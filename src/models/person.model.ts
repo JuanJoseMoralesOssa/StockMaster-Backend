@@ -1,0 +1,44 @@
+import {Entity, hasMany, model, property} from '@loopback/repository';
+import {ExpenseDetails} from './expense-details.model';
+import {Product} from './product.model';
+import {PurchaseDetails} from './purchase-details.model';
+import {Expense} from './expense.model';
+import {Purchase} from './purchase.model';
+
+@model()
+export class Person extends Entity {
+  @property({
+    type: 'number',
+    id: true,
+    generated: true,
+  })
+  id?: number;
+
+  @property({
+    type: 'string',
+    required: true,
+  })
+  name: string;
+
+  @hasMany(() => Product, {through: {model: () => ExpenseDetails}})
+  products_expense_details: Product[];
+
+  @hasMany(() => Product, {through: {model: () => PurchaseDetails}})
+  products_purchase_details: Product[];
+
+  @hasMany(() => Expense, {through: {model: () => ExpenseDetails}})
+  expenses: Expense[];
+
+  @hasMany(() => Purchase, {through: {model: () => PurchaseDetails}})
+  purchases: Purchase[];
+
+  constructor(data?: Partial<Person>) {
+    super(data);
+  }
+}
+
+export interface PersonRelations {
+  // describe navigational properties here
+}
+
+export type PersonWithRelations = Person & PersonRelations;
