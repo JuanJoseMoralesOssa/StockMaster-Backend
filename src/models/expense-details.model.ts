@@ -1,4 +1,7 @@
-import {Entity, model, property} from '@loopback/repository';
+import {belongsTo, Entity, model, property} from '@loopback/repository';
+import {Expense} from './expense.model';
+import {Person} from './person.model';
+import {Product} from './product.model';
 
 @model()
 export class ExpenseDetails extends Entity {
@@ -15,20 +18,14 @@ export class ExpenseDetails extends Entity {
   })
   weight_kg: number;
 
-  @property({
-    type: 'number',
-  })
-  personId?: number;
+  @belongsTo(() => Product)
+  productId: number;
 
-  @property({
-    type: 'number',
-  })
-  productId?: number;
+  @belongsTo(() => Person)
+  personId: number;
 
-  @property({
-    type: 'number',
-  })
-  expenseId?: number;
+  @belongsTo(() => Expense)
+  expenseId: number;
 
   constructor(data?: Partial<ExpenseDetails>) {
     super(data);

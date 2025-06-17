@@ -27,3 +27,14 @@ export * from './product.controller';
 export * from './purchase-details.controller';
 export * from './purchase.controller';
 export * from './user.controller';
+
+export * from './purchase-details-person.controller';
+export * from './purchase-details-product.controller';
+export * from './purchase-details-purchase.controller';
+
+export * from './expense-details-expense.controller';
+export * from './expense-details-person.controller';
+export * from './expense-details-product.controller';
+
+export * from './person-reports.controller';
+export * from './details-report.controller';
