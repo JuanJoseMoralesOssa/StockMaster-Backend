@@ -1,6 +1,6 @@
 import {repository} from '@loopback/repository';
 import {get, HttpErrors, param} from '@loopback/rest';
-import {Expense, Person, Purchase} from '../models';
+import {Expense, ExpenseDetails, Person, Purchase, PurchaseDetails} from '../models';
 import {
   ExpenseDetailsRepository,
   ExpenseRepository,
@@ -48,13 +48,18 @@ export class DetailsReportsController {
     protected expenseRepository: ExpenseRepository,
   ) {}
 
-  @get('/persons/{personId}/products/{productId}/transactions')
+  @get('/person/{personId}/product/{productId}/transactions')
   async getPersonProductTransactions(
     @param.path.number('personId') personId: number,
     @param.path.number('productId') productId: number,
     @param.query.string('startDate') startDate: string,
     @param.query.string('endDate') endDate: string,
   ): Promise<TransactionDetailPersonProduct[]> {
+    // Validación de fechas
+    if (!startDate || !endDate) {
+      throw new HttpErrors.BadRequest('Both startDate and endDate are required');
+    }
+
     // Validar formato de fechas
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
@@ -116,7 +121,9 @@ export class DetailsReportsController {
     const purchaseTransactions =
       person.purchases?.flatMap(
         (purchase: Purchase) =>
-          purchase.purchase_details?.map((detail: any) => ({
+          purchase.purchase_details?.filter(
+            (detail: PurchaseDetails) => detail.productId === productId,
+          ).map((detail: PurchaseDetails) => ({
             date: purchase.date,
             weight_kg: detail.weight_kg,
             type: 'Compra' as const,
@@ -127,7 +134,9 @@ export class DetailsReportsController {
     const expenseTransactions =
       person.expenses?.flatMap(
         (expense: Expense) =>
-          expense.expense_details?.map((detail: any) => ({
+          expense.expense_details?.filter(
+            (detail: ExpenseDetails) => detail.productId === productId,
+          ).map((detail: ExpenseDetails) => ({
             date: expense.date,
             weight_kg: detail.weight_kg,
             type: 'Gasto' as const,
@@ -140,13 +149,22 @@ export class DetailsReportsController {
     );
   }
 
-  @get('/products/{productId}/transactions')
+  @get('/product/{productId}/transactions')
   async getProductTransactions(
     @param.path.number('productId') productId: number,
     @param.query.string('startDate') startDate: string,
     @param.query.string('endDate') endDate: string,
   ): Promise<TransactionDetailProduct[]> {
-    // Validación de fechas (código sin cambios...)
+
+    // Validación de fechas
+    if (!startDate || !endDate) {
+      throw new HttpErrors.BadRequest('Both startDate and endDate are required');
+    }
+    // Validar formato de fechas
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+      throw new HttpErrors.BadRequest('Invalid date format. Use YYYY-MM-DD');
+    }
 
     // Verificar que el producto existe
     const product = await this.productRepository.findById(productId);
@@ -239,13 +257,22 @@ export class DetailsReportsController {
     );
   }
 
-  @get('/people/{personId}/transactions')
+  @get('/person/{personId}/transactions')
   async getPersonTransactions(
     @param.path.number('personId') personId: number,
     @param.query.string('startDate') startDate: string,
     @param.query.string('endDate') endDate: string,
   ): Promise<TransactionDetailPerson[]> {
-    // Validación de fechas (código sin cambios...)
+
+    // Validación de fechas
+    if (!startDate || !endDate) {
+      throw new HttpErrors.BadRequest('Both startDate and endDate are required');
+    }
+    // Validar formato de fechas
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+      throw new HttpErrors.BadRequest('Invalid date format. Use YYYY-MM-DD');
+    }
 
     // Verificar que el producto existe
     const person = await this.personRepository.findById(personId);

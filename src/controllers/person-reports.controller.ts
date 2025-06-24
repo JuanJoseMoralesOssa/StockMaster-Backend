@@ -185,7 +185,6 @@ export class PersonReportsController {
       );
     }
 
-    // No necesitas verificar supplier.id porque ya verificaste que supplier no es null
     return this.processCombinedDetails(supplier);
   }
 
@@ -195,7 +194,6 @@ export class PersonReportsController {
    * @returns Sorted list of product details
    */
   private processCombinedDetails(supplier: Person): ProductDetail[] {
-    // Extract purchase details
     const purchaseDetails =
       supplier.purchases?.flatMap(
         (purchase: Purchase) =>
