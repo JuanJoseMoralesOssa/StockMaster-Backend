@@ -6,3 +6,4 @@ export * from './product.model';
 export * from './kardex.model';
 export * from './expense-details.model';
 export * from './expense.model';
+export * from './pagination.model';

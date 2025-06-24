@@ -7,17 +7,17 @@ import {
   Where,
 } from '@loopback/repository';
 import {
-  post,
-  param,
+  del,
   get,
   getModelSchemaRef,
+  param,
   patch,
+  post,
   put,
-  del,
   requestBody,
   response,
 } from '@loopback/rest';
-import {User} from '../models';
+import {Pagination, User} from '../models';
 import {UserRepository} from '../repositories';
 
 export class UserController {
@@ -72,8 +72,21 @@ export class UserController {
   })
   async find(
     @param.filter(User) filter?: Filter<User>,
-  ): Promise<User[]> {
-    return this.userRepository.find(filter);
+    @param.query.number('page') page: number = 1,
+    @param.query.number('limit') limit: number = 10,
+  ): Promise<Pagination<User>> {
+    const users = await this.userRepository.find({
+      ...filter,
+      skip: (page - 1) * limit,
+      limit: limit
+    });
+    const count = await this.userRepository.count(filter?.where);
+    return new Pagination<User>({
+      count: count.count,
+      data: users,
+      page: page,
+      limit: limit
+    });
   }
 
   @patch('/users')

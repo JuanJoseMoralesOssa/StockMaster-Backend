@@ -7,17 +7,17 @@ import {
   Where,
 } from '@loopback/repository';
 import {
-  post,
-  param,
+  del,
   get,
   getModelSchemaRef,
+  param,
   patch,
+  post,
   put,
-  del,
   requestBody,
   response,
 } from '@loopback/rest';
-import {Product} from '../models';
+import {Pagination, Product} from '../models';
 import {ProductRepository} from '../repositories';
 
 export class ProductController {
@@ -71,6 +71,37 @@ export class ProductController {
     },
   })
   async find(
+    @param.filter(Product) filter?: Filter<Product>,
+    @param.query.number('page') page: number = 1,
+    @param.query.number('limit') limit: number = 10,
+  ): Promise<Pagination<Product>> {
+    const products = await this.productRepository.find({
+      ...filter,
+      skip: (page - 1) * limit,
+      limit: limit
+    });
+    const count = await this.productRepository.count(filter?.where);
+    return new Pagination<Product>({
+      count: count.count,
+      data: products,
+      page: page,
+      limit: limit
+    });
+  }
+
+  @get('/products/all')
+  @response(200, {
+    description: 'Array of Product model instances',
+    content: {
+      'application/json': {
+        schema: {
+          type: 'array',
+          items: getModelSchemaRef(Product, {includeRelations: true}),
+        },
+      },
+    },
+  })
+  async findAll(
     @param.filter(Product) filter?: Filter<Product>,
   ): Promise<Product[]> {
     return this.productRepository.find(filter);

@@ -7,17 +7,17 @@ import {
   Where,
 } from '@loopback/repository';
 import {
-  post,
-  param,
+  del,
   get,
   getModelSchemaRef,
+  param,
   patch,
+  post,
   put,
-  del,
   requestBody,
   response,
 } from '@loopback/rest';
-import {Expense} from '../models';
+import {Expense, Pagination} from '../models';
 import {ExpenseRepository} from '../repositories';
 
 export class ExpenseController {
@@ -72,8 +72,21 @@ export class ExpenseController {
   })
   async find(
     @param.filter(Expense) filter?: Filter<Expense>,
-  ): Promise<Expense[]> {
-    return this.expenseRepository.find(filter);
+    @param.query.number('page') page: number = 1,
+    @param.query.number('limit') limit: number = 10,
+  ): Promise<Pagination<Expense>> {
+    const expenses = await this.expenseRepository.find({
+      ...filter,
+      skip: (page - 1) * limit,
+      limit: limit
+    });
+    const count = await this.expenseRepository.count(filter?.where);
+    return new Pagination<Expense>({
+      count: count.count,
+      data: expenses,
+      page: page,
+      limit: limit
+    });
   }
 
   @patch('/expenses')

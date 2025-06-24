@@ -7,17 +7,17 @@ import {
   Where,
 } from '@loopback/repository';
 import {
-  post,
-  param,
+  del,
   get,
   getModelSchemaRef,
+  param,
   patch,
+  post,
   put,
-  del,
   requestBody,
   response,
 } from '@loopback/rest';
-import {Purchase} from '../models';
+import {Pagination, Purchase} from '../models';
 import {PurchaseRepository} from '../repositories';
 
 export class PurchaseController {
@@ -72,8 +72,21 @@ export class PurchaseController {
   })
   async find(
     @param.filter(Purchase) filter?: Filter<Purchase>,
-  ): Promise<Purchase[]> {
-    return this.purchaseRepository.find(filter);
+    @param.query.number('page') page: number = 1,
+    @param.query.number('limit') limit: number = 10,
+  ): Promise<Pagination<Purchase>> {
+    const purchases = await this.purchaseRepository.find({
+      ...filter,
+      skip: (page - 1) * limit,
+      limit: limit
+    });
+    const count = await this.purchaseRepository.count(filter?.where);
+    return new Pagination<Purchase>({
+      count: count.count,
+      data: purchases,
+      page: page,
+      limit: limit
+    });
   }
 
   @patch('/purchases')

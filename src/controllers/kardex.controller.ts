@@ -7,17 +7,17 @@ import {
   Where,
 } from '@loopback/repository';
 import {
-  post,
-  param,
+  del,
   get,
   getModelSchemaRef,
+  param,
   patch,
+  post,
   put,
-  del,
   requestBody,
   response,
 } from '@loopback/rest';
-import {Kardex} from '../models';
+import {Kardex, Pagination} from '../models';
 import {KardexRepository} from '../repositories';
 
 export class KardexController {
@@ -72,8 +72,21 @@ export class KardexController {
   })
   async find(
     @param.filter(Kardex) filter?: Filter<Kardex>,
-  ): Promise<Kardex[]> {
-    return this.kardexRepository.find(filter);
+    @param.query.number('page') page: number = 1,
+    @param.query.number('limit') limit: number = 10,
+  ): Promise<Pagination<Kardex>> {
+    const kardexes = await this.kardexRepository.find({
+      ...filter,
+      skip: (page - 1) * limit,
+      limit: limit
+    });
+    const count = await this.kardexRepository.count(filter?.where);
+    return new Pagination<Kardex>({
+      count: count.count,
+      data: kardexes,
+      page: page,
+      limit: limit
+    });
   }
 
   @patch('/kardexes')

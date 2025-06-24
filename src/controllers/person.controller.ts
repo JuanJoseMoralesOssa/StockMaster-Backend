@@ -7,17 +7,17 @@ import {
   Where,
 } from '@loopback/repository';
 import {
-  post,
-  param,
+  del,
   get,
   getModelSchemaRef,
+  param,
   patch,
+  post,
   put,
-  del,
   requestBody,
   response,
 } from '@loopback/rest';
-import {Person} from '../models';
+import {Pagination, Person} from '../models';
 import {PersonRepository} from '../repositories';
 
 export class PersonController {
@@ -71,6 +71,37 @@ export class PersonController {
     },
   })
   async find(
+    @param.filter(Person) filter?: Filter<Person>,
+    @param.query.number('page') page: number = 1,
+    @param.query.number('limit') limit: number = 10,
+  ): Promise<Pagination<Person>> {
+    const people = await this.personRepository.find({
+      ...filter,
+      skip: (page - 1) * limit,
+      limit: limit
+    });
+    const count = await this.personRepository.count(filter?.where);
+    return new Pagination<Person>({
+      count: count.count,
+      data: people,
+      page: page,
+      limit: limit
+    });
+  }
+
+  @get('/people/all')
+  @response(200, {
+    description: 'Array of Person model instances',
+    content: {
+      'application/json': {
+        schema: {
+          type: 'array',
+          items: getModelSchemaRef(Person, {includeRelations: true}),
+        },
+      },
+    },
+  })
+  async findAll(
     @param.filter(Person) filter?: Filter<Person>,
   ): Promise<Person[]> {
     return this.personRepository.find(filter);
