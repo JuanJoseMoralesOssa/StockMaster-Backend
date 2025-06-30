@@ -28,5 +28,7 @@
   "eslint.validate": [
     "javascript",
     "typescript"
-  ]
+  ],
+  "appService.defaultWebAppToDeploy": "/subscriptions/d792493d-50a5-4be7-8269-083d2dc59abb/resourceGroups/appsvc_linux_eastus2/providers/Microsoft.Web/sites/azure-jm-inventory-be",
+  "appService.deploySubpath": "."
 }

@@ -104,7 +104,11 @@ export class ProductController {
   async findAll(
     @param.filter(Product) filter?: Filter<Product>,
   ): Promise<Product[]> {
-    return this.productRepository.find(filter);
+    const newFilter: Filter<Product> = {
+      ...(filter ?? {}), order: ['name ASC'],
+      fields: {id: true, name: true}
+      };
+    return this.productRepository.find(newFilter);
   }
 
   @patch('/products')

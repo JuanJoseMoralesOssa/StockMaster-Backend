@@ -218,35 +218,30 @@ export class DetailsReportsController {
     // Procesar los resultados
     const transactions: TransactionDetailProduct[] = [];
 
-    // Procesar detalles de compra
+    // Procesar detalles de compra - USANDO LAS RELACIONES INCLUIDAS
     for (const detail of purchaseDetails) {
-      const purchase = await this.purchaseRepository.findById(
-        detail.purchaseId,
-        {fields: {date: true}},
-      );
-      // Solo incluir si tiene relación con purchase y la fecha está en rango
-      if (detail.purchaseId && purchase.date && detail.weight_kg) {
+      // Solo procesar si la relación purchase existe (ya filtrada por fecha)
+      if ((detail as any).purchase && detail.weight_kg) {
         transactions.push({
-          date: purchase.date,
+          date: (detail as any).purchase.date,
           weight_kg: detail.weight_kg,
           type: 'Compra',
           personId: detail.personId,
+          personName: (detail as any).person?.name,
         });
       }
     }
 
-    // Procesar detalles de gasto
+    // Procesar detalles de gasto - USANDO LAS RELACIONES INCLUIDAS
     for (const detail of expenseDetails) {
-      const expense = await this.expenseRepository.findById(detail.expenseId, {
-        fields: {date: true},
-      });
-      // Solo incluir si tiene relación con expense y la fecha está en rango
-      if (detail.expenseId && expense.date && detail.weight_kg) {
+      // Solo procesar si la relación expense existe (ya filtrada por fecha)
+      if ((detail as any).expense && detail.weight_kg) {
         transactions.push({
-          date: expense.date,
+          date: (detail as any).expense.date,
           weight_kg: detail.weight_kg,
           type: 'Gasto',
           personId: detail.personId,
+          personName: (detail as any).person?.name,
         });
       }
     }
@@ -274,10 +269,10 @@ export class DetailsReportsController {
       throw new HttpErrors.BadRequest('Invalid date format. Use YYYY-MM-DD');
     }
 
-    // Verificar que el producto existe
+    // Verificar que la persona existe
     const person = await this.personRepository.findById(personId);
     if (!person) {
-      throw new HttpErrors.NotFound(`Persona con ID ${personId} no encontrado`);
+      throw new HttpErrors.NotFound(`Persona con ID ${personId} no encontrada`);
     }
 
     // Construir filtro de fechas
@@ -285,7 +280,7 @@ export class DetailsReportsController {
       between: [`${startDate}T00:00:00.000Z`, `${endDate}T23:59:59.999Z`],
     };
 
-    // Obtener todos los detalles de compra para este producto
+    // Obtener todos los detalles de compra para esta persona con filtro de fecha
     const purchaseDetails = await this.purchaseDetailsRepository.find({
       where: {personId},
       include: [
@@ -303,7 +298,7 @@ export class DetailsReportsController {
       ],
     });
 
-    // Obtener todos los detalles de gasto para este producto
+    // Obtener todos los detalles de gasto para esta persona con filtro de fecha
     const expenseDetails = await this.expenseDetailsRepository.find({
       where: {personId},
       include: [
@@ -324,16 +319,12 @@ export class DetailsReportsController {
     // Procesar los resultados
     const transactions: TransactionDetailPerson[] = [];
 
-    // Procesar detalles de compra
+    // Procesar detalles de compra - USANDO LAS RELACIONES INCLUIDAS
     for (const detail of purchaseDetails) {
-      const purchase = await this.purchaseRepository.findById(
-        detail.purchaseId,
-        {fields: {date: true}},
-      );
-      // Solo incluir si tiene relación con purchase y la fecha está en rango
-      if (detail.purchaseId && purchase.date && detail.weight_kg) {
+      // Solo procesar si la relación purchase existe (ya filtrada por fecha)
+      if ((detail as any).purchase && detail.weight_kg) {
         transactions.push({
-          date: purchase.date,
+          date: (detail as any).purchase.date,
           weight_kg: detail.weight_kg,
           type: 'Compra',
           productId: detail.productId,
@@ -341,15 +332,12 @@ export class DetailsReportsController {
       }
     }
 
-    // Procesar detalles de gasto
+    // Procesar detalles de gasto - USANDO LAS RELACIONES INCLUIDAS
     for (const detail of expenseDetails) {
-      const expense = await this.expenseRepository.findById(detail.expenseId, {
-        fields: {date: true},
-      });
-      // Solo incluir si tiene relación con expense y la fecha está en rango
-      if (detail.expenseId && expense.date && detail.weight_kg) {
+      // Solo procesar si la relación expense existe (ya filtrada por fecha)
+      if ((detail as any).expense && detail.weight_kg) {
         transactions.push({
-          date: expense.date,
+          date: (detail as any).expense.date,
           weight_kg: detail.weight_kg,
           type: 'Gasto',
           productId: detail.productId,

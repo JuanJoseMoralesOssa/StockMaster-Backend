@@ -55,6 +55,7 @@
     "@loopback/rest": "^14.0.10",
     "@loopback/rest-explorer": "^7.0.10",
     "@loopback/service-proxy": "^7.0.10",
+    "dotenv": "^16.5.0",
     "loopback-connector-mssql": "^3.8.0",
     "loopback-connector-mysql": "^7.0.18",
     "tslib": "^2.0.0"

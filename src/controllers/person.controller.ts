@@ -75,12 +75,13 @@ export class PersonController {
     @param.query.number('page') page: number = 1,
     @param.query.number('limit') limit: number = 10,
   ): Promise<Pagination<Person>> {
+    const newFilter: Filter<Person> = { ...(filter ?? {}), order: ['name ASC'] };
     const people = await this.personRepository.find({
-      ...filter,
+      ...newFilter,
       skip: (page - 1) * limit,
       limit: limit
     });
-    const count = await this.personRepository.count(filter?.where);
+    const count = await this.personRepository.count(newFilter?.where);
     return new Pagination<Person>({
       count: count.count,
       data: people,
@@ -104,7 +105,8 @@ export class PersonController {
   async findAll(
     @param.filter(Person) filter?: Filter<Person>,
   ): Promise<Person[]> {
-    return this.personRepository.find(filter);
+    const newFilter: Filter<Person> = { ...(filter ?? {}), order: ['name ASC'] };
+    return this.personRepository.find(newFilter);
   }
 
   @patch('/people')
