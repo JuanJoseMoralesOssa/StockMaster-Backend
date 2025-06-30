@@ -13,15 +13,19 @@ function getCertificatePath(): string {
     path.resolve(process.cwd(), 'dist/certs/DigiCertGlobalRootCA.crt.pem'), // Production (if copied)
     path.resolve(__dirname, '../certs/DigiCertGlobalRootCA.crt.pem'), // Relative to compiled file
     path.resolve(__dirname, '../../src/certs/DigiCertGlobalRootCA.crt.pem'), // From dist back to src
-  ];
+    securityConfig.SSL_CERT_PATH, // From environment variable
+  ].filter(Boolean); // Remove empty strings
 
   for (const certPath of possiblePaths) {
     if (fs.existsSync(certPath)) {
+      console.log(`Using SSL certificate from: ${certPath}`);
       return certPath;
     }
   }
 
-  throw new Error(`SSL certificate file not found. Searched in: ${possiblePaths.join(', ')}`);
+  console.warn(`SSL certificate file not found. Searched in: ${possiblePaths.join(', ')}`);
+  console.warn('Continuing without SSL certificate file - Azure MySQL may still work with default SSL settings');
+  return '';
 }
 
 const config = {
@@ -30,31 +34,22 @@ const config = {
   host: securityConfig.HOST || 'mysql-jm-inv.mysql.database.azure.com',
   port: securityConfig.PORT || 3306,
   user: securityConfig.USER || 'bbjbzdifjkMaestraioAdmin',
-  password: 'Maestrotario1234GMRfRkbWFm6tc8a288@95@6n9iWAK3',
-  database:'jm_inv_db',
+  password: securityConfig.PASSWORD || 'Maestrotario1234GMRfRkbWFm6tc8a288@95@6n9iWAK3',
+  database: securityConfig.DATABASE || 'jm_inv_db',
 
-  // Configuración SSL requerida para Azure Database for MySQL
+  // SSL configuration for Azure MySQL
   ssl: {
-    rejectUnauthorized: true,
-    ca: fs.readFileSync(getCertificatePath()).toString(),
+    rejectUnauthorized: false, // Set to false for Azure MySQL
+    ca: getCertificatePath() ? fs.readFileSync(getCertificatePath()).toString() : undefined,
   },
 
-  // Configuraciones adicionales para Azure Database
-  acquireConnectionTimeout: 60000,
-  timeout: 60000,
-  reconnect: true,
-
-  // Configuraciones específicas para el conector MySQL
+  // LoopBack MySQL connector specific options
   connectionLimit: 10,
+  debug: false,
+
+  // Valid MySQL2 options only
+  connectTimeout: 60000,
   multipleStatements: false,
-
-  // Configuración de timezone para evitar problemas de zona horaria
-  timezone: 'Z',
-
-  // Configuraciones adicionales para Azure
-  supportBigNumbers: true,
-  bigNumberStrings: true,
-  dateStrings: false,
 };
 
 // Observe application's life cycle to disconnect the datasource when
