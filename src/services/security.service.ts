@@ -69,11 +69,11 @@ export class SecurityService {
     try {
       return jwt.verify(token, securityConfig.JWT_SECRET ??
         'default_secret') as User;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error verifying token:', error);
-      if (error.name === 'TokenExpiredError') {
+      if (error instanceof jwt.TokenExpiredError) {
         throw new HttpErrors.Unauthorized('Token has expired');
-      } else if (error.name === 'JsonWebTokenError') {
+      } else if (error instanceof jwt.JsonWebTokenError) {
         throw new HttpErrors.Unauthorized('Invalid token format');
       }
       throw new HttpErrors.Unauthorized('Invalid token');
