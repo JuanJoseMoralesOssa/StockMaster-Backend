@@ -18,6 +18,16 @@ export class User extends Entity {
   @property({
     type: 'string',
     required: true,
+    index: {
+      unique: true,
+    },
+    pattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$',
+  })
+  email: string;
+
+  @property({
+    type: 'string',
+    required: true,
   })
   role: string;
 
@@ -26,7 +36,6 @@ export class User extends Entity {
     required: true,
   })
   password: string;
-
 
   constructor(data?: Partial<User>) {
     super(data);

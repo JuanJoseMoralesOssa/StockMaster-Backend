@@ -77,6 +77,13 @@ export class UserController {
   ): Promise<Pagination<User>> {
     const users = await this.userRepository.find({
       ...filter,
+      fields: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        password: false,
+      },
       skip: (page - 1) * limit,
       limit: limit
     });

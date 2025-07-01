@@ -1,0 +1,93 @@
+import {BindingScope, injectable} from '@loopback/core';
+import {repository} from '@loopback/repository';
+import {HttpErrors} from '@loopback/rest';
+import {securityConfig} from '../config/security';
+import {Credentials, LoginResult, User} from '../models';
+import {UserRepository} from '../repositories';
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+
+@injectable({scope: BindingScope.TRANSIENT})
+export class SecurityService {
+  constructor(
+    @repository(UserRepository)
+    public userRepository: UserRepository,
+  ) { }
+
+  /**
+   * User login
+   * @param credentials User credentials
+   * @returns User instance or null if authentication fails
+   */
+  async login(credentials: Credentials): Promise<LoginResult> {
+    const foundUser = await this.userRepository.findOne({
+      where: {
+        email: credentials.email,
+        password: credentials.password,
+      },
+    });
+    if (!foundUser) {
+      throw new HttpErrors.Unauthorized('Invalid email or password');
+    }
+    foundUser.password = '';
+    const token = this.generateToken(foundUser);
+    return new LoginResult({
+      user: foundUser,
+      token: token,
+    });
+  }
+
+  /**
+   * Generate a JWT token for the user
+   * @param user User instance
+   * @returns JWT token
+   * @description Uses the JWT secret from the environment variables to sign the token
+   */
+  generateToken(user: User): string {
+    const token = jwt.sign(
+      {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+      securityConfig.JWT_SECRET || 'default_secret',
+      {
+        expiresIn: '1d',
+      },
+    );
+    return token;
+  }
+
+  /**
+   * Verify the JWT token and return the user information
+   * @param token JWT token
+   * @returns User instance
+   * @throws Unauthorized error if the token is invalid
+   */
+  verifyToken(token: string): User {
+    try {
+      return jwt.verify(token, securityConfig.JWT_SECRET ??
+        'default_secret') as User;
+    } catch (error) {
+      console.error('Error verifying token:', error);
+      if (error.name === 'TokenExpiredError') {
+        throw new HttpErrors.Unauthorized('Token has expired');
+      } else if (error.name === 'JsonWebTokenError') {
+        throw new HttpErrors.Unauthorized('Invalid token format');
+      }
+      throw new HttpErrors.Unauthorized('Invalid token');
+    }
+  }
+
+  /**
+   * Get the role from the token
+   * @param token JWT token
+   * @returns User role
+   * @throws Unauthorized error if the token is invalid
+   */
+  getRoleFromToken(token: string): string {
+    return this.verifyToken(token).role;
+  }
+
+}
