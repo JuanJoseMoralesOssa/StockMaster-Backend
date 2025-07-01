@@ -17,15 +17,17 @@ import {
   requestBody,
   response,
 } from '@loopback/rest';
+// import {requireAuth, requireAuthAndRoles} from '../auth';
 import {Expense, Pagination} from '../models';
 import {ExpenseRepository} from '../repositories';
 
 export class ExpenseController {
   constructor(
     @repository(ExpenseRepository)
-    public expenseRepository : ExpenseRepository,
-  ) {}
+    public expenseRepository: ExpenseRepository,
+  ) { }
 
+  // @requireAuthAndRoles('admin', 'manager')  // Solo admin y manager pueden crear
   @post('/expenses')
   @response(200, {
     description: 'Expense model instance',
@@ -58,6 +60,7 @@ export class ExpenseController {
     return this.expenseRepository.count(where);
   }
 
+  // @requireAuth() // Cualquier usuario autenticado puede leer
   @get('/expenses')
   @response(200, {
     description: 'Array of Expense model instances',
@@ -89,6 +92,9 @@ export class ExpenseController {
     });
   }
 
+  // O usar por separado si prefieres
+  // @requireAuth()
+  // @requireRoles('admin')
   @patch('/expenses')
   @response(200, {
     description: 'Expense PATCH success count',
@@ -153,6 +159,7 @@ export class ExpenseController {
     await this.expenseRepository.replaceById(id, expense);
   }
 
+  // @requireAuthAndRoles('admin') // Solo admin puede eliminar
   @del('/expenses/{id}')
   @response(204, {
     description: 'Expense DELETE success',
