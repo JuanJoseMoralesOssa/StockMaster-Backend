@@ -1,0 +1,4 @@
+export * from './purchase-person.controller';
+export * from './purchase-product.controller';
+export * from './purchase-purchase-details.controller';
+export * from './purchase.controller';
