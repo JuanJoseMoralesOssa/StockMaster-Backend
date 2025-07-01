@@ -18,3 +18,4 @@ export * from './types/pagination.model';
 
 export * from './types/credentials.model';
 export * from './types/login-result.model';
+export * from './types/whoami-response.model';
