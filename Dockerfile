@@ -1,5 +1,5 @@
 # Multi-stage build for production optimization
-FROM docker.io/library/node:22-alpine AS builder
+FROM docker.io/library/node:24-alpine AS builder
 
 # Set working directory
 WORKDIR /app
@@ -17,7 +17,7 @@ COPY . .
 RUN npm run build
 
 # Production stage
-FROM docker.io/library/node:22-alpine AS production
+FROM docker.io/library/node:24-alpine AS production
 
 # Install security updates and curl for health checks
 RUN apk update && \
