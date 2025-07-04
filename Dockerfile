@@ -7,8 +7,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Install ALL dependencies (including devDependencies needed for build)
+RUN npm ci
 
 # Copy source code
 COPY . .
@@ -30,10 +30,14 @@ RUN apk update && \
 # Create app directory
 WORKDIR /home/nodeuser/app
 
-# Copy built application and dependencies from builder stage
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
+# Copy package files first for better caching
 COPY --from=builder /app/package*.json ./
+
+# Install only production dependencies
+RUN npm ci --only=production && npm cache clean --force
+
+# Copy built application and other necessary files
+COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/src/certs ./src/certs
 
 # Change ownership to non-root user
