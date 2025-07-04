@@ -4,16 +4,7 @@ on:
   push:
     branches: [main, master]
   pull_request:
-    b      - name: 🐳 Build and push Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ steps.acr-creds.outputs.acr-server }}/${{ env.IMAGE_NAME }}:latest
-            ${{ steps.acr-creds.outputs.acr-server }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=maxmain, master]
+    branches: [main, master]
   workflow_dispatch:
 
 env:
@@ -107,8 +98,8 @@ jobs:
           driver: docker-container
           buildkitd-flags: --debug
 
-      - name: �🐳 Build and push Docker image
-        uses: docker/build-push-action@v5
+      - name: 🐳 Build and push Docker image
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
@@ -116,7 +107,7 @@ jobs:
             ${{ steps.acr-creds.outputs.acr-server }}/${{ env.IMAGE_NAME }}:latest
             ${{ steps.acr-creds.outputs.acr-server }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=maxmain,master
 
       - name: 🔑 Login to ACR
         run: |
