@@ -98,6 +98,13 @@ jobs:
           driver: docker-container
           buildkitd-flags: --debug
 
+      - name: 🔐 Login to ACR (Azure CLI)
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ steps.acr-creds.outputs.acr-server }}
+          username: ${{ steps.acr-creds.outputs.acr-username }}
+          password: ${{ steps.acr-creds.outputs.acr-password }}
+
       - name: 🐳 Build and push Docker image
         uses: docker/build-push-action@v6
         with:
@@ -108,12 +115,6 @@ jobs:
             ${{ steps.acr-creds.outputs.acr-server }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: 🔑 Login to ACR
-        run: |
-          echo "${{ steps.acr-creds.outputs.acr-password }}" | docker login ${{ steps.acr-creds.outputs.acr-server }} \
-            --username ${{ steps.acr-creds.outputs.acr-username }} \
-            --password-stdin
 
       - name: 🌍 Create or Update Container Apps Environment
         run: |
