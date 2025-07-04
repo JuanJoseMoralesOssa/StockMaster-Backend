@@ -1,0 +1,38 @@
+# CODEOWNERS file for backend-inventory
+# This file defines who owns what in the repository
+# Learn more: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global ownership - Juan José Morales Ossa owns the entire project
+* @JuanJoseMoralesOssa
+
+# Package files - Critical for dependency management
+package*.json @JuanJoseMoralesOssa
+npm-shrinkwrap.json @JuanJoseMoralesOssa
+
+# Docker files - Container configuration
+Dockerfile @JuanJoseMoralesOssa
+docker-compose*.yml @JuanJoseMoralesOssa
+.dockerignore @JuanJoseMoralesOssa
+
+# GitHub Actions workflows - CI/CD pipeline
+/.github/ @JuanJoseMoralesOssa
+/.github/workflows/ @JuanJoseMoralesOssa
+
+# Configuration files - Security and setup
+tsconfig*.json @JuanJoseMoralesOssa
+.env* @JuanJoseMoralesOssa
+/src/config/ @JuanJoseMoralesOssa
+
+# Database and datasources - Critical data layer
+/src/datasources/ @JuanJoseMoralesOssa
+/src/models/ @JuanJoseMoralesOssa
+/src/repositories/ @JuanJoseMoralesOssa
+
+# Authentication and security - High security impact
+/src/auth/ @JuanJoseMoralesOssa
+/src/services/security.service.ts @JuanJoseMoralesOssa
+
+# Critical application files
+/src/application.ts @JuanJoseMoralesOssa
+/src/index.ts @JuanJoseMoralesOssa
+/src/migrate.ts @JuanJoseMoralesOssa
