@@ -15,6 +15,26 @@ export class SecurityService {
   ) { }
 
   /**
+   * Hash a password using bcrypt
+   * @param password Password to hash
+   * @returns Hashed password
+   */
+  async hashPassword(password: string): Promise<string> {
+    const salt = await bcrypt.genSalt(12);
+    return bcrypt.hash(password, salt);
+  }
+
+  /**
+   * Verify if the provided password matches the hashed password
+   * @param password Password to verify
+   * @param hashedPassword Hashed password to compare against
+   * @returns True if passwords match, false otherwise
+   */
+  async verifyPassword(password: string, hashedPassword: string): Promise<boolean> {
+    return bcrypt.compare(password, hashedPassword);
+  }
+
+  /**
    * User login
    * @param credentials User credentials
    * @returns User instance or null if authentication fails
@@ -23,10 +43,16 @@ export class SecurityService {
     const foundUser = await this.userRepository.findOne({
       where: {
         email: credentials.email,
-        password: credentials.password,
       },
     });
     if (!foundUser) {
+      throw new HttpErrors.Unauthorized('Invalid email or password');
+    }
+    const isPasswordValid = await this.verifyPassword(
+      credentials.password,
+      foundUser.password,
+    );
+    if (!isPasswordValid) {
       throw new HttpErrors.Unauthorized('Invalid email or password');
     }
     foundUser.password = '';

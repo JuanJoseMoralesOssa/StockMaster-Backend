@@ -1,0 +1,56 @@
+version: 2
+updates:
+  # Mantener dependencias de npm actualizadas
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:00'
+    open-pull-requests-limit: 10
+    reviewers:
+      - 'juanjomoss' # Reemplaza con tu username de GitHub
+    assignees:
+      - 'juanjomoss' # Reemplaza con tu username de GitHub
+    commit-message:
+      prefix: '📦'
+      prefix-development: '📦 dev'
+    labels:
+      - 'dependencies'
+      - 'npm'
+
+  # Mantener GitHub Actions actualizadas
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:00'
+    open-pull-requests-limit: 5
+    reviewers:
+      - 'juanjomoss' # Reemplaza con tu username de GitHub
+    assignees:
+      - 'juanjomoss' # Reemplaza con tu username de GitHub
+    commit-message:
+      prefix: '🔄'
+    labels:
+      - 'github-actions'
+      - 'dependencies'
+
+  # Mantener Dockerfile actualizado
+  - package-ecosystem: 'docker'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:00'
+    open-pull-requests-limit: 5
+    reviewers:
+      - 'juanjomoss' # Reemplaza con tu username de GitHub
+    assignees:
+      - 'juanjomoss' # Reemplaza con tu username de GitHub
+    commit-message:
+      prefix: '🐳'
+    labels:
+      - 'docker'
+      - 'dependencies'

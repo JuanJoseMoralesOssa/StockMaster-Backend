@@ -1,28 +1,58 @@
-# Check out https://hub.docker.com/_/node to select a new base image
-FROM docker.io/library/node:18-slim
+# Multi-stage build for production optimization
+FROM docker.io/library/node:22-alpine AS builder
 
-# Set to a non-root built-in user `node`
-USER node
+# Set working directory
+WORKDIR /app
 
-# Create app directory (with user `node`)
-RUN mkdir -p /home/node/app
+# Copy package files
+COPY package*.json ./
 
-WORKDIR /home/node/app
+# Install dependencies
+RUN npm ci --only=production
 
-# Install app dependencies
-# A wildcard is used to ensure both package.json AND package-lock.json are copied
-# where available (npm@5+)
-COPY --chown=node package*.json ./
+# Copy source code
+COPY . .
 
-RUN npm install
-
-# Bundle app source code
-COPY --chown=node . .
-
+# Build the application
 RUN npm run build
 
-# Bind to all network interfaces so that it can be mapped to the host OS
-ENV HOST=0.0.0.0 PORT=3000
+# Production stage
+FROM docker.io/library/node:22-alpine AS production
 
-EXPOSE ${PORT}
-CMD [ "node", "." ]
+# Install security updates and curl for health checks
+RUN apk update && \
+  apk upgrade && \
+  apk add --no-cache curl && \
+  rm -rf /var/cache/apk/* && \
+  addgroup -g 1001 -S nodeuser && \
+  adduser -S nodeuser -u 1001
+
+# Create app directory
+WORKDIR /home/nodeuser/app
+
+# Copy built application and dependencies from builder stage
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/src/certs ./src/certs
+
+# Change ownership to non-root user
+RUN chown -R nodeuser:nodeuser /home/nodeuser/app
+
+# Switch to non-root user
+USER nodeuser
+
+# Environment variables
+ENV NODE_ENV=production
+ENV HOST=0.0.0.0
+ENV PORT=3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/ping || exit 1
+
+# Expose port
+EXPOSE 3000
+
+# Start the application
+CMD ["node", "dist/index.js"]

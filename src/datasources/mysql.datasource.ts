@@ -31,11 +31,16 @@ function getCertificatePath(): string {
 const config = {
   name: 'mysql',
   connector: 'mysql',
-  host: securityConfig.HOST || 'mysql-jm-inv.mysql.database.azure.com',
+  host: securityConfig.HOST || 'mysql-jm-inv-bd.mysql.database.azure.com',
   port: securityConfig.PORT || 3306,
   user: securityConfig.USER || 'bbjbzdifjkMaestraioAdmin',
   password: securityConfig.PASSWORD || 'Maestrotario1234GMRfRkbWFm6tc8a288@95@6n9iWAK3',
   database: securityConfig.DATABASE || 'jm_inv_db',
+  // host: 'localhost',
+  // port: 3306,
+  // user: 'root',
+  // password: 'toor',
+  // database: 'jm_inv_db',
 
   // SSL configuration for Azure MySQL
   ssl: {
@@ -59,8 +64,7 @@ const config = {
 @lifeCycleObserver('datasource')
 export class MysqlDataSource
   extends juggler.DataSource
-  implements LifeCycleObserver
-{
+  implements LifeCycleObserver {
   static readonly dataSourceName = 'mysql';
   static readonly defaultConfig = config;
 

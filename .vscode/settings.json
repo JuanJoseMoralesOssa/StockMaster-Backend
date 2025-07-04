@@ -1,5 +1,7 @@
 {
-  "editor.rulers": [80],
+  "editor.rulers": [
+    80
+  ],
   "editor.tabCompletion": "on",
   "editor.tabSize": 2,
   "editor.trimAutoWhitespace": true,
@@ -8,7 +10,6 @@
     "source.organizeImports": "explicit",
     "source.fixAll.eslint": "explicit"
   },
-
   "files.exclude": {
     "**/.DS_Store": true,
     "**/.git": true,
@@ -19,7 +20,6 @@
   },
   "files.insertFinalNewline": true,
   "files.trimTrailingWhitespace": true,
-
   "typescript.tsdk": "./node_modules/typescript/lib",
   "typescript.format.insertSpaceAfterOpeningAndBeforeClosingNonemptyBraces": false,
   "typescript.preferences.quoteStyle": "single",
@@ -30,5 +30,9 @@
     "typescript"
   ],
   "appService.defaultWebAppToDeploy": "/subscriptions/d792493d-50a5-4be7-8269-083d2dc59abb/resourceGroups/appsvc_linux_eastus2/providers/Microsoft.Web/sites/azure-jm-inventory-be",
-  "appService.deploySubpath": "."
+  "appService.deploySubpath": ".",
+  "sonarlint.connectedMode.project": {
+    "connectionId": "iamorganization",
+    "projectKey": "inventory-backend"
+  }
 }
