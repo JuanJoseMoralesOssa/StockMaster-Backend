@@ -4,7 +4,16 @@ on:
   push:
     branches: [main, master]
   pull_request:
-    branches: [main, master]
+    b      - name: 🐳 Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.acr-creds.outputs.acr-server }}/${{ env.IMAGE_NAME }}:latest
+            ${{ steps.acr-creds.outputs.acr-server }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=maxmain, master]
   workflow_dispatch: # Permite ejecutar manualmente
 
 env:
@@ -92,7 +101,13 @@ jobs:
           echo "::add-mask::$ACR_PASSWORD"
           echo "acr-password=$ACR_PASSWORD" >> $GITHUB_OUTPUT
 
-      - name: 🐳 Build and push Docker image
+      - name: � Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container
+          buildkitd-flags: --debug
+
+      - name: �🐳 Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .

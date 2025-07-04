@@ -9,9 +9,9 @@ updates:
       time: '09:00'
     open-pull-requests-limit: 10
     reviewers:
-      - 'juanjomoss' # Reemplaza con tu username de GitHub
+      - 'JuanJoseMoralesOssa' # Reemplaza con tu username de GitHub
     assignees:
-      - 'juanjomoss' # Reemplaza con tu username de GitHub
+      - 'JuanJoseMoralesOssa' # Reemplaza con tu username de GitHub
     commit-message:
       prefix: '📦'
       prefix-development: '📦 dev'
@@ -28,9 +28,9 @@ updates:
       time: '09:00'
     open-pull-requests-limit: 5
     reviewers:
-      - 'juanjomoss' # Reemplaza con tu username de GitHub
+      - 'JuanJoseMoralesOssa' # Reemplaza con tu username de GitHub
     assignees:
-      - 'juanjomoss' # Reemplaza con tu username de GitHub
+      - 'JuanJoseMoralesOssa' # Reemplaza con tu username de GitHub
     commit-message:
       prefix: '🔄'
     labels:
@@ -46,9 +46,9 @@ updates:
       time: '09:00'
     open-pull-requests-limit: 5
     reviewers:
-      - 'juanjomoss' # Reemplaza con tu username de GitHub
+      - 'JuanJoseMoralesOssa' # Reemplaza con tu username de GitHub
     assignees:
-      - 'juanjomoss' # Reemplaza con tu username de GitHub
+      - 'JuanJoseMoralesOssa' # Reemplaza con tu username de GitHub
     commit-message:
       prefix: '🐳'
     labels:
