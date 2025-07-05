@@ -105,8 +105,6 @@ jobs:
           driver: docker-container
           buildkitd-flags: --debug
 
-
-
       - name: 🐳 Build and push Docker image
         uses: docker/build-push-action@v6
         with:
@@ -177,34 +175,64 @@ jobs:
           echo "- **Application URL**: https://$APP_URL" >> $GITHUB_STEP_SUMMARY
           echo "- **Health Check**: https://$APP_URL/ping" >> $GITHUB_STEP_SUMMARY
           echo "- **API Explorer**: https://$APP_URL/explorer" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-
-      - name: 🏥 Health Check
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY      - name: 🏥 Health Check
         run: |
           echo "Waiting for application to be ready..."
           sleep 30
 
           APP_URL=${{ steps.get-url.outputs.app-url }}
-          MAX_ATTEMPTS=10
+          MAX_ATTEMPTS=12
           ATTEMPT=1
+
+          # Show container status
+          echo "🔍 Container status:"
+          az containerapp show --name ${{ env.APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query "properties.runningStatus" -o tsv || echo "Could not get status"
 
           while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
             echo "Health check attempt $ATTEMPT/$MAX_ATTEMPTS..."
+            echo "Testing URL: $APP_URL/ping"
 
-            if curl -f -s "$APP_URL/ping" > /dev/null; then
+            # Try with more verbose output
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$APP_URL/ping" || echo "000")
+            echo "HTTP Status Code: $HTTP_CODE"
+
+            if [ "$HTTP_CODE" = "200" ]; then
               echo "✅ Application is healthy!"
+              RESPONSE=$(curl -s "$APP_URL/ping")
+              echo "✅ Health check response: $RESPONSE"
               echo "🌐 Application URL: $APP_URL"
               echo "🏥 Health check passed: $APP_URL/ping"
               echo "📚 API Explorer: $APP_URL/explorer"
               break
             else
-              echo "⏳ Application not ready yet, waiting..."
-              sleep 30
+              echo "⏳ Application not ready yet (HTTP: $HTTP_CODE), waiting..."
+
+              # Show container logs for debugging on later attempts
+              if [ $ATTEMPT -ge 5 ]; then
+                echo "🔍 Container logs for debugging:"
+                az containerapp logs show \
+                  --name ${{ env.APP_NAME }} \
+                  --resource-group ${{ env.RESOURCE_GROUP }} \
+                  --tail 15 || echo "Could not fetch logs"
+              fi
+
+              sleep 25
               ATTEMPT=$((ATTEMPT + 1))
             fi
 
             if [ $ATTEMPT -gt $MAX_ATTEMPTS ]; then
               echo "❌ Health check failed after $MAX_ATTEMPTS attempts"
+              echo "🔍 Final container logs:"
+              az containerapp logs show \
+                --name ${{ env.APP_NAME }} \
+                --resource-group ${{ env.RESOURCE_GROUP }} \
+                --tail 30 || echo "Could not fetch logs"
+
+              echo "🔍 Container status:"
+              az containerapp show --name ${{ env.APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} \
+                --query "properties" || echo "Could not get detailed status"
+
               echo "Please check the application logs in Azure Portal"
               exit 1
             fi
