@@ -117,6 +117,14 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: 📦 List tags in ACR (debug)
+        run: |
+          echo "Listing image tags in ACR..."
+          az acr repository show-tags \
+            --name ${{ env.REGISTRY_NAME }} \
+            --repository ${{ env.IMAGE_NAME }} \
+            --output table
+
       - name: 🌍 Create or Update Container Apps Environment
         run: |
           if ! az containerapp env show --name ${{ env.ENVIRONMENT_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} &> /dev/null; then
@@ -175,7 +183,9 @@ jobs:
           echo "- **Application URL**: https://$APP_URL" >> $GITHUB_STEP_SUMMARY
           echo "- **Health Check**: https://$APP_URL/ping" >> $GITHUB_STEP_SUMMARY
           echo "- **API Explorer**: https://$APP_URL/explorer" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY      - name: 🏥 Health Check
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: 🏥 Health Check
         run: |
           echo "Waiting for application to be ready..."
           sleep 30
