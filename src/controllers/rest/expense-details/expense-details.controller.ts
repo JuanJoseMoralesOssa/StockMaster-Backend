@@ -112,8 +112,13 @@ export class ExpenseDetailsController {
   }
 
   @patch('/expense-details/{id}')
-  @response(204, {
+  @response(200, {
     description: 'ExpenseDetails PATCH success',
+    content: {
+      'application/json': {
+        schema: getModelSchemaRef(ExpenseDetails, {includeRelations: true}),
+      },
+    },
   })
   async updateById(
     @param.path.number('id') id: number,
@@ -124,20 +129,37 @@ export class ExpenseDetailsController {
         },
       },
     })
-    expenseDetails: ExpenseDetails,
-  ): Promise<void> {
+    expenseDetails: Partial<ExpenseDetails>,
+  ): Promise<ExpenseDetails> {
     await this.expenseDetailsRepository.updateById(id, expenseDetails);
+    return this.expenseDetailsRepository.findById(id, {include: []});
   }
 
   @put('/expense-details/{id}')
-  @response(204, {
+  @response(200, {
     description: 'ExpenseDetails PUT success',
+    content: {
+      'application/json': {
+        schema: getModelSchemaRef(ExpenseDetails, {includeRelations: true}),
+      },
+    },
   })
   async replaceById(
     @param.path.number('id') id: number,
-    @requestBody() expenseDetails: ExpenseDetails,
-  ): Promise<void> {
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: getModelSchemaRef(ExpenseDetails, {
+            title: 'ExpenseDetailsReplace',
+            exclude: ['id'],
+          }),
+        },
+      },
+    })
+    expenseDetails: Omit<ExpenseDetails, 'id'>,
+  ): Promise<ExpenseDetails> {
     await this.expenseDetailsRepository.replaceById(id, expenseDetails);
+    return this.expenseDetailsRepository.findById(id, {include: []});
   }
 
   @del('/expense-details/{id}')

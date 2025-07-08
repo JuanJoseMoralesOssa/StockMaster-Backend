@@ -23,8 +23,8 @@ import {UserRepository} from '../../../repositories';
 export class UserController {
   constructor(
     @repository(UserRepository)
-    public userRepository : UserRepository,
-  ) {}
+    public userRepository: UserRepository,
+  ) { }
 
   @post('/users')
   @response(200, {
@@ -132,8 +132,13 @@ export class UserController {
   }
 
   @patch('/users/{id}')
-  @response(204, {
+  @response(200, {
     description: 'User PATCH success',
+    content: {
+      'application/json': {
+        schema: getModelSchemaRef(User, {includeRelations: true}),
+      },
+    },
   })
   async updateById(
     @param.path.number('id') id: number,
@@ -144,20 +149,37 @@ export class UserController {
         },
       },
     })
-    user: User,
-  ): Promise<void> {
+    user: Partial<User>,
+  ): Promise<User> {
     await this.userRepository.updateById(id, user);
+    return this.userRepository.findById(id, {include: []});
   }
 
   @put('/users/{id}')
-  @response(204, {
+  @response(200, {
     description: 'User PUT success',
+    content: {
+      'application/json': {
+        schema: getModelSchemaRef(User, {includeRelations: true}),
+      },
+    },
   })
   async replaceById(
     @param.path.number('id') id: number,
-    @requestBody() user: User,
-  ): Promise<void> {
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: getModelSchemaRef(User, {
+            title: 'UserReplace',
+            exclude: ['id'],
+          }),
+        },
+      },
+    })
+    user: Omit<User, 'id'>,
+  ): Promise<User> {
     await this.userRepository.replaceById(id, user);
+    return this.userRepository.findById(id, {include: []});
   }
 
   @del('/users/{id}')

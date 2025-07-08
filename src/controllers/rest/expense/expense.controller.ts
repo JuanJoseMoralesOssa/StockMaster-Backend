@@ -131,8 +131,13 @@ export class ExpenseController {
   }
 
   @patch('/expenses/{id}')
-  @response(204, {
+  @response(200, {
     description: 'Expense PATCH success',
+    content: {
+      'application/json': {
+        schema: getModelSchemaRef(Expense, {includeRelations: true}),
+      },
+    },
   })
   async updateById(
     @param.path.number('id') id: number,
@@ -143,20 +148,37 @@ export class ExpenseController {
         },
       },
     })
-    expense: Expense,
-  ): Promise<void> {
+    expense: Partial<Expense>,
+  ): Promise<Expense> {
     await this.expenseRepository.updateById(id, expense);
+    return this.expenseRepository.findById(id, {include: []});
   }
 
   @put('/expenses/{id}')
-  @response(204, {
+  @response(200, {
     description: 'Expense PUT success',
+    content: {
+      'application/json': {
+        schema: getModelSchemaRef(Expense, {includeRelations: true}),
+      },
+    },
   })
   async replaceById(
     @param.path.number('id') id: number,
-    @requestBody() expense: Expense,
-  ): Promise<void> {
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: getModelSchemaRef(Expense, {
+            title: 'ExpenseReplace',
+            exclude: ['id'],
+          }),
+        },
+      },
+    })
+    expense: Omit<Expense, 'id'>,
+  ): Promise<Expense> {
     await this.expenseRepository.replaceById(id, expense);
+    return this.expenseRepository.findById(id, {include: []});
   }
 
   // @requireAuthAndRoles('admin') // Solo admin puede eliminar

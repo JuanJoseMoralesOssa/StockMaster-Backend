@@ -7,13 +7,13 @@ import {
   Where,
 } from '@loopback/repository';
 import {
-  post,
-  param,
+  del,
   get,
   getModelSchemaRef,
+  param,
   patch,
+  post,
   put,
-  del,
   requestBody,
   response,
 } from '@loopback/rest';
@@ -23,8 +23,8 @@ import {PurchaseDetailsRepository} from '../../../repositories';
 export class PurchaseDetailsController {
   constructor(
     @repository(PurchaseDetailsRepository)
-    public purchaseDetailsRepository : PurchaseDetailsRepository,
-  ) {}
+    public purchaseDetailsRepository: PurchaseDetailsRepository,
+  ) { }
 
   @post('/purchase-details')
   @response(200, {
@@ -112,8 +112,13 @@ export class PurchaseDetailsController {
   }
 
   @patch('/purchase-details/{id}')
-  @response(204, {
+  @response(200, {
     description: 'PurchaseDetails PATCH success',
+    content: {
+      'application/json': {
+        schema: getModelSchemaRef(PurchaseDetails, {includeRelations: true}),
+      },
+    },
   })
   async updateById(
     @param.path.number('id') id: number,
@@ -124,20 +129,37 @@ export class PurchaseDetailsController {
         },
       },
     })
-    purchaseDetails: PurchaseDetails,
-  ): Promise<void> {
+    purchaseDetails: Partial<PurchaseDetails>,
+  ): Promise<PurchaseDetails> {
     await this.purchaseDetailsRepository.updateById(id, purchaseDetails);
+    return this.purchaseDetailsRepository.findById(id, {include: []});
   }
 
   @put('/purchase-details/{id}')
-  @response(204, {
+  @response(200, {
     description: 'PurchaseDetails PUT success',
+    content: {
+      'application/json': {
+        schema: getModelSchemaRef(PurchaseDetails, {includeRelations: true}),
+      },
+    },
   })
   async replaceById(
     @param.path.number('id') id: number,
-    @requestBody() purchaseDetails: PurchaseDetails,
-  ): Promise<void> {
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: getModelSchemaRef(PurchaseDetails, {
+            title: 'PurchaseDetailsReplace',
+            exclude: ['id'],
+          }),
+        },
+      },
+    })
+    purchaseDetails: Omit<PurchaseDetails, 'id'>,
+  ): Promise<PurchaseDetails> {
     await this.purchaseDetailsRepository.replaceById(id, purchaseDetails);
+    return this.purchaseDetailsRepository.findById(id, {include: []});
   }
 
   @del('/purchase-details/{id}')

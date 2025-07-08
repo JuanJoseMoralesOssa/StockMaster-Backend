@@ -125,8 +125,13 @@ export class PurchaseController {
   }
 
   @patch('/purchases/{id}')
-  @response(204, {
+  @response(200, {
     description: 'Purchase PATCH success',
+    content: {
+      'application/json': {
+        schema: getModelSchemaRef(Purchase, {includeRelations: true}),
+      },
+    },
   })
   async updateById(
     @param.path.number('id') id: number,
@@ -137,20 +142,37 @@ export class PurchaseController {
         },
       },
     })
-    purchase: Purchase,
-  ): Promise<void> {
+    purchase: Partial<Purchase>,
+  ): Promise<Purchase> {
     await this.purchaseRepository.updateById(id, purchase);
+    return this.purchaseRepository.findById(id, {include: []});
   }
 
   @put('/purchases/{id}')
-  @response(204, {
+  @response(200, {
     description: 'Purchase PUT success',
+    content: {
+      'application/json': {
+        schema: getModelSchemaRef(Purchase, {includeRelations: true}),
+      },
+    },
   })
   async replaceById(
     @param.path.number('id') id: number,
-    @requestBody() purchase: Purchase,
-  ): Promise<void> {
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: getModelSchemaRef(Purchase, {
+            title: 'PurchaseReplace',
+            exclude: ['id'],
+          }),
+        },
+      },
+    })
+    purchase: Omit<Purchase, 'id'>,
+  ): Promise<Purchase> {
     await this.purchaseRepository.replaceById(id, purchase);
+    return this.purchaseRepository.findById(id, {include: []});
   }
 
   @del('/purchases/{id}')

@@ -144,11 +144,14 @@ export class ProductController {
     @param.filter(Product, {exclude: 'where'}) filter?: FilterExcludingWhere<Product>
   ): Promise<Product> {
     return this.productRepository.findById(id, filter);
-  }
-
-  @patch('/products/{id}')
-  @response(204, {
+  } @patch('/products/{id}')
+  @response(200, {
     description: 'Product PATCH success',
+    content: {
+      'application/json': {
+        schema: getModelSchemaRef(Product, {includeRelations: true}),
+      },
+    },
   })
   async updateById(
     @param.path.number('id') id: number,
@@ -159,20 +162,37 @@ export class ProductController {
         },
       },
     })
-    product: Product,
-  ): Promise<void> {
+    product: Partial<Product>,
+  ): Promise<Product> {
     await this.productRepository.updateById(id, product);
+    return this.productRepository.findById(id, {include: []});
   }
 
   @put('/products/{id}')
-  @response(204, {
+  @response(200, {
     description: 'Product PUT success',
+    content: {
+      'application/json': {
+        schema: getModelSchemaRef(Product, {includeRelations: true}),
+      },
+    },
   })
   async replaceById(
     @param.path.number('id') id: number,
-    @requestBody() product: Product,
-  ): Promise<void> {
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: getModelSchemaRef(Product, {
+            title: 'ProductReplace',
+            exclude: ['id'],
+          }),
+        },
+      },
+    })
+    product: Omit<Product, 'id'>,
+  ): Promise<Product> {
     await this.productRepository.replaceById(id, product);
+    return this.productRepository.findById(id, {include: []});
   }
 
   @del('/products/{id}')

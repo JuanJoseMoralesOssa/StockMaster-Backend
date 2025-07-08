@@ -145,8 +145,13 @@ export class PersonController {
   }
 
   @patch('/people/{id}')
-  @response(204, {
+  @response(200, {
     description: 'Person PATCH success',
+    content: {
+      'application/json': {
+        schema: getModelSchemaRef(Person, {includeRelations: true}),
+      },
+    },
   })
   async updateById(
     @param.path.number('id') id: number,
@@ -157,20 +162,37 @@ export class PersonController {
         },
       },
     })
-    person: Person,
-  ): Promise<void> {
+    person: Partial<Person>,
+  ): Promise<Person> {
     await this.personRepository.updateById(id, person);
+    return this.personRepository.findById(id, {include: []});
   }
 
   @put('/people/{id}')
-  @response(204, {
+  @response(200, {
     description: 'Person PUT success',
+    content: {
+      'application/json': {
+        schema: getModelSchemaRef(Person, {includeRelations: true}),
+      },
+    },
   })
   async replaceById(
     @param.path.number('id') id: number,
-    @requestBody() person: Person,
-  ): Promise<void> {
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: getModelSchemaRef(Person, {
+            title: 'PersonReplace',
+            exclude: ['id'],
+          }),
+        },
+      },
+    })
+    person: Omit<Person, 'id'>,
+  ): Promise<Person> {
     await this.personRepository.replaceById(id, person);
+    return this.personRepository.findById(id, {include: []});
   }
 
   @del('/people/{id}')
