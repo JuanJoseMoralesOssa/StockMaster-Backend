@@ -151,7 +151,7 @@ export class ExpenseController {
     expense: Partial<Expense>,
   ): Promise<Expense> {
     await this.expenseRepository.updateById(id, expense);
-    return this.expenseRepository.findById(id, {include: []});
+    return this.expenseRepository.findById(id, {include: ["expense_details"]});
   }
 
   @put('/expenses/{id}')
@@ -178,7 +178,7 @@ export class ExpenseController {
     expense: Omit<Expense, 'id'>,
   ): Promise<Expense> {
     await this.expenseRepository.replaceById(id, expense);
-    return this.expenseRepository.findById(id, {include: []});
+    return this.expenseRepository.findById(id, {include: ["expense_details"]});
   }
 
   // @requireAuthAndRoles('admin') // Solo admin puede eliminar

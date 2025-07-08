@@ -145,7 +145,7 @@ export class PurchaseController {
     purchase: Partial<Purchase>,
   ): Promise<Purchase> {
     await this.purchaseRepository.updateById(id, purchase);
-    return this.purchaseRepository.findById(id, {include: []});
+    return this.purchaseRepository.findById(id, {include: ["purchase_details"]});
   }
 
   @put('/purchases/{id}')
@@ -172,7 +172,7 @@ export class PurchaseController {
     purchase: Omit<Purchase, 'id'>,
   ): Promise<Purchase> {
     await this.purchaseRepository.replaceById(id, purchase);
-    return this.purchaseRepository.findById(id, {include: []});
+    return this.purchaseRepository.findById(id, {include: ["purchase_details"]});
   }
 
   @del('/purchases/{id}')
