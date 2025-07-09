@@ -20,7 +20,7 @@ import {
 } from '@loopback/rest';
 import {Expense, Pagination} from '../../../models';
 import {ExpenseRepository} from '../../../repositories';
-import {TransactionService} from '../../../services/transaction.service';
+import {TransactionService} from '../../../services';
 // import {requireAuth, requireAuthAndRoles} from '../auth';
 
 export class ExpenseController {
