@@ -10,6 +10,7 @@ import {
   del,
   get,
   getModelSchemaRef,
+  HttpErrors,
   param,
   patch,
   post,
@@ -44,6 +45,12 @@ export class PurchaseController {
     })
     purchase: Omit<Purchase, 'id'>,
   ): Promise<Purchase> {
+    if (purchase.date) {
+      const year = new Date(purchase.date).getFullYear();
+      if (year < 2000 || year > new Date().getFullYear()) {
+        throw new HttpErrors.BadRequest('Invalid date. Year must be between 2000 and current year.');
+      }
+    }
     return this.purchaseRepository.create(purchase);
   }
 

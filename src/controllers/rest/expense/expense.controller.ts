@@ -10,6 +10,7 @@ import {
   del,
   get,
   getModelSchemaRef,
+  HttpErrors,
   param,
   patch,
   post,
@@ -46,6 +47,12 @@ export class ExpenseController {
     })
     expense: Omit<Expense, 'id'>,
   ): Promise<Expense> {
+    if (expense.date) {
+      const year = new Date(expense.date).getFullYear();
+      if (year < 2000 || year > new Date().getFullYear()) {
+        throw new HttpErrors.BadRequest('Invalid date. Year must be between 2000 and current year.');
+      }
+    }
     return this.expenseRepository.create(expense);
   }
 

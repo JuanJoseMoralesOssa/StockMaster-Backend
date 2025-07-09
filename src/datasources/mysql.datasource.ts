@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {securityConfig} from '../config/security';
 
-require('dotenv').config();
+// require('dotenv').config();
 
 // Function to find the SSL certificate file
 function getCertificatePath(): string {
@@ -36,11 +36,13 @@ const config = {
   user: process.env.MYSQL_USER ?? securityConfig.USER,
   password: process.env.MYSQL_PASSWORD ?? securityConfig.PASSWORD,
   database: process.env.MYSQL_DATABASE ?? securityConfig.DATABASE,
+
   // host: 'localhost',
   // port: 3306,
   // user: 'root',
   // password: 'toor',
   // database: 'jm_inv_db',
+
 
   // SSL configuration for Azure MySQL
   ssl: {

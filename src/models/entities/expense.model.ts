@@ -1,4 +1,4 @@
-import {Entity, model, property, hasMany} from '@loopback/repository';
+import {Entity, hasMany, model, property} from '@loopback/repository';
 import {ExpenseDetails} from './expense-details.model';
 import {Person} from './person.model';
 import {Product} from './product.model';
@@ -20,7 +20,18 @@ export class Expense extends Entity {
 
   @property({
     type: 'date',
+    jsonSchema: {
+      format: 'date',
+    },
     required: true,
+    mysql: {
+      columnName: 'date',
+      dataType: 'date',
+      dataLength: null,
+      dataPrecision: null,
+      dataScale: null,
+      nullable: 'N',
+    },
   })
   date: string;
 

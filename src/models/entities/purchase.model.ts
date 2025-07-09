@@ -14,9 +14,21 @@ export class Purchase extends Entity {
 
   @property({
     type: 'date',
+    jsonSchema: {
+      format: 'date',
+    },
     required: true,
+    mysql: {
+      columnName: 'date',
+      dataType: 'date',
+      dataLength: null,
+      dataPrecision: null,
+      dataScale: null,
+      nullable: 'N',
+    },
   })
   date: string;
+
 
   @property({
     type: 'number',

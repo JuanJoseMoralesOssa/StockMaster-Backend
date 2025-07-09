@@ -21,6 +21,17 @@ export class User extends Entity {
     index: {
       unique: true,
     },
+    jsonSchema: {
+      format: 'email',
+    },
+    mysql: {
+      columnName: 'email',
+      dataType: 'varchar',
+      dataLength: 255,
+      dataPrecision: null,
+      dataScale: null,
+      nullable: 'N',
+    },
     pattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$',
   })
   email: string;
