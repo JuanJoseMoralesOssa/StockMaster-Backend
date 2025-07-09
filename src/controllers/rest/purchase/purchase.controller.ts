@@ -1,3 +1,4 @@
+import {service} from '@loopback/core';
 import {
   Count,
   CountSchema,
@@ -16,15 +17,18 @@ import {
   post,
   put,
   requestBody,
-  response,
+  response
 } from '@loopback/rest';
 import {Pagination, Purchase} from '../../../models';
 import {PurchaseRepository} from '../../../repositories/purchase.repository';
+import {TransactionService} from '../../../services';
 
 export class PurchaseController {
   constructor(
     @repository(PurchaseRepository)
     public purchaseRepository: PurchaseRepository,
+    @service(TransactionService)
+    public transactionService: TransactionService,
   ) { }
 
   @post('/purchases')
@@ -45,13 +49,11 @@ export class PurchaseController {
     })
     purchase: Omit<Purchase, 'id'>,
   ): Promise<Purchase> {
-    if (purchase.date) {
-      const year = new Date(purchase.date).getFullYear();
-      if (year < 2000 || year > new Date().getFullYear()) {
-        throw new HttpErrors.BadRequest('Invalid date. Year must be between 2000 and current year.');
-      }
-    }
-    return this.purchaseRepository.create(purchase);
+    this.transactionService.validateDate(purchase.date);
+    const createdPurchase = await this.purchaseRepository.create(purchase);
+    return this.purchaseRepository.findById(createdPurchase.id!, {
+      include: ['purchase_details']
+    });
   }
 
   @get('/purchases/count')
@@ -188,5 +190,132 @@ export class PurchaseController {
   })
   async deleteById(@param.path.number('id') id: number): Promise<void> {
     await this.purchaseRepository.deleteById(id);
+  }
+
+  /**
+   * Crea una compra con sus detalles en una transacción atómica
+   */
+  @post('/purchases/with-details')
+  @response(200, {
+    description: 'Purchase created with details',
+    content: {'application/json': {schema: getModelSchemaRef(Purchase, {includeRelations: true})}},
+  })
+  async createWithDetails(
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object',
+            required: ['date'],
+            properties: {
+              date: {type: 'string', format: 'date'},
+              purchaseDetails: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  required: ['weight_kg', 'productId', 'personId'],
+                  properties: {
+                    weight_kg: {type: 'number'},
+                    productId: {type: 'number'},
+                    personId: {type: 'number'},
+                  }
+                }
+              }
+            }
+          }
+        },
+      },
+    })
+    purchase: {
+      date: string;
+      purchaseDetails?: Array<{
+        weight_kg: number;
+        productId: number;
+        personId: number;
+      }>;
+    },
+  ): Promise<Purchase> {
+    const details = purchase.purchaseDetails ?? [];
+    const newPurchase = {
+      date: purchase.date,
+      details: details
+    } as Partial<Purchase> & {details?: Array<{weight_kg: number; productId: number; personId: number}>};
+    return this.transactionService.createWithDetails<Purchase, {
+      weight_kg: number;
+      productId: number;
+      personId: number;
+    }>(
+      newPurchase,
+      this.purchaseRepository,
+      'purchase_details'
+    );
+  }
+
+  /**
+   * Actualiza una compra con sus detalles (crear, actualizar, eliminar detalles)
+   */
+  @put('/purchases/with-details')
+  @response(200, {
+    description: 'Purchase updated with details',
+    content: {'application/json': {schema: getModelSchemaRef(Purchase, {includeRelations: true})}},
+  })
+  async updateWithDetails(
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object',
+            required: ['id'],
+            properties: {
+              id: {type: 'number'},
+              date: {type: 'string', format: 'date'},
+              purchaseDetails: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: {type: 'number'},
+                    weight_kg: {type: 'number'},
+                    productId: {type: 'number'},
+                    personId: {type: 'number'},
+                    toCreate: {type: 'boolean'},
+                    toUpdate: {type: 'boolean'},
+                    toDelete: {type: 'boolean'},
+                  }
+                }
+              }
+            }
+          }
+        },
+      },
+    })
+    purchaseData: {
+      id: number;
+      date?: string;
+      purchaseDetails?: Array<{
+        id?: number;
+        weight_kg?: number;
+        productId?: number;
+        personId?: number;
+        toCreate?: boolean;
+        toUpdate?: boolean;
+        toDelete?: boolean;
+      }>;
+    },
+  ): Promise<Purchase> {
+    try {
+      // Usar el TransactionService para manejar la lógica compleja
+      return await this.transactionService.updateWithDetails(
+        {
+          id: purchaseData.id,
+          date: purchaseData.date,
+          details: purchaseData.purchaseDetails
+        } as any,
+        this.purchaseRepository,
+        'purchase_details'
+      );
+    } catch (error) {
+      throw new HttpErrors.BadRequest(`Error updating purchase with details: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 }

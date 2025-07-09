@@ -1,3 +1,4 @@
+import {service} from '@loopback/core';
 import {
   Count,
   CountSchema,
@@ -10,22 +11,24 @@ import {
   del,
   get,
   getModelSchemaRef,
-  HttpErrors,
   param,
   patch,
   post,
   put,
   requestBody,
-  response,
+  response
 } from '@loopback/rest';
 import {Expense, Pagination} from '../../../models';
 import {ExpenseRepository} from '../../../repositories';
+import {TransactionService} from '../../../services/transaction.service';
 // import {requireAuth, requireAuthAndRoles} from '../auth';
 
 export class ExpenseController {
   constructor(
     @repository(ExpenseRepository)
     public expenseRepository: ExpenseRepository,
+    @service(TransactionService)
+    public transactionService: TransactionService,
   ) { }
 
   // @requireAuthAndRoles('admin', 'manager')  // Solo admin y manager pueden crear
@@ -47,13 +50,70 @@ export class ExpenseController {
     })
     expense: Omit<Expense, 'id'>,
   ): Promise<Expense> {
-    if (expense.date) {
-      const year = new Date(expense.date).getFullYear();
-      if (year < 2000 || year > new Date().getFullYear()) {
-        throw new HttpErrors.BadRequest('Invalid date. Year must be between 2000 and current year.');
-      }
-    }
-    return this.expenseRepository.create(expense);
+    this.transactionService.validateDate(expense.date);
+    const createdExpense = await this.expenseRepository.create(expense);
+    return this.expenseRepository.findById(createdExpense.id!, {
+      include: ['expense_details']
+    });
+  }
+
+  /**
+   * Crea un gasto con sus detalles en una transacción atómica
+   */
+  @post('/expenses/with-details')
+  @response(200, {
+    description: 'Expense created with details',
+    content: {'application/json': {schema: getModelSchemaRef(Expense, {includeRelations: true})}},
+  })
+  async createWithDetails(
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object',
+            required: ['date'],
+            properties: {
+              date: {type: 'string', format: 'date'},
+              expenseDetails: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  required: ['weight_kg', 'productId', 'personId'],
+                  properties: {
+                    weight_kg: {type: 'number'},
+                    productId: {type: 'number'},
+                    personId: {type: 'number'},
+                  }
+                }
+              }
+            }
+          }
+        },
+      },
+    })
+    expense: {
+      date: string;
+      expenseDetails?: Array<{
+        weight_kg: number;
+        productId: number;
+        personId: number;
+      }>;
+    },
+  ): Promise<Expense> {
+    const details = expense.expenseDetails ?? [];
+    const newExpense = {
+      date: expense.date,
+      details: details
+    } as Partial<Expense> & {details?: Array<{weight_kg: number; productId: number; personId: number}>};
+    return this.transactionService.createWithDetails<Expense, {
+      weight_kg: number;
+      productId: number;
+      personId: number;
+    }>(
+      newExpense,
+      this.expenseRepository,
+      'expense_details'
+    );
   }
 
   @get('/expenses/count')
@@ -196,4 +256,5 @@ export class ExpenseController {
   async deleteById(@param.path.number('id') id: number): Promise<void> {
     await this.expenseRepository.deleteById(id);
   }
+
 }
