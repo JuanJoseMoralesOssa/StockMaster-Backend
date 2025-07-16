@@ -130,12 +130,12 @@ export class PersonReportsController {
     const dateFilter =
       filterType === FilterType.DAY
         ? {
-          gte: `${dateValue}T00:00:00.000Z`,
-          lt: `${dateValue}T23:59:59.999Z`,
+          gte: dateValue,
+          lt: dateValue,
         }
         : {
-          gte: `${dateValue}-01T00:00:00.000Z`,
-          lt: `${dateValue}-31T23:59:59.999Z`,
+          gte: `${dateValue}-01`,
+          lt: `${dateValue}-31`,
         };
 
     // SOLUCIÓN: No limitar los campos y usar relaciones correctas

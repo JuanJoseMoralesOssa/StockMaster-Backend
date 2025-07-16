@@ -257,4 +257,61 @@ export class ExpenseController {
     await this.expenseRepository.deleteById(id);
   }
 
+  @get('/expenses/filtered')
+  @response(200, {
+    description: 'Array of filtered Expense model instances with pagination',
+    content: {
+      'application/json': {
+        schema: {
+          type: 'object',
+          properties: {
+            count: {type: 'number'},
+            data: {
+              type: 'array',
+              items: getModelSchemaRef(Expense, {includeRelations: true}),
+            },
+            page: {type: 'number'},
+            limit: {type: 'number'},
+          },
+        },
+      },
+    },
+  })
+  async getFilteredExpenses(
+    @param.query.string('startDate') startDate?: string,
+    @param.query.string('endDate') endDate?: string,
+    @param.query.number('personId') personId?: number,
+    @param.query.number('productId') productId?: number,
+    @param.query.number('page') page: number = 1,
+    @param.query.number('limit') limit: number = 10,
+  ): Promise<Pagination<Expense>> {
+    // Validar fechas si se proporcionan
+    if (startDate) {
+      this.transactionService.validateDate(startDate);
+    }
+    if (endDate) {
+      this.transactionService.validateDate(endDate);
+    }
+
+    // Obtener todos los gastos filtrados
+    const allFilteredExpenses = await this.expenseRepository.findFilteredExpenses(
+      startDate,
+      endDate,
+      personId,
+      productId
+    );
+
+    // Aplicar paginación manualmente
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const paginatedExpenses = allFilteredExpenses.slice(startIndex, endIndex);
+
+    return new Pagination<Expense>({
+      count: allFilteredExpenses.length,
+      data: paginatedExpenses,
+      page: page,
+      limit: limit
+    });
+  }
+
 }

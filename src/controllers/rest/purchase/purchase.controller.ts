@@ -318,4 +318,62 @@ export class PurchaseController {
       throw new HttpErrors.BadRequest(`Error updating purchase with details: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
+
+  @get('/purchases/filtered')
+  @response(200, {
+    description: 'Array of filtered Purchase model instances with pagination',
+    content: {
+      'application/json': {
+        schema: {
+          type: 'object',
+          properties: {
+            count: {type: 'number'},
+            data: {
+              type: 'array',
+              items: getModelSchemaRef(Purchase, {includeRelations: true}),
+            },
+            page: {type: 'number'},
+            limit: {type: 'number'},
+          },
+        },
+      },
+    },
+  })
+  async getFilteredPurchases(
+    @param.query.string('startDate') startDate?: string,
+    @param.query.string('endDate') endDate?: string,
+    @param.query.number('personId') personId?: number,
+    @param.query.number('productId') productId?: number,
+    @param.query.number('page') page: number = 1,
+    @param.query.number('limit') limit: number = 10,
+  ): Promise<Pagination<Purchase>> {
+    // Validar fechas si se proporcionan
+    if (startDate) {
+      this.transactionService.validateDate(startDate);
+    }
+    if (endDate) {
+      this.transactionService.validateDate(endDate);
+    }
+
+    // Obtener todas las compras filtradas
+    const allFilteredPurchases = await this.purchaseRepository.findFilteredPurchases(
+      startDate,
+      endDate,
+      personId,
+      productId
+    );
+
+    // Aplicar paginación manualmente
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const paginatedPurchases = allFilteredPurchases.slice(startIndex, endIndex);
+
+    return new Pagination<Purchase>({
+      count: allFilteredPurchases.length,
+      data: paginatedPurchases,
+      page: page,
+      limit: limit
+    });
+  }
+
 }

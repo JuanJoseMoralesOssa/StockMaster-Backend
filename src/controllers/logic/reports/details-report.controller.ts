@@ -46,7 +46,7 @@ export class DetailsReportsController {
     protected purchaseRepository: PurchaseRepository,
     @repository(ExpenseRepository)
     protected expenseRepository: ExpenseRepository,
-  ) {}
+  ) { }
 
   @get('/person/{personId}/product/{productId}/transactions')
   async getPersonProductTransactions(
@@ -68,7 +68,7 @@ export class DetailsReportsController {
 
     // Construir filtro de fechas
     const dateFilter = {
-      between: [`${startDate}T00:00:00.000Z`, `${endDate}T23:59:59.999Z`],
+      between: [startDate, endDate],
     };
 
     // Buscar persona con sus compras y gastos
@@ -176,7 +176,7 @@ export class DetailsReportsController {
 
     // Construir filtro de fechas
     const dateFilter = {
-      between: [`${startDate}T00:00:00.000Z`, `${endDate}T23:59:59.999Z`],
+      between: [startDate, endDate],
     };
 
     // Obtener todos los detalles de compra para este producto
@@ -277,7 +277,7 @@ export class DetailsReportsController {
 
     // Construir filtro de fechas
     const dateFilter = {
-      between: [`${startDate}T00:00:00.000Z`, `${endDate}T23:59:59.999Z`],
+      between: [startDate, endDate],
     };
 
     // Obtener todos los detalles de compra para esta persona con filtro de fecha
