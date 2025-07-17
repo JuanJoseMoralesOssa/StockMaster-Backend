@@ -127,7 +127,7 @@ export class DetailsReportsController {
             date: purchase.date,
             weight_kg: detail.weight_kg,
             type: 'Compra' as const,
-          })) || [],
+          })) ?? [],
       ) || [];
 
     // Extraer detalles de gastos
