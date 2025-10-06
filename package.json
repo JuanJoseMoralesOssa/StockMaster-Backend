@@ -65,7 +65,7 @@
     "@loopback/security": "^0.12.2",
     "@loopback/service-proxy": "^8.0.1",
     "bcryptjs": "^3.0.2",
-    "dotenv": "^17.0.1",
+    "dotenv": "^17.2.3",
     "jsonwebtoken": "^9.0.2",
     "loopback-connector-mssql": "^3.8.0",
     "loopback-connector-mysql": "^7.0.18",
