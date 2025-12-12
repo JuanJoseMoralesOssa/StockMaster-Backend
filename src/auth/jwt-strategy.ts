@@ -54,16 +54,16 @@ export class JWTAuthStrategy implements AuthenticationStrategy, OASEnhancer {
     }
 
     // Por ejemplo: Bearer xxx.yyy.zzz
-    const authHeaderValue = request.headers.authorization
+    const authHeaderValue = request.headers.authorization.trim()
 
-    if (!authHeaderValue.startsWith('Bearer')) {
+    if (!/^Bearer\s+/i.test(authHeaderValue)) {
       throw new HttpErrors.Unauthorized(
         'Authorization header is not of type "Bearer".',
       )
     }
 
     // Dividir el valor del header para obtener el token
-    const parts = authHeaderValue.split(' ')
+    const parts = authHeaderValue.split(/\s+/)
     if (parts.length !== 2) {
       throw new HttpErrors.Unauthorized(
         'Authorization header value has too many parts. It must follow the pattern: "Bearer xx.yy.zz" where xx.yy.zz is a valid JWT token.',

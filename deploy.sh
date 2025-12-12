@@ -87,10 +87,11 @@ az containerapp create \
         NODE_ENV=production \
         HOST=0.0.0.0 \
         PORT=3000 \
-        MYSQL_HOST=mysql-jm-inv-bd.mysql.database.azure.com \
-        MYSQL_USER=bbjbzdifjkMaestraioAdmin \
-        MYSQL_PASSWORD=Maestrotario1234GMRfRkbWFm6tc8a288@95@6n9iWAK3 \
-        MYSQL_DATABASE=jm_inv_db
+        BD_HOST=TU_HOST_POSTGRES \
+        BD_PORT=5432 \
+        BD_USER=TU_USUARIO_POSTGRES \
+        BD_PASSWORD=TU_PASSWORD_POSTGRES \
+        BD_DATABASE=TU_BASE_DE_DATOS_POSTGRES
 
 # 9. Obtener URL de la aplicación
 echo "🎉 ¡Despliegue completado!"

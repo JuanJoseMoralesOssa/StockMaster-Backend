@@ -92,17 +92,20 @@ echo ""
 echo "1. AZURE_CREDENTIALS (REQUERIDO):"
 echo "   $SP_OUTPUT"
 echo ""
-echo "2. MYSQL_PASSWORD (REQUERIDO):"
-echo "   Tu password real de MySQL"
+echo "2. BD_PASSWORD (REQUERIDO):"
+echo "   Tu password real de PostgreSQL"
 echo ""
-echo "3. MYSQL_HOST (OPCIONAL):"
-echo "   mysql-jm-inv-bd.mysql.database.azure.com"
+echo "3. BD_HOST (REQUERIDO):"
+echo "   Tu host de PostgreSQL"
 echo ""
-echo "4. MYSQL_USER (OPCIONAL):"
-echo "   bbjbzdifjkMaestraioAdmin"
+echo "4. BD_USER (REQUERIDO):"
+echo "   Tu usuario de PostgreSQL"
 echo ""
-echo "5. MYSQL_DATABASE (OPCIONAL):"
-echo "   jm_inv_db"
+echo "5. BD_DATABASE (REQUERIDO):"
+echo "   Tu base de datos PostgreSQL"
+echo ""
+echo "6. BD_PORT (OPCIONAL):"
+echo "   5432"
 echo ""
 
 # Si GitHub CLI está disponible, ofrecer configuración automática
@@ -123,16 +126,23 @@ if command -v gh &> /dev/null; then
         echo "$SP_OUTPUT" | gh secret set AZURE_CREDENTIALS
         print_status "AZURE_CREDENTIALS configurado"
 
-        # Solicitar password de MySQL
-        read -s -p "🔑 Ingresa el password de MySQL: " MYSQL_PASSWORD
+        # Solicitar password de PostgreSQL
+        read -s -p "🔑 Ingresa el password de PostgreSQL: " BD_PASSWORD
         echo ""
-        echo "$MYSQL_PASSWORD" | gh secret set MYSQL_PASSWORD
-        print_status "MYSQL_PASSWORD configurado"
+        echo "$BD_PASSWORD" | gh secret set BD_PASSWORD
+        print_status "BD_PASSWORD configurado"
 
-        # Configurar secrets opcionales
-        echo "mysql-jm-inv-bd.mysql.database.azure.com" | gh secret set MYSQL_HOST
-        echo "bbjbzdifjkMaestraioAdmin" | gh secret set MYSQL_USER
-        echo "jm_inv_db" | gh secret set MYSQL_DATABASE
+        # Configurar secrets requeridos
+        read -p "🌐 Ingresa el host de PostgreSQL (BD_HOST): " BD_HOST
+        read -p "👤 Ingresa el usuario de PostgreSQL (BD_USER): " BD_USER
+        read -p "🗄️  Ingresa el nombre de la base de datos (BD_DATABASE): " BD_DATABASE
+        read -p "🔢 Ingresa el puerto (BD_PORT, default 5432): " BD_PORT
+        BD_PORT=${BD_PORT:-5432}
+
+        echo "$BD_HOST" | gh secret set BD_HOST
+        echo "$BD_USER" | gh secret set BD_USER
+        echo "$BD_DATABASE" | gh secret set BD_DATABASE
+        echo "$BD_PORT" | gh secret set BD_PORT
 
         print_status "Todos los secrets configurados automáticamente"
     fi

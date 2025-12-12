@@ -1,3 +1,4 @@
+import {service} from '@loopback/core'
 import {
   Count,
   CountSchema,
@@ -17,19 +18,22 @@ import {
   requestBody,
   response,
 } from '@loopback/rest'
-import { Pagination, User } from '../../../models'
-import { UserRepository } from '../../../repositories'
+import {Pagination, User} from '../../../models'
+import {UserRepository} from '../../../repositories'
+import {SecurityService} from '../../../services'
 
 export class UserController {
   constructor(
     @repository(UserRepository)
     public userRepository: UserRepository,
-  ) {}
+    @service(SecurityService)
+    public securityService: SecurityService,
+  ) { }
 
   @post('/users')
   @response(200, {
     description: 'User model instance',
-    content: { 'application/json': { schema: getModelSchemaRef(User) } },
+    content: {'application/json': {schema: getModelSchemaRef(User)}},
   })
   async create(
     @requestBody({
@@ -44,13 +48,18 @@ export class UserController {
     })
     user: Omit<User, 'id'>,
   ): Promise<User> {
-    return this.userRepository.create(user)
+    // Hash the password before saving the user
+    user.password = await this.securityService.hashPassword(user.password)
+    const createdUser = await this.userRepository.create(user)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const {password: _password, ...userWithoutPassword} = createdUser
+    return userWithoutPassword as User
   }
 
   @get('/users/count')
   @response(200, {
     description: 'User model count',
-    content: { 'application/json': { schema: CountSchema } },
+    content: {'application/json': {schema: CountSchema}},
   })
   async count(@param.where(User) where?: Where<User>): Promise<Count> {
     return this.userRepository.count(where)
@@ -63,7 +72,7 @@ export class UserController {
       'application/json': {
         schema: {
           type: 'array',
-          items: getModelSchemaRef(User, { includeRelations: true }),
+          items: getModelSchemaRef(User, {includeRelations: true}),
         },
       },
     },
@@ -97,13 +106,13 @@ export class UserController {
   @patch('/users')
   @response(200, {
     description: 'User PATCH success count',
-    content: { 'application/json': { schema: CountSchema } },
+    content: {'application/json': {schema: CountSchema}},
   })
   async updateAll(
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(User, { partial: true }),
+          schema: getModelSchemaRef(User, {partial: true}),
         },
       },
     })
@@ -118,13 +127,13 @@ export class UserController {
     description: 'User model instance',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(User, { includeRelations: true }),
+        schema: getModelSchemaRef(User, {includeRelations: true}),
       },
     },
   })
   async findById(
     @param.path.number('id') id: number,
-    @param.filter(User, { exclude: 'where' })
+    @param.filter(User, {exclude: 'where'})
     filter?: FilterExcludingWhere<User>,
   ): Promise<User> {
     return this.userRepository.findById(id, filter)
@@ -135,7 +144,7 @@ export class UserController {
     description: 'User PATCH success',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(User, { includeRelations: true }),
+        schema: getModelSchemaRef(User, {includeRelations: true}),
       },
     },
   })
@@ -144,14 +153,14 @@ export class UserController {
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(User, { partial: true }),
+          schema: getModelSchemaRef(User, {partial: true}),
         },
       },
     })
     user: Partial<User>,
   ): Promise<User> {
     await this.userRepository.updateById(id, user)
-    return this.userRepository.findById(id, { include: [] })
+    return this.userRepository.findById(id, {include: []})
   }
 
   @put('/users/{id}')
@@ -159,7 +168,7 @@ export class UserController {
     description: 'User PUT success',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(User, { includeRelations: true }),
+        schema: getModelSchemaRef(User, {includeRelations: true}),
       },
     },
   })
@@ -178,7 +187,7 @@ export class UserController {
     user: Omit<User, 'id'>,
   ): Promise<User> {
     await this.userRepository.replaceById(id, user)
-    return this.userRepository.findById(id, { include: [] })
+    return this.userRepository.findById(id, {include: []})
   }
 
   @del('/users/{id}')

@@ -18,7 +18,7 @@ export class Purchase extends Entity {
       format: 'date',
     },
     required: true,
-    mysql: {
+    postgresql: {
       columnName: 'date',
       dataType: 'date',
       dataLength: null,

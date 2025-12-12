@@ -23,16 +23,22 @@ param(
 )
 
 # Verificar que las variables de entorno están configuradas
-if (-not $env:MYSQL_PASSWORD) {
-    Write-Error "❌ Error: La variable de entorno MYSQL_PASSWORD no está configurada"
-    Write-Host "Ejecuta: `$env:MYSQL_PASSWORD='tu_password_aqui'" -ForegroundColor Yellow
-    exit 1
+if (-not $env:BD_URL) {
+    if (-not $env:BD_HOST -or -not $env:BD_USER -or -not $env:BD_PASSWORD -or -not $env:BD_DATABASE) {
+        Write-Error "❌ Error: Debes configurar BD_URL o las variables BD_HOST, BD_USER, BD_PASSWORD y BD_DATABASE"
+        Write-Host "Ejemplos:" -ForegroundColor Yellow
+        Write-Host "  `$env:BD_URL='postgresql://user:pass@host:5432/dbname'" -ForegroundColor Yellow
+        Write-Host "  # o" -ForegroundColor Yellow
+        Write-Host "  `$env:BD_HOST='tu_host'; `$env:BD_USER='tu_user'; `$env:BD_PASSWORD='tu_pass'; `$env:BD_DATABASE='tu_db'" -ForegroundColor Yellow
+        exit 1
+    }
 }
 
-# Variables de base de datos
-$MYSQL_HOST = if ($env:MYSQL_HOST) { $env:MYSQL_HOST } else { "mysql-jm-inv-bd.mysql.database.azure.com" }
-$MYSQL_USER = if ($env:MYSQL_USER) { $env:MYSQL_USER } else { "bbjbzdifjkMaestraioAdmin" }
-$MYSQL_DATABASE = if ($env:MYSQL_DATABASE) { $env:MYSQL_DATABASE } else { "jm_inv_db" }
+# Variables de base de datos (PostgreSQL)
+$BD_HOST = if ($env:BD_HOST) { $env:BD_HOST } else { "localhost" }
+$BD_PORT = if ($env:BD_PORT) { $env:BD_PORT } else { "5432" }
+$BD_USER = if ($env:BD_USER) { $env:BD_USER } else { "postgres" }
+$BD_DATABASE = if ($env:BD_DATABASE) { $env:BD_DATABASE } else { "postgres" }
 
 Write-Host "🚀 Iniciando despliegue en Azure Container Apps..." -ForegroundColor Green
 Write-Host "📊 Configuración:" -ForegroundColor Cyan
@@ -111,7 +117,7 @@ az containerapp create `
     --memory 2Gi `
     --min-replicas 1 `
     --max-replicas 5 `
-    --env-vars NODE_ENV=production HOST=0.0.0.0 PORT=3000 MYSQL_HOST=$MYSQL_HOST MYSQL_USER=$MYSQL_USER MYSQL_PASSWORD=$env:MYSQL_PASSWORD MYSQL_DATABASE=$MYSQL_DATABASE
+    --env-vars NODE_ENV=production HOST=0.0.0.0 PORT=3000 BD_URL=$env:BD_URL BD_HOST=$BD_HOST BD_PORT=$BD_PORT BD_USER=$BD_USER BD_PASSWORD=$env:BD_PASSWORD BD_DATABASE=$BD_DATABASE
 
 # 10. Obtener URL de la aplicación
 Write-Host "🎉 ¡Despliegue completado!" -ForegroundColor Green

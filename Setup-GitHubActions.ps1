@@ -106,17 +106,20 @@ Write-Host ""
 Write-Host "1. AZURE_CREDENTIALS (REQUERIDO):" -ForegroundColor Yellow
 Write-Host "   $spJson"
 Write-Host ""
-Write-Host "2. MYSQL_PASSWORD (REQUERIDO):" -ForegroundColor Yellow
-Write-Host "   Tu password real de MySQL"
+Write-Host "2. BD_PASSWORD (REQUERIDO):" -ForegroundColor Yellow
+Write-Host "   Tu password real de PostgreSQL"
 Write-Host ""
-Write-Host "3. MYSQL_HOST (OPCIONAL):" -ForegroundColor Yellow
-Write-Host "   mysql-jm-inv-bd.mysql.database.azure.com"
+Write-Host "3. BD_HOST (REQUERIDO):" -ForegroundColor Yellow
+Write-Host "   Tu host de PostgreSQL"
 Write-Host ""
-Write-Host "4. MYSQL_USER (OPCIONAL):" -ForegroundColor Yellow
-Write-Host "   bbjbzdifjkMaestraioAdmin"
+Write-Host "4. BD_USER (REQUERIDO):" -ForegroundColor Yellow
+Write-Host "   Tu usuario de PostgreSQL"
 Write-Host ""
-Write-Host "5. MYSQL_DATABASE (OPCIONAL):" -ForegroundColor Yellow
-Write-Host "   jm_inv_db"
+Write-Host "5. BD_DATABASE (REQUERIDO):" -ForegroundColor Yellow
+Write-Host "   Tu base de datos PostgreSQL"
+Write-Host ""
+Write-Host "6. BD_PORT (OPCIONAL):" -ForegroundColor Yellow
+Write-Host "   5432"
 Write-Host ""
 
 # Si GitHub CLI está disponible, ofrecer configuración automática
@@ -137,16 +140,23 @@ if ($HasGitHubCLI -and ($AutoConfig -or (Read-Host "¿Quieres configurar los sec
         $spJson | gh secret set AZURE_CREDENTIALS
         Write-Status "AZURE_CREDENTIALS configurado"
 
-        # Solicitar password de MySQL
-        $mysqlPassword = Read-Host "🔑 Ingresa el password de MySQL" -AsSecureString
-        $mysqlPasswordPlain = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($mysqlPassword))
-        $mysqlPasswordPlain | gh secret set MYSQL_PASSWORD
-        Write-Status "MYSQL_PASSWORD configurado"
+        # Solicitar password de PostgreSQL
+        $bdPassword = Read-Host "🔑 Ingresa el password de PostgreSQL" -AsSecureString
+        $bdPasswordPlain = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($bdPassword))
+        $bdPasswordPlain | gh secret set BD_PASSWORD
+        Write-Status "BD_PASSWORD configurado"
 
-        # Configurar secrets opcionales
-        "mysql-jm-inv-bd.mysql.database.azure.com" | gh secret set MYSQL_HOST
-        "bbjbzdifjkMaestraioAdmin" | gh secret set MYSQL_USER
-        "jm_inv_db" | gh secret set MYSQL_DATABASE
+        # Solicitar secrets requeridos
+        $bdHost = Read-Host "🌐 Ingresa el host de PostgreSQL (BD_HOST)"
+        $bdUser = Read-Host "👤 Ingresa el usuario de PostgreSQL (BD_USER)"
+        $bdDatabase = Read-Host "🗄️  Ingresa el nombre de la base de datos (BD_DATABASE)"
+        $bdPort = Read-Host "🔢 Ingresa el puerto (BD_PORT, default 5432)"
+        if (-not $bdPort) { $bdPort = "5432" }
+
+        $bdHost | gh secret set BD_HOST
+        $bdUser | gh secret set BD_USER
+        $bdDatabase | gh secret set BD_DATABASE
+        $bdPort | gh secret set BD_PORT
 
         Write-Status "Todos los secrets configurados automáticamente"
     } catch {

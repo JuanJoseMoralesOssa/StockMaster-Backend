@@ -5,14 +5,16 @@ properties:
   managedEnvironmentId: /subscriptions/{subscription-id}/resourceGroups/{resource-group}/providers/Microsoft.App/managedEnvironments/{environment-name}
   configuration:
     secrets:
-      - name: mysql-host
-        value: mysql-jm-inv-bd.mysql.database.azure.com
-      - name: mysql-user
-        value: bbjbzdifjkMaestraioAdmin
-      - name: mysql-password
-        value: Maestrotario1234GMRfRkbWFm6tc8a288@95@6n9iWAK3
-      - name: mysql-database
-        value: jm_inv_db
+      - name: bd-host
+        value: your-postgres-host
+      - name: bd-port
+        value: "5432"
+      - name: bd-user
+        value: your-postgres-user
+      - name: bd-password
+        value: your-postgres-password
+      - name: bd-database
+        value: your-postgres-database
     activeRevisionsMode: Single
     ingress:
       external: true
@@ -32,14 +34,16 @@ properties:
             value: 0.0.0.0
           - name: PORT
             value: "3000"
-          - name: MYSQL_HOST
-            secretRef: mysql-host
-          - name: MYSQL_USER
-            secretRef: mysql-user
-          - name: MYSQL_PASSWORD
-            secretRef: mysql-password
-          - name: MYSQL_DATABASE
-            secretRef: mysql-database
+          - name: BD_HOST
+            secretRef: bd-host
+          - name: BD_PORT
+            secretRef: bd-port
+          - name: BD_USER
+            secretRef: bd-user
+          - name: BD_PASSWORD
+            secretRef: bd-password
+          - name: BD_DATABASE
+            secretRef: bd-database
         resources:
           cpu: 1
           memory: 2Gi

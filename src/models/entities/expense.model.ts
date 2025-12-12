@@ -1,7 +1,7 @@
-import { Entity, hasMany, model, property } from '@loopback/repository'
-import { ExpenseDetails } from './expense-details.model'
-import { Person } from './person.model'
-import { Product } from './product.model'
+import {Entity, hasMany, model, property} from '@loopback/repository'
+import {ExpenseDetails} from './expense-details.model'
+import {Person} from './person.model'
+import {Product} from './product.model'
 
 @model()
 export class Expense extends Entity {
@@ -24,7 +24,7 @@ export class Expense extends Entity {
       format: 'date',
     },
     required: true,
-    mysql: {
+    postgresql: {
       columnName: 'date',
       dataType: 'date',
       dataLength: null,
@@ -38,10 +38,10 @@ export class Expense extends Entity {
   @hasMany(() => ExpenseDetails)
   expense_details: ExpenseDetails[]
 
-  @hasMany(() => Person, { through: { model: () => ExpenseDetails } })
+  @hasMany(() => Person, {through: {model: () => ExpenseDetails}})
   people: Person[]
 
-  @hasMany(() => Product, { through: { model: () => ExpenseDetails } })
+  @hasMany(() => Product, {through: {model: () => ExpenseDetails}})
   products: Product[]
 
   constructor(data?: Partial<Expense>) {

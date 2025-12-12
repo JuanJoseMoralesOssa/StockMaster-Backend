@@ -108,3 +108,5 @@ build/
 
 # Logs
 *.log
+
+docker

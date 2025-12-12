@@ -1,4 +1,4 @@
-import { Entity, model, property } from '@loopback/repository'
+import {Entity, model, property} from '@loopback/repository'
 
 @model()
 export class User extends Entity {
@@ -24,7 +24,7 @@ export class User extends Entity {
     jsonSchema: {
       format: 'email',
     },
-    mysql: {
+    postgresql: {
       columnName: 'email',
       dataType: 'varchar',
       dataLength: 255,

@@ -73,11 +73,14 @@ Ve a tu repositorio → Settings → Secrets and variables → Actions:
 **Obligatorios:**
 
 - `AZURE_CREDENTIALS` - Credenciales de Azure
-- `MYSQL_PASSWORD` - Password de MySQL
+- `BD_HOST` - Host de PostgreSQL
+- `BD_USER` - Usuario de PostgreSQL
+- `BD_PASSWORD` - Password de PostgreSQL
+- `BD_DATABASE` - Base de datos PostgreSQL
 
 **Opcionales:**
 
-- `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_DATABASE`
+- `BD_PORT`
 - `SNYK_TOKEN`, `SONAR_TOKEN`
 
 ### 3. **Hacer Push**

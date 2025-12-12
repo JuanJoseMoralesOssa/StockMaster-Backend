@@ -6,7 +6,7 @@ Este proyecto utiliza GitHub Actions para automatizar el despliegue y testing de
 
 ### 1. 🚀 Deploy (`deploy.yml`)
 
-**Trigger:** Push a `main` o `master`
+BD_PASSWORD=tu_password_postgres
 
 **Funciones:**
 
@@ -70,9 +70,10 @@ MYSQL_PASSWORD=tu_password_mysql
 ### Opcionales
 
 ```
-MYSQL_HOST=mysql-jm-inv-bd.mysql.database.azure.com
-MYSQL_USER=bbjbzdifjkMaestraioAdmin
-MYSQL_DATABASE=jm_inv_db
+BD_HOST=tu_host_postgres
+BD_USER=tu_usuario_postgres
+BD_DATABASE=tu_db_postgres
+BD_PORT=5432
 SNYK_TOKEN=tu_token_snyk
 SONAR_TOKEN=tu_token_sonarcloud
 ```

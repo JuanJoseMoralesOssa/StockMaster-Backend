@@ -1,10 +1,10 @@
-import { Getter, inject } from '@loopback/core'
+import {Getter, inject} from '@loopback/core'
 import {
   DefaultCrudRepository,
   HasManyThroughRepositoryFactory,
   repository,
 } from '@loopback/repository'
-import { MysqlDataSource } from '../datasources'
+import {PostgresDataSource} from '../datasources'
 // import {SqlserverDataSource} from '../datasources';
 import {
   Expense,
@@ -15,11 +15,11 @@ import {
   Purchase,
   PurchaseDetails,
 } from '../models'
-import { ExpenseDetailsRepository } from './expense-details.repository'
-import { ExpenseRepository } from './expense.repository'
-import { ProductRepository } from './product.repository'
-import { PurchaseDetailsRepository } from './purchase-details.repository'
-import { PurchaseRepository } from './purchase.repository'
+import {ExpenseDetailsRepository} from './expense-details.repository'
+import {ExpenseRepository} from './expense.repository'
+import {ProductRepository} from './product.repository'
+import {PurchaseDetailsRepository} from './purchase-details.repository'
+import {PurchaseRepository} from './purchase.repository'
 
 export class PersonRepository extends DefaultCrudRepository<
   Person,
@@ -55,7 +55,7 @@ export class PersonRepository extends DefaultCrudRepository<
   >
 
   constructor(
-    @inject('datasources.mysql') dataSource: MysqlDataSource,
+    @inject('datasources.postgres') dataSource: PostgresDataSource,
     // @inject('datasources.sqlserver') dataSource: SqlserverDataSource,
     @repository.getter('ExpenseDetailsRepository')
     protected expenseDetailsRepositoryGetter: Getter<ExpenseDetailsRepository>,

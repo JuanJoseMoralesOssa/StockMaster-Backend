@@ -1,11 +1,11 @@
-import { Getter, inject } from '@loopback/core'
+import {Getter, inject} from '@loopback/core'
 import {
   DefaultCrudRepository,
   HasManyRepositoryFactory,
   HasManyThroughRepositoryFactory,
   repository,
 } from '@loopback/repository'
-import { MysqlDataSource } from '../datasources'
+import {PostgresDataSource} from '../datasources'
 // import {SqlserverDataSource} from '../datasources';
 import {
   Expense,
@@ -14,9 +14,9 @@ import {
   Person,
   Product,
 } from '../models'
-import { ExpenseDetailsRepository } from './expense-details.repository'
-import { PersonRepository } from './person.repository'
-import { ProductRepository } from './product.repository'
+import {ExpenseDetailsRepository} from './expense-details.repository'
+import {PersonRepository} from './person.repository'
+import {ProductRepository} from './product.repository'
 
 export class ExpenseRepository extends DefaultCrudRepository<
   Expense,
@@ -43,7 +43,7 @@ export class ExpenseRepository extends DefaultCrudRepository<
   >
 
   constructor(
-    @inject('datasources.mysql') dataSource: MysqlDataSource,
+    @inject('datasources.postgres') dataSource: PostgresDataSource,
     // @inject('datasources.sqlserver') dataSource: SqlserverDataSource,
     @repository.getter('ExpenseDetailsRepository')
     protected expenseDetailsRepositoryGetter: Getter<ExpenseDetailsRepository>,
@@ -109,15 +109,15 @@ export class ExpenseRepository extends DefaultCrudRepository<
 
     // Agregar filtro de fechas solo si se proporcionan
     if (startDate && endDate) {
-      expenseWhere.date = { between: [startDate, endDate] }
+      expenseWhere.date = {between: [startDate, endDate]}
     } else if (startDate) {
-      expenseWhere.date = { gte: startDate }
+      expenseWhere.date = {gte: startDate}
     } else if (endDate) {
-      expenseWhere.date = { lte: endDate }
+      expenseWhere.date = {lte: endDate}
     }
 
     if (expenseIds) {
-      expenseWhere.id = { inq: expenseIds }
+      expenseWhere.id = {inq: expenseIds}
     }
 
     // Armar el scope del include dinámicamente
@@ -132,7 +132,7 @@ export class ExpenseRepository extends DefaultCrudRepository<
         {
           relation: 'expense_details',
           ...(Object.keys(includeScope).length > 0
-            ? { scope: includeScope }
+            ? {scope: includeScope}
             : {}),
         },
       ],

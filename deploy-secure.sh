@@ -4,10 +4,15 @@
 # IMPORTANTE: Configura las variables de entorno antes de ejecutar
 
 # Verificar que las variables de entorno estén configuradas
-if [ -z "$MYSQL_PASSWORD" ]; then
-    echo "❌ Error: La variable MYSQL_PASSWORD no está configurada"
-    echo "Ejecuta: export MYSQL_PASSWORD='tu_password_aqui'"
-    exit 1
+if [ -z "$BD_URL" ]; then
+    if [ -z "$BD_HOST" ] || [ -z "$BD_USER" ] || [ -z "$BD_PASSWORD" ] || [ -z "$BD_DATABASE" ]; then
+        echo "❌ Error: Debes configurar BD_URL o las variables BD_HOST, BD_USER, BD_PASSWORD y BD_DATABASE"
+        echo "Ejemplos:"
+        echo "  export BD_URL='postgresql://user:pass@host:5432/dbname'"
+        echo "  # o"
+        echo "  export BD_HOST='tu_host' BD_USER='tu_user' BD_PASSWORD='tu_pass' BD_DATABASE='tu_db'"
+        exit 1
+    fi
 fi
 
 # Configuración
@@ -19,10 +24,11 @@ REGISTRY_NAME="${REGISTRY_NAME:-acrinventorybackend}"
 IMAGE_NAME="${IMAGE_NAME:-backend-inventory}"
 TAG="${TAG:-latest}"
 
-# Variables de base de datos
-MYSQL_HOST="${MYSQL_HOST:-mysql-jm-inv-bd.mysql.database.azure.com}"
-MYSQL_USER="${MYSQL_USER:-bbjbzdifjkMaestraioAdmin}"
-MYSQL_DATABASE="${MYSQL_DATABASE:-jm_inv_db}"
+# Variables de base de datos (PostgreSQL)
+BD_HOST="${BD_HOST:-localhost}"
+BD_PORT="${BD_PORT:-5432}"
+BD_USER="${BD_USER:-postgres}"
+BD_DATABASE="${BD_DATABASE:-postgres}"
 
 echo "🚀 Iniciando despliegue en Azure Container Apps..."
 echo "📊 Configuración:"
@@ -106,10 +112,12 @@ az containerapp create \
         NODE_ENV=production \
         HOST=0.0.0.0 \
         PORT=3000 \
-        MYSQL_HOST=$MYSQL_HOST \
-        MYSQL_USER=$MYSQL_USER \
-        MYSQL_PASSWORD=$MYSQL_PASSWORD \
-        MYSQL_DATABASE=$MYSQL_DATABASE
+        BD_URL=$BD_URL \
+        BD_HOST=$BD_HOST \
+        BD_PORT=$BD_PORT \
+        BD_USER=$BD_USER \
+        BD_PASSWORD=$BD_PASSWORD \
+        BD_DATABASE=$BD_DATABASE
 
 # 9. Obtener URL de la aplicación
 echo "🎉 ¡Despliegue completado!"

@@ -1,13 +1,13 @@
-import { Getter, inject } from '@loopback/core'
+import {Getter, inject} from '@loopback/core'
 import {
   BelongsToAccessor,
   DefaultCrudRepository,
   repository,
 } from '@loopback/repository'
-import { MysqlDataSource } from '../datasources'
+import {PostgresDataSource} from '../datasources'
 // import {SqlserverDataSource} from '../datasources';
-import { Kardex, KardexRelations, Product } from '../models'
-import { ProductRepository } from './product.repository'
+import {Kardex, KardexRelations, Product} from '../models'
+import {ProductRepository} from './product.repository'
 
 export class KardexRepository extends DefaultCrudRepository<
   Kardex,
@@ -20,7 +20,7 @@ export class KardexRepository extends DefaultCrudRepository<
   >
 
   constructor(
-    @inject('datasources.mysql') dataSource: MysqlDataSource,
+    @inject('datasources.postgres') dataSource: PostgresDataSource,
     // @inject('datasources.sqlserver') dataSource: SqlserverDataSource,
     @repository.getter('ProductRepository')
     protected productRepositoryGetter: Getter<ProductRepository>,

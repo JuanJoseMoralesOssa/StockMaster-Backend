@@ -163,15 +163,16 @@ jobs:
               --min-replicas 1 \
               --max-replicas 5 \
               --secrets \
-                mysql-password=${{ secrets.MYSQL_PASSWORD }} \
+                bd-password=${{ secrets.BD_PASSWORD }} \
               --env-vars \
                 NODE_ENV=production \
                 HOST=0.0.0.0 \
                 PORT=3000 \
-                MYSQL_HOST=${{ secrets.MYSQL_HOST }} \
-                MYSQL_USER=${{ secrets.MYSQL_USER }} \
-                MYSQL_PASSWORD=secretref:mysql-password \
-                MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
+                BD_HOST=${{ secrets.BD_HOST }} \
+                BD_PORT=${{ secrets.BD_PORT }} \
+                BD_USER=${{ secrets.BD_USER }} \
+                BD_PASSWORD=secretref:bd-password \
+                BD_DATABASE=${{ secrets.BD_DATABASE }}
           fi
 
       - name: 🎉 Get Application URL
