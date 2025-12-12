@@ -1,5 +1,44 @@
-node_modules
-npm-debug.log
-/dist
-# Cache used by TypeScript's incremental build
+# Dependencies
+node_modules/
+
+# Build output (rebuilt in container)
+dist/
 *.tsbuildinfo
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test files
+coverage/
+.nyc_output/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# CI/CD
+.github/
+azure-container-app.yaml
+sonar-project.properties
+CODEOWNERS
+
+# Scripts
+*.sh
+*.ps1
+
+# Config files (not needed at runtime)
+tsconfig.json
+.eslintrc*
+.prettierrc*

@@ -1,5 +1,9 @@
 # Multi-stage build for production optimization
-FROM docker.io/library/node:25-alpine AS builder
+# Pin to specific Alpine version for security and reproducibility
+FROM docker.io/library/node:22-alpine3.21 AS builder
+
+# Upgrade all Alpine packages for security
+RUN apk update && apk upgrade --no-cache && rm -rf /var/cache/apk/*
 
 # Set working directory
 WORKDIR /app
@@ -17,11 +21,11 @@ COPY . .
 RUN npm run build
 
 # Production stage
-FROM docker.io/library/node:25-alpine AS production
+FROM docker.io/library/node:22-alpine3.21 AS production
 
 # Install security updates and curl for health checks
 RUN apk update && \
-  apk upgrade && \
+  apk upgrade --no-cache && \
   apk add --no-cache curl && \
   rm -rf /var/cache/apk/* && \
   addgroup -g 1001 -S nodeuser && \
@@ -34,7 +38,7 @@ WORKDIR /home/nodeuser/app
 COPY --from=builder /app/package*.json ./
 
 # Install only production dependencies
-RUN npm ci --only=production && npm cache clean --force
+RUN npm ci --omit=dev && npm cache clean --force
 
 # Copy built application and other necessary files
 COPY --from=builder /app/dist ./dist
