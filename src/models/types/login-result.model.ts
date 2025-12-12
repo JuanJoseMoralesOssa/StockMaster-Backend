@@ -1,5 +1,5 @@
-import {Model, model, property} from '@loopback/repository';
-import {User} from '../entities/user.model';
+import { Model, model, property } from '@loopback/repository'
+import { User } from '../entities/user.model'
 
 @model()
 export class LoginResult extends Model {
@@ -7,17 +7,16 @@ export class LoginResult extends Model {
     type: 'object',
     required: true,
   })
-  user: User;
+  user: User
 
   @property({
     type: 'string',
     required: true,
   })
-  token: string;
-
+  token: string
 
   constructor(data?: Partial<LoginResult>) {
-    super(data);
+    super(data)
   }
 }
 
@@ -25,4 +24,4 @@ export interface LoginResultRelations {
   // describe navigational properties here
 }
 
-export type LoginResultWithRelations = LoginResult & LoginResultRelations;
+export type LoginResultWithRelations = LoginResult & LoginResultRelations

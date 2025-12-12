@@ -5,7 +5,7 @@ import {
   FilterExcludingWhere,
   repository,
   Where,
-} from '@loopback/repository';
+} from '@loopback/repository'
 import {
   del,
   get,
@@ -16,20 +16,20 @@ import {
   put,
   requestBody,
   response,
-} from '@loopback/rest';
-import {Kardex, Pagination} from '../../../models';
-import {KardexRepository} from '../../../repositories';
+} from '@loopback/rest'
+import { Kardex, Pagination } from '../../../models'
+import { KardexRepository } from '../../../repositories'
 
 export class KardexController {
   constructor(
     @repository(KardexRepository)
-    public kardexRepository : KardexRepository,
+    public kardexRepository: KardexRepository,
   ) {}
 
   @post('/kardexes')
   @response(200, {
     description: 'Kardex model instance',
-    content: {'application/json': {schema: getModelSchemaRef(Kardex)}},
+    content: { 'application/json': { schema: getModelSchemaRef(Kardex) } },
   })
   async create(
     @requestBody({
@@ -44,18 +44,16 @@ export class KardexController {
     })
     kardex: Omit<Kardex, 'id'>,
   ): Promise<Kardex> {
-    return this.kardexRepository.create(kardex);
+    return this.kardexRepository.create(kardex)
   }
 
   @get('/kardexes/count')
   @response(200, {
     description: 'Kardex model count',
-    content: {'application/json': {schema: CountSchema}},
+    content: { 'application/json': { schema: CountSchema } },
   })
-  async count(
-    @param.where(Kardex) where?: Where<Kardex>,
-  ): Promise<Count> {
-    return this.kardexRepository.count(where);
+  async count(@param.where(Kardex) where?: Where<Kardex>): Promise<Count> {
+    return this.kardexRepository.count(where)
   }
 
   @get('/kardexes')
@@ -65,7 +63,7 @@ export class KardexController {
       'application/json': {
         schema: {
           type: 'array',
-          items: getModelSchemaRef(Kardex, {includeRelations: true}),
+          items: getModelSchemaRef(Kardex, { includeRelations: true }),
         },
       },
     },
@@ -78,34 +76,34 @@ export class KardexController {
     const kardexes = await this.kardexRepository.find({
       ...filter,
       skip: (page - 1) * limit,
-      limit: limit
-    });
-    const count = await this.kardexRepository.count(filter?.where);
+      limit: limit,
+    })
+    const count = await this.kardexRepository.count(filter?.where)
     return new Pagination<Kardex>({
       count: count.count,
       data: kardexes,
       page: page,
-      limit: limit
-    });
+      limit: limit,
+    })
   }
 
   @patch('/kardexes')
   @response(200, {
     description: 'Kardex PATCH success count',
-    content: {'application/json': {schema: CountSchema}},
+    content: { 'application/json': { schema: CountSchema } },
   })
   async updateAll(
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(Kardex, {partial: true}),
+          schema: getModelSchemaRef(Kardex, { partial: true }),
         },
       },
     })
     kardex: Kardex,
     @param.where(Kardex) where?: Where<Kardex>,
   ): Promise<Count> {
-    return this.kardexRepository.updateAll(kardex, where);
+    return this.kardexRepository.updateAll(kardex, where)
   }
 
   @get('/kardexes/{id}')
@@ -113,15 +111,16 @@ export class KardexController {
     description: 'Kardex model instance',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(Kardex, {includeRelations: true}),
+        schema: getModelSchemaRef(Kardex, { includeRelations: true }),
       },
     },
   })
   async findById(
     @param.path.number('id') id: number,
-    @param.filter(Kardex, {exclude: 'where'}) filter?: FilterExcludingWhere<Kardex>
+    @param.filter(Kardex, { exclude: 'where' })
+    filter?: FilterExcludingWhere<Kardex>,
   ): Promise<Kardex> {
-    return this.kardexRepository.findById(id, filter);
+    return this.kardexRepository.findById(id, filter)
   }
 
   @patch('/kardexes/{id}')
@@ -133,13 +132,13 @@ export class KardexController {
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(Kardex, {partial: true}),
+          schema: getModelSchemaRef(Kardex, { partial: true }),
         },
       },
     })
     kardex: Kardex,
   ): Promise<void> {
-    await this.kardexRepository.updateById(id, kardex);
+    await this.kardexRepository.updateById(id, kardex)
   }
 
   @put('/kardexes/{id}')
@@ -150,7 +149,7 @@ export class KardexController {
     @param.path.number('id') id: number,
     @requestBody() kardex: Kardex,
   ): Promise<void> {
-    await this.kardexRepository.replaceById(id, kardex);
+    await this.kardexRepository.replaceById(id, kardex)
   }
 
   @del('/kardexes/{id}')
@@ -158,6 +157,6 @@ export class KardexController {
     description: 'Kardex DELETE success',
   })
   async deleteById(@param.path.number('id') id: number): Promise<void> {
-    await this.kardexRepository.deleteById(id);
+    await this.kardexRepository.deleteById(id)
   }
 }

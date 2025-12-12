@@ -1,3 +1,3 @@
-export * from './details-report.controller';
-export * from './general-reports-controller.controller';
-export * from './person-reports.controller';
+export * from './details-report.controller'
+export * from './general-reports-controller.controller'
+export * from './person-reports.controller'

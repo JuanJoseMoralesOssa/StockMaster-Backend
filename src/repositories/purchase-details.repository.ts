@@ -1,10 +1,10 @@
-import {Getter, inject} from '@loopback/core';
+import { Getter, inject } from '@loopback/core'
 import {
   BelongsToAccessor,
   DefaultCrudRepository,
   repository,
-} from '@loopback/repository';
-import {MysqlDataSource} from '../datasources';
+} from '@loopback/repository'
+import { MysqlDataSource } from '../datasources'
 // import {SqlserverDataSource} from '../datasources';
 import {
   Person,
@@ -12,10 +12,10 @@ import {
   Purchase,
   PurchaseDetails,
   PurchaseDetailsRelations,
-} from '../models';
-import {PersonRepository} from './person.repository';
-import {ProductRepository} from './product.repository';
-import {PurchaseRepository} from './purchase.repository';
+} from '../models'
+import { PersonRepository } from './person.repository'
+import { ProductRepository } from './product.repository'
+import { PurchaseRepository } from './purchase.repository'
 
 export class PurchaseDetailsRepository extends DefaultCrudRepository<
   PurchaseDetails,
@@ -25,17 +25,17 @@ export class PurchaseDetailsRepository extends DefaultCrudRepository<
   public readonly product: BelongsToAccessor<
     Product,
     typeof PurchaseDetails.prototype.id
-  >;
+  >
 
   public readonly person: BelongsToAccessor<
     Person,
     typeof PurchaseDetails.prototype.id
-  >;
+  >
 
   public readonly purchase: BelongsToAccessor<
     Purchase,
     typeof PurchaseDetails.prototype.id
-  >;
+  >
 
   constructor(
     @inject('datasources.mysql') dataSource: MysqlDataSource,
@@ -47,21 +47,21 @@ export class PurchaseDetailsRepository extends DefaultCrudRepository<
     protected purchaseRepositoryGetter: Getter<PurchaseRepository>,
     // @inject('datasources.sqlserver') dataSource: SqlserverDataSource,
   ) {
-    super(PurchaseDetails, dataSource);
+    super(PurchaseDetails, dataSource)
     this.purchase = this.createBelongsToAccessorFor(
       'purchase',
       purchaseRepositoryGetter,
-    );
-    this.registerInclusionResolver('purchase', this.purchase.inclusionResolver);
+    )
+    this.registerInclusionResolver('purchase', this.purchase.inclusionResolver)
     this.person = this.createBelongsToAccessorFor(
       'person',
       personRepositoryGetter,
-    );
-    this.registerInclusionResolver('person', this.person.inclusionResolver);
+    )
+    this.registerInclusionResolver('person', this.person.inclusionResolver)
     this.product = this.createBelongsToAccessorFor(
       'product',
       productRepositoryGetter,
-    );
-    this.registerInclusionResolver('product', this.product.inclusionResolver);
+    )
+    this.registerInclusionResolver('product', this.product.inclusionResolver)
   }
 }

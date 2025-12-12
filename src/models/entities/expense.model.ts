@@ -1,7 +1,7 @@
-import {Entity, hasMany, model, property} from '@loopback/repository';
-import {ExpenseDetails} from './expense-details.model';
-import {Person} from './person.model';
-import {Product} from './product.model';
+import { Entity, hasMany, model, property } from '@loopback/repository'
+import { ExpenseDetails } from './expense-details.model'
+import { Person } from './person.model'
+import { Product } from './product.model'
 
 @model()
 export class Expense extends Entity {
@@ -10,13 +10,13 @@ export class Expense extends Entity {
     id: true,
     generated: true,
   })
-  id?: number;
+  id?: number
 
   @property({
     type: 'number',
     required: true,
   })
-  total_kg: number;
+  total_kg: number
 
   @property({
     type: 'date',
@@ -33,19 +33,19 @@ export class Expense extends Entity {
       nullable: 'N',
     },
   })
-  date: string;
+  date: string
 
   @hasMany(() => ExpenseDetails)
-  expense_details: ExpenseDetails[];
+  expense_details: ExpenseDetails[]
 
-  @hasMany(() => Person, {through: {model: () => ExpenseDetails}})
-  people: Person[];
+  @hasMany(() => Person, { through: { model: () => ExpenseDetails } })
+  people: Person[]
 
-  @hasMany(() => Product, {through: {model: () => ExpenseDetails}})
-  products: Product[];
+  @hasMany(() => Product, { through: { model: () => ExpenseDetails } })
+  products: Product[]
 
   constructor(data?: Partial<Expense>) {
-    super(data);
+    super(data)
   }
 }
 
@@ -53,4 +53,4 @@ export interface ExpenseRelations {
   // describe navigational properties here
 }
 
-export type ExpenseWithRelations = Expense & ExpenseRelations;
+export type ExpenseWithRelations = Expense & ExpenseRelations

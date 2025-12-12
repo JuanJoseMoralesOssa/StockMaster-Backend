@@ -1,4 +1,4 @@
-import {Model, model, property} from '@loopback/repository';
+import { Model, model, property } from '@loopback/repository'
 
 @model()
 export class WhoAmIResponse extends Model {
@@ -6,27 +6,27 @@ export class WhoAmIResponse extends Model {
     type: 'string',
     required: true,
   })
-  id: string;
+  id: string
 
   @property({
     type: 'string',
     required: true,
   })
-  name: string;
+  name: string
 
   @property({
     type: 'string',
     required: true,
   })
-  email: string;
+  email: string
 
   @property({
     type: 'string',
     required: true,
   })
-  role: string;
+  role: string
 
   constructor(data?: Partial<WhoAmIResponse>) {
-    super(data);
+    super(data)
   }
 }

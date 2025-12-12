@@ -1,7 +1,7 @@
-import {Entity, hasMany, model, property} from '@loopback/repository';
-import {Person} from './person.model';
-import {Product} from './product.model';
-import {PurchaseDetails} from './purchase-details.model';
+import { Entity, hasMany, model, property } from '@loopback/repository'
+import { Person } from './person.model'
+import { Product } from './product.model'
+import { PurchaseDetails } from './purchase-details.model'
 
 @model()
 export class Purchase extends Entity {
@@ -10,7 +10,7 @@ export class Purchase extends Entity {
     id: true,
     generated: true,
   })
-  id?: number;
+  id?: number
 
   @property({
     type: 'date',
@@ -27,25 +27,24 @@ export class Purchase extends Entity {
       nullable: 'N',
     },
   })
-  date: string;
-
+  date: string
 
   @property({
     type: 'number',
   })
-  total_kg?: number;
+  total_kg?: number
 
   @hasMany(() => PurchaseDetails)
-  purchase_details?: PurchaseDetails[];
+  purchase_details?: PurchaseDetails[]
 
-  @hasMany(() => Person, {through: {model: () => PurchaseDetails}})
-  people: Person[];
+  @hasMany(() => Person, { through: { model: () => PurchaseDetails } })
+  people: Person[]
 
-  @hasMany(() => Product, {through: {model: () => PurchaseDetails}})
-  products: Product[];
+  @hasMany(() => Product, { through: { model: () => PurchaseDetails } })
+  products: Product[]
 
   constructor(data?: Partial<Purchase>) {
-    super(data);
+    super(data)
   }
 }
 
@@ -53,4 +52,4 @@ export interface PurchaseRelations {
   // describe navigational properties here
 }
 
-export type PurchaseWithRelations = Purchase & PurchaseRelations;
+export type PurchaseWithRelations = Purchase & PurchaseRelations

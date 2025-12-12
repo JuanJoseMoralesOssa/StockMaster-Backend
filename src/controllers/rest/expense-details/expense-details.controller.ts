@@ -5,7 +5,7 @@ import {
   FilterExcludingWhere,
   repository,
   Where,
-} from '@loopback/repository';
+} from '@loopback/repository'
 import {
   del,
   get,
@@ -16,20 +16,22 @@ import {
   put,
   requestBody,
   response,
-} from '@loopback/rest';
-import {ExpenseDetails} from '../../../models';
-import {ExpenseDetailsRepository} from '../../../repositories';
+} from '@loopback/rest'
+import { ExpenseDetails } from '../../../models'
+import { ExpenseDetailsRepository } from '../../../repositories'
 
 export class ExpenseDetailsController {
   constructor(
     @repository(ExpenseDetailsRepository)
     public expenseDetailsRepository: ExpenseDetailsRepository,
-  ) { }
+  ) {}
 
   @post('/expense-details')
   @response(200, {
     description: 'ExpenseDetails model instance',
-    content: {'application/json': {schema: getModelSchemaRef(ExpenseDetails)}},
+    content: {
+      'application/json': { schema: getModelSchemaRef(ExpenseDetails) },
+    },
   })
   async create(
     @requestBody({
@@ -44,18 +46,18 @@ export class ExpenseDetailsController {
     })
     expenseDetails: Omit<ExpenseDetails, 'id'>,
   ): Promise<ExpenseDetails> {
-    return this.expenseDetailsRepository.create(expenseDetails);
+    return this.expenseDetailsRepository.create(expenseDetails)
   }
 
   @get('/expense-details/count')
   @response(200, {
     description: 'ExpenseDetails model count',
-    content: {'application/json': {schema: CountSchema}},
+    content: { 'application/json': { schema: CountSchema } },
   })
   async count(
     @param.where(ExpenseDetails) where?: Where<ExpenseDetails>,
   ): Promise<Count> {
-    return this.expenseDetailsRepository.count(where);
+    return this.expenseDetailsRepository.count(where)
   }
 
   @get('/expense-details')
@@ -65,7 +67,7 @@ export class ExpenseDetailsController {
       'application/json': {
         schema: {
           type: 'array',
-          items: getModelSchemaRef(ExpenseDetails, {includeRelations: true}),
+          items: getModelSchemaRef(ExpenseDetails, { includeRelations: true }),
         },
       },
     },
@@ -73,26 +75,26 @@ export class ExpenseDetailsController {
   async find(
     @param.filter(ExpenseDetails) filter?: Filter<ExpenseDetails>,
   ): Promise<ExpenseDetails[]> {
-    return this.expenseDetailsRepository.find(filter);
+    return this.expenseDetailsRepository.find(filter)
   }
 
   @patch('/expense-details')
   @response(200, {
     description: 'ExpenseDetails PATCH success count',
-    content: {'application/json': {schema: CountSchema}},
+    content: { 'application/json': { schema: CountSchema } },
   })
   async updateAll(
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(ExpenseDetails, {partial: true}),
+          schema: getModelSchemaRef(ExpenseDetails, { partial: true }),
         },
       },
     })
     expenseDetails: ExpenseDetails,
     @param.where(ExpenseDetails) where?: Where<ExpenseDetails>,
   ): Promise<Count> {
-    return this.expenseDetailsRepository.updateAll(expenseDetails, where);
+    return this.expenseDetailsRepository.updateAll(expenseDetails, where)
   }
 
   @get('/expense-details/{id}')
@@ -100,15 +102,16 @@ export class ExpenseDetailsController {
     description: 'ExpenseDetails model instance',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(ExpenseDetails, {includeRelations: true}),
+        schema: getModelSchemaRef(ExpenseDetails, { includeRelations: true }),
       },
     },
   })
   async findById(
     @param.path.number('id') id: number,
-    @param.filter(ExpenseDetails, {exclude: 'where'}) filter?: FilterExcludingWhere<ExpenseDetails>
+    @param.filter(ExpenseDetails, { exclude: 'where' })
+    filter?: FilterExcludingWhere<ExpenseDetails>,
   ): Promise<ExpenseDetails> {
-    return this.expenseDetailsRepository.findById(id, filter);
+    return this.expenseDetailsRepository.findById(id, filter)
   }
 
   @patch('/expense-details/{id}')
@@ -116,7 +119,7 @@ export class ExpenseDetailsController {
     description: 'ExpenseDetails PATCH success',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(ExpenseDetails, {includeRelations: true}),
+        schema: getModelSchemaRef(ExpenseDetails, { includeRelations: true }),
       },
     },
   })
@@ -125,14 +128,14 @@ export class ExpenseDetailsController {
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(ExpenseDetails, {partial: true}),
+          schema: getModelSchemaRef(ExpenseDetails, { partial: true }),
         },
       },
     })
     expenseDetails: Partial<ExpenseDetails>,
   ): Promise<ExpenseDetails> {
-    await this.expenseDetailsRepository.updateById(id, expenseDetails);
-    return this.expenseDetailsRepository.findById(id, {include: []});
+    await this.expenseDetailsRepository.updateById(id, expenseDetails)
+    return this.expenseDetailsRepository.findById(id, { include: [] })
   }
 
   @put('/expense-details/{id}')
@@ -140,7 +143,7 @@ export class ExpenseDetailsController {
     description: 'ExpenseDetails PUT success',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(ExpenseDetails, {includeRelations: true}),
+        schema: getModelSchemaRef(ExpenseDetails, { includeRelations: true }),
       },
     },
   })
@@ -158,8 +161,8 @@ export class ExpenseDetailsController {
     })
     expenseDetails: Omit<ExpenseDetails, 'id'>,
   ): Promise<ExpenseDetails> {
-    await this.expenseDetailsRepository.replaceById(id, expenseDetails);
-    return this.expenseDetailsRepository.findById(id, {include: []});
+    await this.expenseDetailsRepository.replaceById(id, expenseDetails)
+    return this.expenseDetailsRepository.findById(id, { include: [] })
   }
 
   @del('/expense-details/{id}')
@@ -167,6 +170,6 @@ export class ExpenseDetailsController {
     description: 'ExpenseDetails DELETE success',
   })
   async deleteById(@param.path.number('id') id: number): Promise<void> {
-    await this.expenseDetailsRepository.deleteById(id);
+    await this.expenseDetailsRepository.deleteById(id)
   }
 }

@@ -1,13 +1,13 @@
-import {Getter, inject} from '@loopback/core';
+import { Getter, inject } from '@loopback/core'
 import {
   BelongsToAccessor,
   DefaultCrudRepository,
   repository,
-} from '@loopback/repository';
-import {MysqlDataSource} from '../datasources';
+} from '@loopback/repository'
+import { MysqlDataSource } from '../datasources'
 // import {SqlserverDataSource} from '../datasources';
-import {Kardex, KardexRelations, Product} from '../models';
-import {ProductRepository} from './product.repository';
+import { Kardex, KardexRelations, Product } from '../models'
+import { ProductRepository } from './product.repository'
 
 export class KardexRepository extends DefaultCrudRepository<
   Kardex,
@@ -17,7 +17,7 @@ export class KardexRepository extends DefaultCrudRepository<
   public readonly product: BelongsToAccessor<
     Product,
     typeof Kardex.prototype.id
-  >;
+  >
 
   constructor(
     @inject('datasources.mysql') dataSource: MysqlDataSource,
@@ -25,11 +25,11 @@ export class KardexRepository extends DefaultCrudRepository<
     @repository.getter('ProductRepository')
     protected productRepositoryGetter: Getter<ProductRepository>,
   ) {
-    super(Kardex, dataSource);
+    super(Kardex, dataSource)
     this.product = this.createBelongsToAccessorFor(
       'product',
       productRepositoryGetter,
-    );
-    this.registerInclusionResolver('product', this.product.inclusionResolver);
+    )
+    this.registerInclusionResolver('product', this.product.inclusionResolver)
   }
 }

@@ -7,4 +7,4 @@ export const securityConfig = {
   DATABASE: process.env.BD_DATABASE ?? '',
   SSL_CERT_PATH: process.env.SSL_CERT_PATH ?? '',
   JWT_SECRET: process.env.JWT_SECRET ?? '',
-};
+}

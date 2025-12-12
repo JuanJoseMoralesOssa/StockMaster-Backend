@@ -1,6 +1,12 @@
-import {repository} from '@loopback/repository';
-import {get, HttpErrors, param} from '@loopback/rest';
-import {Expense, ExpenseDetails, Person, Purchase, PurchaseDetails} from '../../../models';
+import { repository } from '@loopback/repository'
+import { get, HttpErrors, param } from '@loopback/rest'
+import {
+  Expense,
+  ExpenseDetails,
+  Person,
+  Purchase,
+  PurchaseDetails,
+} from '../../../models'
 import {
   ExpenseDetailsRepository,
   ExpenseRepository,
@@ -8,28 +14,28 @@ import {
   ProductRepository,
   PurchaseDetailsRepository,
   PurchaseRepository,
-} from '../../../repositories';
+} from '../../../repositories'
 
 interface TransactionDetailPersonProduct {
-  date: string;
-  weight_kg: number;
-  type: 'Compra' | 'Gasto';
+  date: string
+  weight_kg: number
+  type: 'Compra' | 'Gasto'
 }
 
 interface TransactionDetailProduct {
-  date: string;
-  weight_kg: number;
-  type: 'Compra' | 'Gasto';
-  personId: number; // Opcional para incluir información del proveedor
-  personName?: string; // Opcional para mostrar el nombre del proveedor
+  date: string
+  weight_kg: number
+  type: 'Compra' | 'Gasto'
+  personId: number // Opcional para incluir información del proveedor
+  personName?: string // Opcional para mostrar el nombre del proveedor
 }
 
 interface TransactionDetailPerson {
-  date: string;
-  weight_kg: number;
-  type: 'Compra' | 'Gasto';
-  productId: number; // Opcional para incluir información del proveedor
-  personName?: string; // Opcional para mostrar el nombre del proveedor
+  date: string
+  weight_kg: number
+  type: 'Compra' | 'Gasto'
+  productId: number // Opcional para incluir información del proveedor
+  personName?: string // Opcional para mostrar el nombre del proveedor
 }
 
 export class DetailsReportsController {
@@ -46,7 +52,7 @@ export class DetailsReportsController {
     protected purchaseRepository: PurchaseRepository,
     @repository(ExpenseRepository)
     protected expenseRepository: ExpenseRepository,
-  ) { }
+  ) {}
 
   @get('/person/{personId}/product/{productId}/transactions')
   async getPersonProductTransactions(
@@ -57,33 +63,33 @@ export class DetailsReportsController {
   ): Promise<TransactionDetailPersonProduct[]> {
     // Validación de fechas
     if (!startDate || !endDate) {
-      throw new HttpErrors.BadRequest('Both startDate and endDate are required');
+      throw new HttpErrors.BadRequest('Both startDate and endDate are required')
     }
 
     // Validar formato de fechas
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/
     if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
-      throw new HttpErrors.BadRequest('Invalid date format. Use YYYY-MM-DD');
+      throw new HttpErrors.BadRequest('Invalid date format. Use YYYY-MM-DD')
     }
 
     // Construir filtro de fechas
     const dateFilter = {
       between: [startDate, endDate],
-    };
+    }
 
     // Buscar persona con sus compras y gastos
     const person = await this.personRepository.findOne({
-      where: {id: personId},
+      where: { id: personId },
       include: [
         {
           relation: 'purchases',
           scope: {
-            where: {date: dateFilter},
+            where: { date: dateFilter },
             include: [
               {
                 relation: 'purchase_details',
                 scope: {
-                  where: {productId},
+                  where: { productId },
                 },
               },
             ],
@@ -92,25 +98,25 @@ export class DetailsReportsController {
         {
           relation: 'expenses',
           scope: {
-            where: {date: dateFilter},
+            where: { date: dateFilter },
             include: [
               {
                 relation: 'expense_details',
                 scope: {
-                  where: {productId},
+                  where: { productId },
                 },
               },
             ],
           },
         },
       ],
-    });
+    })
 
     if (!person) {
-      throw new HttpErrors.NotFound(`Persona con ID ${personId} no encontrada`);
+      throw new HttpErrors.NotFound(`Persona con ID ${personId} no encontrada`)
     }
 
-    return this.processTransactions(person, productId);
+    return this.processTransactions(person, productId)
   }
 
   private processTransactions(
@@ -121,32 +127,34 @@ export class DetailsReportsController {
     const purchaseTransactions =
       person.purchases?.flatMap(
         (purchase: Purchase) =>
-          purchase.purchase_details?.filter(
-            (detail: PurchaseDetails) => detail.productId === productId,
-          ).map((detail: PurchaseDetails) => ({
-            date: purchase.date,
-            weight_kg: detail.weight_kg,
-            type: 'Compra' as const,
-          })) ?? [],
-      ) || [];
+          purchase.purchase_details
+            ?.filter(
+              (detail: PurchaseDetails) => detail.productId === productId,
+            )
+            .map((detail: PurchaseDetails) => ({
+              date: purchase.date,
+              weight_kg: detail.weight_kg,
+              type: 'Compra' as const,
+            })) ?? [],
+      ) || []
 
     // Extraer detalles de gastos
     const expenseTransactions =
       person.expenses?.flatMap(
         (expense: Expense) =>
-          expense.expense_details?.filter(
-            (detail: ExpenseDetails) => detail.productId === productId,
-          ).map((detail: ExpenseDetails) => ({
-            date: expense.date,
-            weight_kg: detail.weight_kg,
-            type: 'Gasto' as const,
-          })) || [],
-      ) || [];
+          expense.expense_details
+            ?.filter((detail: ExpenseDetails) => detail.productId === productId)
+            .map((detail: ExpenseDetails) => ({
+              date: expense.date,
+              weight_kg: detail.weight_kg,
+              type: 'Gasto' as const,
+            })) || [],
+      ) || []
 
     // Combinar y ordenar por fecha
     return [...purchaseTransactions, ...expenseTransactions].sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-    );
+    )
   }
 
   @get('/product/{productId}/transactions')
@@ -155,33 +163,32 @@ export class DetailsReportsController {
     @param.query.string('startDate') startDate: string,
     @param.query.string('endDate') endDate: string,
   ): Promise<TransactionDetailProduct[]> {
-
     // Validación de fechas
     if (!startDate || !endDate) {
-      throw new HttpErrors.BadRequest('Both startDate and endDate are required');
+      throw new HttpErrors.BadRequest('Both startDate and endDate are required')
     }
     // Validar formato de fechas
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/
     if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
-      throw new HttpErrors.BadRequest('Invalid date format. Use YYYY-MM-DD');
+      throw new HttpErrors.BadRequest('Invalid date format. Use YYYY-MM-DD')
     }
 
     // Verificar que el producto existe
-    const product = await this.productRepository.findById(productId);
+    const product = await this.productRepository.findById(productId)
     if (!product) {
       throw new HttpErrors.NotFound(
         `Producto con ID ${productId} no encontrado`,
-      );
+      )
     }
 
     // Construir filtro de fechas
     const dateFilter = {
       between: [startDate, endDate],
-    };
+    }
 
     // Obtener todos los detalles de compra para este producto
     const purchaseDetails = await this.purchaseDetailsRepository.find({
-      where: {productId},
+      where: { productId },
       include: [
         {
           relation: 'purchase',
@@ -195,11 +202,11 @@ export class DetailsReportsController {
           relation: 'person',
         },
       ],
-    });
+    })
 
     // Obtener todos los detalles de gasto para este producto
     const expenseDetails = await this.expenseDetailsRepository.find({
-      where: {productId},
+      where: { productId },
       include: [
         {
           relation: 'expense',
@@ -213,10 +220,10 @@ export class DetailsReportsController {
           relation: 'person',
         },
       ],
-    });
+    })
 
     // Procesar los resultados
-    const transactions: TransactionDetailProduct[] = [];
+    const transactions: TransactionDetailProduct[] = []
 
     // Procesar detalles de compra - USANDO LAS RELACIONES INCLUIDAS
     for (const detail of purchaseDetails) {
@@ -228,7 +235,7 @@ export class DetailsReportsController {
           type: 'Compra',
           personId: detail.personId,
           personName: (detail as any).person?.name,
-        });
+        })
       }
     }
 
@@ -242,14 +249,14 @@ export class DetailsReportsController {
           type: 'Gasto',
           personId: detail.personId,
           personName: (detail as any).person?.name,
-        });
+        })
       }
     }
 
     // Ordenar por fecha
     return transactions.sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-    );
+    )
   }
 
   @get('/person/{personId}/transactions')
@@ -258,31 +265,30 @@ export class DetailsReportsController {
     @param.query.string('startDate') startDate: string,
     @param.query.string('endDate') endDate: string,
   ): Promise<TransactionDetailPerson[]> {
-
     // Validación de fechas
     if (!startDate || !endDate) {
-      throw new HttpErrors.BadRequest('Both startDate and endDate are required');
+      throw new HttpErrors.BadRequest('Both startDate and endDate are required')
     }
     // Validar formato de fechas
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/
     if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
-      throw new HttpErrors.BadRequest('Invalid date format. Use YYYY-MM-DD');
+      throw new HttpErrors.BadRequest('Invalid date format. Use YYYY-MM-DD')
     }
 
     // Verificar que la persona existe
-    const person = await this.personRepository.findById(personId);
+    const person = await this.personRepository.findById(personId)
     if (!person) {
-      throw new HttpErrors.NotFound(`Persona con ID ${personId} no encontrada`);
+      throw new HttpErrors.NotFound(`Persona con ID ${personId} no encontrada`)
     }
 
     // Construir filtro de fechas
     const dateFilter = {
       between: [startDate, endDate],
-    };
+    }
 
     // Obtener todos los detalles de compra para esta persona con filtro de fecha
     const purchaseDetails = await this.purchaseDetailsRepository.find({
-      where: {personId},
+      where: { personId },
       include: [
         {
           relation: 'purchase',
@@ -296,11 +302,11 @@ export class DetailsReportsController {
           relation: 'product',
         },
       ],
-    });
+    })
 
     // Obtener todos los detalles de gasto para esta persona con filtro de fecha
     const expenseDetails = await this.expenseDetailsRepository.find({
-      where: {personId},
+      where: { personId },
       include: [
         {
           relation: 'expense',
@@ -314,10 +320,10 @@ export class DetailsReportsController {
           relation: 'product',
         },
       ],
-    });
+    })
 
     // Procesar los resultados
-    const transactions: TransactionDetailPerson[] = [];
+    const transactions: TransactionDetailPerson[] = []
 
     // Procesar detalles de compra - USANDO LAS RELACIONES INCLUIDAS
     for (const detail of purchaseDetails) {
@@ -328,7 +334,7 @@ export class DetailsReportsController {
           weight_kg: detail.weight_kg,
           type: 'Compra',
           productId: detail.productId,
-        });
+        })
       }
     }
 
@@ -341,13 +347,13 @@ export class DetailsReportsController {
           weight_kg: detail.weight_kg,
           type: 'Gasto',
           productId: detail.productId,
-        });
+        })
       }
     }
 
     // Ordenar por fecha
     return transactions.sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-    );
+    )
   }
 }

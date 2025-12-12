@@ -1,8 +1,8 @@
 /** REST Controllers */
-export * from './rest';
+export * from './rest'
 
 /** Logic Controllers */
-export * from './logic';
+export * from './logic'
 
 /** Health Controllers */
-export * from './health';
+export * from './health'

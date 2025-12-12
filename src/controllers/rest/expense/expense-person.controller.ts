@@ -4,7 +4,7 @@ import {
   Filter,
   repository,
   Where,
-} from '@loopback/repository';
+} from '@loopback/repository'
 import {
   del,
   get,
@@ -14,16 +14,16 @@ import {
   patch,
   post,
   requestBody,
-} from '@loopback/rest';
+} from '@loopback/rest'
 
-import {Expense, Person} from '../../../models';
-import {ExpenseRepository} from '../../../repositories';
-
+import { Expense, Person } from '../../../models'
+import { ExpenseRepository } from '../../../repositories'
 
 export class ExpensePersonController {
   constructor(
-    @repository(ExpenseRepository) protected expenseRepository: ExpenseRepository,
-  ) { }
+    @repository(ExpenseRepository)
+    protected expenseRepository: ExpenseRepository,
+  ) {}
 
   @get('/expenses/{id}/people', {
     responses: {
@@ -31,7 +31,7 @@ export class ExpensePersonController {
         description: 'Array of Expense has many Person through ExpenseDetails',
         content: {
           'application/json': {
-            schema: {type: 'array', items: getModelSchemaRef(Person)},
+            schema: { type: 'array', items: getModelSchemaRef(Person) },
           },
         },
       },
@@ -41,14 +41,14 @@ export class ExpensePersonController {
     @param.path.number('id') id: number,
     @param.query.object('filter') filter?: Filter<Person>,
   ): Promise<Person[]> {
-    return this.expenseRepository.people(id).find(filter);
+    return this.expenseRepository.people(id).find(filter)
   }
 
   @post('/expenses/{id}/people', {
     responses: {
       '200': {
         description: 'create a Person model instance',
-        content: {'application/json': {schema: getModelSchemaRef(Person)}},
+        content: { 'application/json': { schema: getModelSchemaRef(Person) } },
       },
     },
   })
@@ -63,16 +63,17 @@ export class ExpensePersonController {
           }),
         },
       },
-    }) person: Omit<Person, 'id'>,
+    })
+    person: Omit<Person, 'id'>,
   ): Promise<Person> {
-    return this.expenseRepository.people(id).create(person);
+    return this.expenseRepository.people(id).create(person)
   }
 
   @patch('/expenses/{id}/people', {
     responses: {
       '200': {
         description: 'Expense.Person PATCH success count',
-        content: {'application/json': {schema: CountSchema}},
+        content: { 'application/json': { schema: CountSchema } },
       },
     },
   })
@@ -81,28 +82,30 @@ export class ExpensePersonController {
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(Person, {partial: true}),
+          schema: getModelSchemaRef(Person, { partial: true }),
         },
       },
     })
     person: Partial<Person>,
-    @param.query.object('where', getWhereSchemaFor(Person)) where?: Where<Person>,
+    @param.query.object('where', getWhereSchemaFor(Person))
+    where?: Where<Person>,
   ): Promise<Count> {
-    return this.expenseRepository.people(id).patch(person, where);
+    return this.expenseRepository.people(id).patch(person, where)
   }
 
   @del('/expenses/{id}/people', {
     responses: {
       '200': {
         description: 'Expense.Person DELETE success count',
-        content: {'application/json': {schema: CountSchema}},
+        content: { 'application/json': { schema: CountSchema } },
       },
     },
   })
   async delete(
     @param.path.number('id') id: number,
-    @param.query.object('where', getWhereSchemaFor(Person)) where?: Where<Person>,
+    @param.query.object('where', getWhereSchemaFor(Person))
+    where?: Where<Person>,
   ): Promise<Count> {
-    return this.expenseRepository.people(id).delete(where);
+    return this.expenseRepository.people(id).delete(where)
   }
 }

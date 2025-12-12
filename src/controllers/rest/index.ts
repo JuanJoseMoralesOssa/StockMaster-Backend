@@ -1,23 +1,23 @@
 /** Expense Controllers */
-export * from './expense';
+export * from './expense'
 
 /** Kardex Controllers */
-export * from './kardex';
+export * from './kardex'
 
 /** Person Controllers */
-export * from './person';
+export * from './person'
 
 /** Product Controllers */
-export * from './product';
+export * from './product'
 
 /** Purchase Controllers */
-export * from './purchase';
+export * from './purchase'
 
 /** User Controllers */
-export * from './user';
+export * from './user'
 
 /** Purchase Details Controllers */
-export * from './purchase-details';
+export * from './purchase-details'
 
 /** Expense Details Controllers */
-export * from './expense-details';
+export * from './expense-details'

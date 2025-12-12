@@ -1,19 +1,19 @@
-import {repository} from '@loopback/repository'
-import {get, HttpErrors, param} from '@loopback/rest'
-import {Expense, ExpenseDetails, Person, Purchase, PurchaseDetails} from '../../../models'
-import {PersonRepository} from '../../../repositories'
-
+import { repository } from '@loopback/repository'
+import { get, HttpErrors, param } from '@loopback/rest'
+import {
+  Expense,
+  ExpenseDetails,
+  Person,
+  Purchase,
+  PurchaseDetails,
+} from '../../../models'
+import { PersonRepository } from '../../../repositories'
 
 // Definir interfaces para mejor tipado
 interface ProductDetail {
-  date: string;
-  weight_kg: number;
-  type: 'Compra' | 'Gasto';
-}
-
-interface SupplierWithTransactions {
-  purchases: Purchase[];
-  expenses: Expense[];
+  date: string
+  weight_kg: number
+  type: 'Compra' | 'Gasto'
 }
 
 enum FilterType {
@@ -24,7 +24,7 @@ enum FilterType {
 export class PersonReportsController {
   constructor(
     @repository(PersonRepository) protected personRepository: PersonRepository,
-  ) { }
+  ) {}
 
   @get('/suppliers/{supplierId}/products/{productId}/details/day')
   async getSupplierProductDetailsByDay(
@@ -32,14 +32,14 @@ export class PersonReportsController {
     @param.path.number('productId') productId: number,
     @param.query.string('day') day: string, // Format: 'YYYY-MM-DD'
   ): Promise<ProductDetail[]> {
-    this.validateIds(supplierId, productId);
-    this.validateDateFormat(day, FilterType.DAY);
+    this.validateIds(supplierId, productId)
+    this.validateDateFormat(day, FilterType.DAY)
     return this.getProductDetailsBySupplier(
       supplierId,
       productId,
       day,
       FilterType.DAY,
-    );
+    )
   }
 
   @get('/suppliers/{supplierId}/products/{productId}/details')
@@ -48,14 +48,14 @@ export class PersonReportsController {
     @param.path.number('productId') productId: number,
     @param.query.string('month') month: string, // Format: 'YYYY-MM'
   ): Promise<ProductDetail[]> {
-    this.validateIds(supplierId, productId);
-    this.validateDateFormat(month, FilterType.MONTH);
+    this.validateIds(supplierId, productId)
+    this.validateDateFormat(month, FilterType.MONTH)
     return this.getProductDetailsBySupplier(
       supplierId,
       productId,
       month,
       FilterType.MONTH,
-    );
+    )
   }
 
   /**
@@ -65,11 +65,11 @@ export class PersonReportsController {
    */
   private validateIds(supplierId: number, productId: number): void {
     if (!supplierId || supplierId <= 0) {
-      throw new HttpErrors.BadRequest('Invalid supplier ID');
+      throw new HttpErrors.BadRequest('Invalid supplier ID')
     }
 
     if (!productId || productId <= 0) {
-      throw new HttpErrors.BadRequest('Invalid product ID');
+      throw new HttpErrors.BadRequest('Invalid product ID')
     }
   }
 
@@ -79,35 +79,35 @@ export class PersonReportsController {
    * @param filterType - Type of filter (day or month)
    */
   private validateDateFormat(dateValue: string, filterType: FilterType): void {
-    const dayRegex = /^\d{4}-\d{2}-\d{2}$/; // YYYY-MM-DD
-    const monthRegex = /^\d{4}-\d{2}$/; // YYYY-MM
+    const dayRegex = /^\d{4}-\d{2}-\d{2}$/ // YYYY-MM-DD
+    const monthRegex = /^\d{4}-\d{2}$/ // YYYY-MM
 
     // Validate date values greater than 0
-    const dateParts = dateValue.split('-');
+    const dateParts = dateValue.split('-')
     if (dateParts.some(part => parseInt(part, 10) <= 0)) {
-      throw new HttpErrors.BadRequest('Date values must be greater than 0');
+      throw new HttpErrors.BadRequest('Date values must be greater than 0')
     }
 
     if (filterType === FilterType.DAY && !dayRegex.test(dateValue)) {
-      throw new HttpErrors.BadRequest('Invalid day format. Use YYYY-MM-DD');
+      throw new HttpErrors.BadRequest('Invalid day format. Use YYYY-MM-DD')
     }
 
     if (filterType === FilterType.MONTH && !monthRegex.test(dateValue)) {
-      throw new HttpErrors.BadRequest('Invalid month format. Use YYYY-MM');
+      throw new HttpErrors.BadRequest('Invalid month format. Use YYYY-MM')
     }
 
     // Additional date validation
     if (filterType === FilterType.DAY) {
-      const date = new Date(dateValue);
+      const date = new Date(dateValue)
       if (isNaN(date.getTime())) {
-        throw new HttpErrors.BadRequest('Invalid date');
+        throw new HttpErrors.BadRequest('Invalid date')
       }
     } else {
-      const [year, month] = dateParts.map(Number);
+      const [year, month] = dateParts.map(Number)
       // Month is 0-based in JavaScript Date
-      const date = new Date(year, month - 1);
+      const date = new Date(year, month - 1)
       if (isNaN(date.getTime())) {
-        throw new HttpErrors.BadRequest('Invalid month');
+        throw new HttpErrors.BadRequest('Invalid month')
       }
     }
   }
@@ -130,27 +130,27 @@ export class PersonReportsController {
     const dateFilter =
       filterType === FilterType.DAY
         ? {
-          gte: dateValue,
-          lt: dateValue,
-        }
+            gte: dateValue,
+            lt: dateValue,
+          }
         : {
-          gte: `${dateValue}-01`,
-          lt: `${dateValue}-31`,
-        };
+            gte: `${dateValue}-01`,
+            lt: `${dateValue}-31`,
+          }
 
     // SOLUCIÓN: No limitar los campos y usar relaciones correctas
     const supplier = await this.personRepository.findOne({
-      where: {id: supplierId},
+      where: { id: supplierId },
       include: [
         {
           relation: 'purchases',
           scope: {
-            where: {date: dateFilter},
+            where: { date: dateFilter },
             include: [
               {
                 relation: 'purchase_details', // Asegúrate de que este nombre coincida con la definición del modelo
                 scope: {
-                  where: {productId},
+                  where: { productId },
                 },
               },
             ],
@@ -159,28 +159,28 @@ export class PersonReportsController {
         {
           relation: 'expenses',
           scope: {
-            where: {date: dateFilter},
+            where: { date: dateFilter },
             include: [
               {
                 relation: 'expense_details', // Asegúrate de que este nombre coincida con la definición del modelo
                 scope: {
-                  fields: {id: false, weight_kg: true},
-                  where: {productId},
+                  fields: { id: false, weight_kg: true },
+                  where: { productId },
                 },
               },
             ],
           },
         },
       ],
-    });
+    })
 
     if (!supplier) {
       throw new HttpErrors.NotFound(
         `Proveedor con ID ${supplierId} no encontrado`,
-      );
+      )
     }
 
-    return this.processCombinedDetails(supplier);
+    return this.processCombinedDetails(supplier)
   }
 
   /**
@@ -196,8 +196,8 @@ export class PersonReportsController {
             date: purchase.date,
             weight_kg: detail.weight_kg,
             type: 'Compra' as const,
-          })) || [],
-      ) || [];
+          })) ?? [],
+      ) ?? []
 
     // Extract expense details
     const expenseDetails =
@@ -207,12 +207,12 @@ export class PersonReportsController {
             date: expense.date,
             weight_kg: detail.weight_kg,
             type: 'Gasto' as const,
-          })) || [],
-      ) || [];
+          })) ?? [],
+      ) ?? []
 
     // Combine and sort
     return [...purchaseDetails, ...expenseDetails].sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-    );
+    )
   }
 }

@@ -4,7 +4,7 @@ import {
   Filter,
   repository,
   Where,
-} from '@loopback/repository';
+} from '@loopback/repository'
 import {
   del,
   get,
@@ -14,16 +14,15 @@ import {
   patch,
   post,
   requestBody,
-} from '@loopback/rest';
-import {Expense, ExpenseDetails} from '../../../models';
-import {ExpenseRepository} from '../../../repositories';
-
+} from '@loopback/rest'
+import { Expense, ExpenseDetails } from '../../../models'
+import { ExpenseRepository } from '../../../repositories'
 
 export class ExpenseExpenseDetailsController {
   constructor(
     @repository(ExpenseRepository)
     protected expenseRepository: ExpenseRepository,
-  ) { }
+  ) {}
 
   @get('/expenses/{id}/expense-details', {
     responses: {
@@ -31,7 +30,7 @@ export class ExpenseExpenseDetailsController {
         description: 'Array of Expense has many ExpenseDetails',
         content: {
           'application/json': {
-            schema: {type: 'array', items: getModelSchemaRef(ExpenseDetails)},
+            schema: { type: 'array', items: getModelSchemaRef(ExpenseDetails) },
           },
         },
       },
@@ -41,7 +40,7 @@ export class ExpenseExpenseDetailsController {
     @param.path.number('id') id: number,
     @param.query.object('filter') filter?: Filter<ExpenseDetails>,
   ): Promise<ExpenseDetails[]> {
-    return this.expenseRepository.expense_details(id).find(filter);
+    return this.expenseRepository.expense_details(id).find(filter)
   }
 
   @post('/expenses/{id}/expense-details', {
@@ -49,7 +48,7 @@ export class ExpenseExpenseDetailsController {
       '200': {
         description: 'Expense model instance',
         content: {
-          'application/json': {schema: getModelSchemaRef(ExpenseDetails)},
+          'application/json': { schema: getModelSchemaRef(ExpenseDetails) },
         },
       },
     },
@@ -69,14 +68,14 @@ export class ExpenseExpenseDetailsController {
     })
     expenseDetails: Omit<ExpenseDetails, 'id'>,
   ): Promise<ExpenseDetails> {
-    return this.expenseRepository.expense_details(id).create(expenseDetails);
+    return this.expenseRepository.expense_details(id).create(expenseDetails)
   }
 
   @patch('/expenses/{id}/expense-details', {
     responses: {
       '200': {
         description: 'Expense.ExpenseDetails PATCH success count',
-        content: {'application/json': {schema: CountSchema}},
+        content: { 'application/json': { schema: CountSchema } },
       },
     },
   })
@@ -85,7 +84,7 @@ export class ExpenseExpenseDetailsController {
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(ExpenseDetails, {partial: true}),
+          schema: getModelSchemaRef(ExpenseDetails, { partial: true }),
         },
       },
     })
@@ -95,14 +94,14 @@ export class ExpenseExpenseDetailsController {
   ): Promise<Count> {
     return this.expenseRepository
       .expense_details(id)
-      .patch(expenseDetails, where);
+      .patch(expenseDetails, where)
   }
 
   @del('/expenses/{id}/expense-details', {
     responses: {
       '200': {
         description: 'Expense.ExpenseDetails DELETE success count',
-        content: {'application/json': {schema: CountSchema}},
+        content: { 'application/json': { schema: CountSchema } },
       },
     },
   })
@@ -111,6 +110,6 @@ export class ExpenseExpenseDetailsController {
     @param.query.object('where', getWhereSchemaFor(ExpenseDetails))
     where?: Where<ExpenseDetails>,
   ): Promise<Count> {
-    return this.expenseRepository.expense_details(id).delete(where);
+    return this.expenseRepository.expense_details(id).delete(where)
   }
 }

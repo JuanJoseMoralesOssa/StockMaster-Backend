@@ -4,7 +4,7 @@ import {
   Filter,
   repository,
   Where,
-} from '@loopback/repository';
+} from '@loopback/repository'
 import {
   del,
   get,
@@ -14,14 +14,14 @@ import {
   patch,
   post,
   requestBody,
-} from '@loopback/rest';
-import {Person, Product} from '../../../models';
-import {PersonRepository} from '../../../repositories';
+} from '@loopback/rest'
+import { Person, Product } from '../../../models'
+import { PersonRepository } from '../../../repositories'
 
 export class PersonProductExpenseDetailsController {
   constructor(
     @repository(PersonRepository) protected personRepository: PersonRepository,
-  ) { }
+  ) {}
 
   @get('/people/{id}/products-expense-details', {
     responses: {
@@ -29,7 +29,7 @@ export class PersonProductExpenseDetailsController {
         description: 'Array of Person has many Product through ExpenseDetails',
         content: {
           'application/json': {
-            schema: {type: 'array', items: getModelSchemaRef(Product)},
+            schema: { type: 'array', items: getModelSchemaRef(Product) },
           },
         },
       },
@@ -39,14 +39,14 @@ export class PersonProductExpenseDetailsController {
     @param.path.number('id') id: number,
     @param.query.object('filter') filter?: Filter<Product>,
   ): Promise<Product[]> {
-    return this.personRepository.products_expense_details(id).find(filter);
+    return this.personRepository.products_expense_details(id).find(filter)
   }
 
   @post('/people/{id}/products-expense-details', {
     responses: {
       '200': {
         description: 'create a Product model instance',
-        content: {'application/json': {schema: getModelSchemaRef(Product)}},
+        content: { 'application/json': { schema: getModelSchemaRef(Product) } },
       },
     },
   })
@@ -64,14 +64,14 @@ export class PersonProductExpenseDetailsController {
     })
     product: Omit<Product, 'id'>,
   ): Promise<Product> {
-    return this.personRepository.products_expense_details(id).create(product);
+    return this.personRepository.products_expense_details(id).create(product)
   }
 
   @patch('/people/{id}/products-expense-details', {
     responses: {
       '200': {
         description: 'Person.Product PATCH success count',
-        content: {'application/json': {schema: CountSchema}},
+        content: { 'application/json': { schema: CountSchema } },
       },
     },
   })
@@ -80,7 +80,7 @@ export class PersonProductExpenseDetailsController {
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(Product, {partial: true}),
+          schema: getModelSchemaRef(Product, { partial: true }),
         },
       },
     })
@@ -90,14 +90,14 @@ export class PersonProductExpenseDetailsController {
   ): Promise<Count> {
     return this.personRepository
       .products_expense_details(id)
-      .patch(product, where);
+      .patch(product, where)
   }
 
   @del('/people/{id}/products-expense-details', {
     responses: {
       '200': {
         description: 'Person.Product DELETE success count',
-        content: {'application/json': {schema: CountSchema}},
+        content: { 'application/json': { schema: CountSchema } },
       },
     },
   })
@@ -106,6 +106,6 @@ export class PersonProductExpenseDetailsController {
     @param.query.object('where', getWhereSchemaFor(Product))
     where?: Where<Product>,
   ): Promise<Count> {
-    return this.personRepository.products_expense_details(id).delete(where);
+    return this.personRepository.products_expense_details(id).delete(where)
   }
 }

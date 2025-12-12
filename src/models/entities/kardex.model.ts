@@ -1,5 +1,5 @@
-import {Entity, model, property, belongsTo} from '@loopback/repository';
-import {Product} from './product.model';
+import { Entity, model, property, belongsTo } from '@loopback/repository'
+import { Product } from './product.model'
 
 @model()
 export class Kardex extends Entity {
@@ -8,49 +8,49 @@ export class Kardex extends Entity {
     id: true,
     generated: true,
   })
-  id?: number;
+  id?: number
 
   @property({
     type: 'date',
     required: true,
   })
-  date: string;
+  date: string
 
   @property({
     type: 'number',
     required: true,
   })
-  input: number;
+  input: number
 
   @property({
     type: 'number',
     required: true,
   })
-  output: number;
+  output: number
 
   @property({
     type: 'number',
     required: true,
   })
-  balance: number;
+  balance: number
 
   @property({
     type: 'boolean',
     required: true,
   })
-  balance_record: boolean;
+  balance_record: boolean
 
   @property({
     type: 'number',
     required: true,
   })
-  operation: number;
+  operation: number
 
   @belongsTo(() => Product)
-  productId: number;
+  productId: number
 
   constructor(data?: Partial<Kardex>) {
-    super(data);
+    super(data)
   }
 }
 
@@ -58,4 +58,4 @@ export interface KardexRelations {
   // describe navigational properties here
 }
 
-export type KardexWithRelations = Kardex & KardexRelations;
+export type KardexWithRelations = Kardex & KardexRelations

@@ -1,17 +1,21 @@
-import {inject, service} from '@loopback/core';
-import {get, getModelSchemaRef, post, requestBody, response} from '@loopback/rest';
-import {SecurityBindings, UserProfile} from '@loopback/security';
-import {requireAuth} from '../../../auth';
-import {Credentials, LoginResult, User, WhoAmIResponse} from '../../../models';
-import {SecurityService} from '../../../services';
+import { inject, service } from '@loopback/core'
+import {
+  get,
+  getModelSchemaRef,
+  post,
+  requestBody,
+  response,
+} from '@loopback/rest'
+import { SecurityBindings, UserProfile } from '@loopback/security'
+import { requireAuth } from '../../../auth'
+import { Credentials, LoginResult, User, WhoAmIResponse } from '../../../models'
+import { SecurityService } from '../../../services'
 
 export class AuthControllerController {
   constructor(
     @service(SecurityService)
     public securityService: SecurityService,
-  ) {
-
-  }
+  ) {}
 
   /**
    * User sign-in with credentials (email and password)
@@ -23,7 +27,7 @@ export class AuthControllerController {
   @post('/sign-in')
   @response(200, {
     description: 'User sign-in with credentials (email and password)',
-    content: {'application/json': {schema: getModelSchemaRef(User)}},
+    content: { 'application/json': { schema: getModelSchemaRef(User) } },
   })
   async identifyUser(
     @requestBody({
@@ -37,7 +41,7 @@ export class AuthControllerController {
     })
     credentials: Credentials,
   ): Promise<LoginResult> {
-    return this.securityService.login(credentials);
+    return this.securityService.login(credentials)
   }
 
   /**
@@ -49,7 +53,9 @@ export class AuthControllerController {
   @get('/whoami')
   @response(200, {
     description: 'Current user information',
-    content: {'application/json': {schema: getModelSchemaRef(WhoAmIResponse)}},
+    content: {
+      'application/json': { schema: getModelSchemaRef(WhoAmIResponse) },
+    },
   })
   async whoAmI(
     @inject(SecurityBindings.USER)
@@ -59,8 +65,7 @@ export class AuthControllerController {
       id: currentUser.id ?? '',
       name: currentUser.name ?? '',
       email: currentUser.email ?? '',
-      role: (currentUser as UserProfile & {role?: string}).role ?? '',
-    });
+      role: (currentUser as UserProfile & { role?: string }).role ?? '',
+    })
   }
-
 }

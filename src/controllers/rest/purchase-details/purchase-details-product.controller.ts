@@ -1,19 +1,13 @@
-import {
-  repository,
-} from '@loopback/repository';
-import {
-  get,
-  getModelSchemaRef,
-  param,
-} from '@loopback/rest';
-import {Product, PurchaseDetails} from '../../../models';
-import {PurchaseDetailsRepository} from '../../../repositories';
+import { repository } from '@loopback/repository'
+import { get, getModelSchemaRef, param } from '@loopback/rest'
+import { Product, PurchaseDetails } from '../../../models'
+import { PurchaseDetailsRepository } from '../../../repositories'
 
 export class PurchaseDetailsProductController {
   constructor(
     @repository(PurchaseDetailsRepository)
     public purchaseDetailsRepository: PurchaseDetailsRepository,
-  ) { }
+  ) {}
 
   @get('/purchase-details/{id}/product', {
     responses: {
@@ -30,6 +24,6 @@ export class PurchaseDetailsProductController {
   async getProduct(
     @param.path.number('id') id: typeof PurchaseDetails.prototype.id,
   ): Promise<Product> {
-    return this.purchaseDetailsRepository.product(id);
+    return this.purchaseDetailsRepository.product(id)
   }
 }

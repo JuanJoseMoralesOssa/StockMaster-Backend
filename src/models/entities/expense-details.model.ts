@@ -1,7 +1,7 @@
-import {belongsTo, Entity, model, property} from '@loopback/repository';
-import {Expense} from './expense.model';
-import {Person} from './person.model';
-import {Product} from './product.model';
+import { belongsTo, Entity, model, property } from '@loopback/repository'
+import { Expense } from './expense.model'
+import { Person } from './person.model'
+import { Product } from './product.model'
 
 @model()
 export class ExpenseDetails extends Entity {
@@ -10,25 +10,25 @@ export class ExpenseDetails extends Entity {
     id: true,
     generated: true,
   })
-  id?: number;
+  id?: number
 
   @property({
     type: 'number',
     required: true,
   })
-  weight_kg: number;
+  weight_kg: number
 
   @belongsTo(() => Product)
-  productId: number;
+  productId: number
 
   @belongsTo(() => Person)
-  personId: number;
+  personId: number
 
   @belongsTo(() => Expense)
-  expenseId: number;
+  expenseId: number
 
   constructor(data?: Partial<ExpenseDetails>) {
-    super(data);
+    super(data)
   }
 }
 
@@ -37,4 +37,4 @@ export interface ExpenseDetailsRelations {
 }
 
 export type ExpenseDetailsWithRelations = ExpenseDetails &
-  ExpenseDetailsRelations;
+  ExpenseDetailsRelations

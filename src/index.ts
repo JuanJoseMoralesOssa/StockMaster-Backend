@@ -1,19 +1,19 @@
-require('dotenv').config();
+require('dotenv').config()
 
-import {App, ApplicationConfig} from './application';
+import { App, ApplicationConfig } from './application'
 
-export * from './application';
+export * from './application'
 
 export async function main(options: ApplicationConfig = {}) {
-  const app = new App(options);
-  await app.boot();
-  await app.start();
+  const app = new App(options)
+  await app.boot()
+  await app.start()
 
-  const url = app.restServer.url;
-  console.log(`Server is running at ${url}`);
-  console.log(`Try ${url}/ping`);
+  const url = app.restServer.url
+  console.log(`Server is running at ${url}`)
+  console.log(`Try ${url}/ping`)
 
-  return app;
+  return app
 }
 
 if (require.main === module) {
@@ -33,9 +33,9 @@ if (require.main === module) {
         setServersFromRequest: true,
       },
     },
-  };
+  }
   main(config).catch(err => {
-    console.error('Cannot start the application.', err);
-    process.exit(1);
-  });
+    console.error('Cannot start the application.', err)
+    process.exit(1)
+  })
 }

@@ -4,7 +4,7 @@ import {
   Filter,
   repository,
   Where,
-} from '@loopback/repository';
+} from '@loopback/repository'
 import {
   del,
   get,
@@ -14,15 +14,15 @@ import {
   patch,
   post,
   requestBody,
-} from '@loopback/rest';
-import {Purchase, PurchaseDetails} from '../../../models';
-import {PurchaseRepository} from '../../../repositories/purchase.repository';
+} from '@loopback/rest'
+import { Purchase, PurchaseDetails } from '../../../models'
+import { PurchaseRepository } from '../../../repositories/purchase.repository'
 
 export class PurchasePurchaseDetailsController {
   constructor(
     @repository(PurchaseRepository)
     protected purchaseRepository: PurchaseRepository,
-  ) { }
+  ) {}
 
   @get('/purchases/{id}/purchase-details', {
     responses: {
@@ -30,7 +30,10 @@ export class PurchasePurchaseDetailsController {
         description: 'Array of Purchase has many PurchaseDetails',
         content: {
           'application/json': {
-            schema: {type: 'array', items: getModelSchemaRef(PurchaseDetails)},
+            schema: {
+              type: 'array',
+              items: getModelSchemaRef(PurchaseDetails),
+            },
           },
         },
       },
@@ -40,7 +43,7 @@ export class PurchasePurchaseDetailsController {
     @param.path.number('id') id: number,
     @param.query.object('filter') filter?: Filter<PurchaseDetails>,
   ): Promise<PurchaseDetails[]> {
-    return this.purchaseRepository.purchase_details(id).find(filter);
+    return this.purchaseRepository.purchase_details(id).find(filter)
   }
 
   @post('/purchases/{id}/purchase-details', {
@@ -48,7 +51,7 @@ export class PurchasePurchaseDetailsController {
       '200': {
         description: 'Purchase model instance',
         content: {
-          'application/json': {schema: getModelSchemaRef(PurchaseDetails)},
+          'application/json': { schema: getModelSchemaRef(PurchaseDetails) },
         },
       },
     },
@@ -68,14 +71,14 @@ export class PurchasePurchaseDetailsController {
     })
     purchaseDetails: Omit<PurchaseDetails, 'id'>,
   ): Promise<PurchaseDetails> {
-    return this.purchaseRepository.purchase_details(id).create(purchaseDetails);
+    return this.purchaseRepository.purchase_details(id).create(purchaseDetails)
   }
 
   @patch('/purchases/{id}/purchase-details', {
     responses: {
       '200': {
         description: 'Purchase.PurchaseDetails PATCH success count',
-        content: {'application/json': {schema: CountSchema}},
+        content: { 'application/json': { schema: CountSchema } },
       },
     },
   })
@@ -84,7 +87,7 @@ export class PurchasePurchaseDetailsController {
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(PurchaseDetails, {partial: true}),
+          schema: getModelSchemaRef(PurchaseDetails, { partial: true }),
         },
       },
     })
@@ -94,14 +97,14 @@ export class PurchasePurchaseDetailsController {
   ): Promise<Count> {
     return this.purchaseRepository
       .purchase_details(id)
-      .patch(purchaseDetails, where);
+      .patch(purchaseDetails, where)
   }
 
   @del('/purchases/{id}/purchase-details', {
     responses: {
       '200': {
         description: 'Purchase.PurchaseDetails DELETE success count',
-        content: {'application/json': {schema: CountSchema}},
+        content: { 'application/json': { schema: CountSchema } },
       },
     },
   })
@@ -110,6 +113,6 @@ export class PurchasePurchaseDetailsController {
     @param.query.object('where', getWhereSchemaFor(PurchaseDetails))
     where?: Where<PurchaseDetails>,
   ): Promise<Count> {
-    return this.purchaseRepository.purchase_details(id).delete(where);
+    return this.purchaseRepository.purchase_details(id).delete(where)
   }
 }

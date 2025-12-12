@@ -4,7 +4,7 @@ import {
   Filter,
   repository,
   Where,
-} from '@loopback/repository';
+} from '@loopback/repository'
 import {
   del,
   get,
@@ -14,22 +14,24 @@ import {
   patch,
   post,
   requestBody,
-} from '@loopback/rest';
-import {Product, Purchase} from '../../../models';
-import {ProductRepository} from '../../../repositories';
+} from '@loopback/rest'
+import { Product, Purchase } from '../../../models'
+import { ProductRepository } from '../../../repositories'
 
 export class ProductPurchaseController {
   constructor(
-    @repository(ProductRepository) protected productRepository: ProductRepository,
-  ) { }
+    @repository(ProductRepository)
+    protected productRepository: ProductRepository,
+  ) {}
 
   @get('/products/{id}/purchases', {
     responses: {
       '200': {
-        description: 'Array of Product has many Purchase through PurchaseDetails',
+        description:
+          'Array of Product has many Purchase through PurchaseDetails',
         content: {
           'application/json': {
-            schema: {type: 'array', items: getModelSchemaRef(Purchase)},
+            schema: { type: 'array', items: getModelSchemaRef(Purchase) },
           },
         },
       },
@@ -39,14 +41,16 @@ export class ProductPurchaseController {
     @param.path.number('id') id: number,
     @param.query.object('filter') filter?: Filter<Purchase>,
   ): Promise<Purchase[]> {
-    return this.productRepository.purchases(id).find(filter);
+    return this.productRepository.purchases(id).find(filter)
   }
 
   @post('/products/{id}/purchases', {
     responses: {
       '200': {
         description: 'create a Purchase model instance',
-        content: {'application/json': {schema: getModelSchemaRef(Purchase)}},
+        content: {
+          'application/json': { schema: getModelSchemaRef(Purchase) },
+        },
       },
     },
   })
@@ -61,16 +65,17 @@ export class ProductPurchaseController {
           }),
         },
       },
-    }) purchase: Omit<Purchase, 'id'>,
+    })
+    purchase: Omit<Purchase, 'id'>,
   ): Promise<Purchase> {
-    return this.productRepository.purchases(id).create(purchase);
+    return this.productRepository.purchases(id).create(purchase)
   }
 
   @patch('/products/{id}/purchases', {
     responses: {
       '200': {
         description: 'Product.Purchase PATCH success count',
-        content: {'application/json': {schema: CountSchema}},
+        content: { 'application/json': { schema: CountSchema } },
       },
     },
   })
@@ -79,28 +84,30 @@ export class ProductPurchaseController {
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(Purchase, {partial: true}),
+          schema: getModelSchemaRef(Purchase, { partial: true }),
         },
       },
     })
     purchase: Partial<Purchase>,
-    @param.query.object('where', getWhereSchemaFor(Purchase)) where?: Where<Purchase>,
+    @param.query.object('where', getWhereSchemaFor(Purchase))
+    where?: Where<Purchase>,
   ): Promise<Count> {
-    return this.productRepository.purchases(id).patch(purchase, where);
+    return this.productRepository.purchases(id).patch(purchase, where)
   }
 
   @del('/products/{id}/purchases', {
     responses: {
       '200': {
         description: 'Product.Purchase DELETE success count',
-        content: {'application/json': {schema: CountSchema}},
+        content: { 'application/json': { schema: CountSchema } },
       },
     },
   })
   async delete(
     @param.path.number('id') id: number,
-    @param.query.object('where', getWhereSchemaFor(Purchase)) where?: Where<Purchase>,
+    @param.query.object('where', getWhereSchemaFor(Purchase))
+    where?: Where<Purchase>,
   ): Promise<Count> {
-    return this.productRepository.purchases(id).delete(where);
+    return this.productRepository.purchases(id).delete(where)
   }
 }

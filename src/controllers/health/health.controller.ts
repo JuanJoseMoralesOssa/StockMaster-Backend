@@ -1,11 +1,11 @@
-import {inject} from '@loopback/core';
+import { inject } from '@loopback/core'
 import {
   Request,
   RestBindings,
   get,
   response,
   ResponseObject,
-} from '@loopback/rest';
+} from '@loopback/rest'
 
 /**
  * OpenAPI response for health check
@@ -18,16 +18,16 @@ const HEALTH_RESPONSE: ResponseObject = {
         type: 'object',
         title: 'HealthResponse',
         properties: {
-          status: {type: 'string'},
-          timestamp: {type: 'string'},
-          uptime: {type: 'number'},
-          environment: {type: 'string'},
-          version: {type: 'string'},
+          status: { type: 'string' },
+          timestamp: { type: 'string' },
+          uptime: { type: 'number' },
+          environment: { type: 'string' },
+          version: { type: 'string' },
         },
       },
     },
   },
-};
+}
 
 /**
  * Health check controller
@@ -44,6 +44,6 @@ export class HealthController {
       uptime: process.uptime(),
       environment: process.env.NODE_ENV ?? 'development',
       version: process.env.npm_package_version ?? '1.0.0',
-    };
+    }
   }
 }

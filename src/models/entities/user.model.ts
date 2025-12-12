@@ -1,4 +1,4 @@
-import {Entity, model, property} from '@loopback/repository';
+import { Entity, model, property } from '@loopback/repository'
 
 @model()
 export class User extends Entity {
@@ -7,13 +7,13 @@ export class User extends Entity {
     id: true,
     generated: true,
   })
-  id?: number;
+  id?: number
 
   @property({
     type: 'string',
     required: true,
   })
-  name: string;
+  name: string
 
   @property({
     type: 'string',
@@ -34,22 +34,22 @@ export class User extends Entity {
     },
     pattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$',
   })
-  email: string;
+  email: string
 
   @property({
     type: 'string',
     required: true,
   })
-  role: string;
+  role: string
 
   @property({
     type: 'string',
     required: true,
   })
-  password: string;
+  password: string
 
   constructor(data?: Partial<User>) {
-    super(data);
+    super(data)
   }
 }
 
@@ -57,4 +57,4 @@ export interface UserRelations {
   // describe navigational properties here
 }
 
-export type UserWithRelations = User & UserRelations;
+export type UserWithRelations = User & UserRelations

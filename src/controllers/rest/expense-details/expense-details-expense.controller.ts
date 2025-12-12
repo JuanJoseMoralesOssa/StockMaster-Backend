@@ -1,20 +1,13 @@
-import {
-  repository,
-} from '@loopback/repository';
-import {
-  get,
-  getModelSchemaRef,
-  param,
-} from '@loopback/rest';
-import {Expense, ExpenseDetails} from '../../../models';
-import {ExpenseDetailsRepository} from '../../../repositories';
-
+import { repository } from '@loopback/repository'
+import { get, getModelSchemaRef, param } from '@loopback/rest'
+import { Expense, ExpenseDetails } from '../../../models'
+import { ExpenseDetailsRepository } from '../../../repositories'
 
 export class ExpenseDetailsExpenseController {
   constructor(
     @repository(ExpenseDetailsRepository)
     public expenseDetailsRepository: ExpenseDetailsRepository,
-  ) { }
+  ) {}
 
   @get('/expense-details/{id}/expense', {
     responses: {
@@ -31,6 +24,6 @@ export class ExpenseDetailsExpenseController {
   async getExpense(
     @param.path.number('id') id: typeof ExpenseDetails.prototype.id,
   ): Promise<Expense> {
-    return this.expenseDetailsRepository.expense(id);
+    return this.expenseDetailsRepository.expense(id)
   }
 }

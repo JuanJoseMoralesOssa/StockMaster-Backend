@@ -1,5 +1,5 @@
-import {repository} from '@loopback/repository'
-import {get, HttpErrors, param} from '@loopback/rest'
+import { repository } from '@loopback/repository'
+import { get, HttpErrors, param } from '@loopback/rest'
 import {
   ExpenseDetailsRepository,
   PersonRepository,
@@ -44,13 +44,14 @@ export class GeneralReportsController {
     protected personRepository: PersonRepository,
     @repository(ProductRepository)
     protected productRepository: ProductRepository,
-  ) { }
+  ) {}
 
   @get('/analytics/date-range')
   async getDateRangeAnalytics(
     @param.query.string('startDate') startDate: string,
     @param.query.string('endDate') endDate: string,
-    @param.query.string('type') type: 'purchases' | 'expenses' | 'both' = 'both',
+    @param.query.string('type')
+    type: 'purchases' | 'expenses' | 'both' = 'both',
   ): Promise<DateRangeAnalytics> {
     this.validateDateRange(startDate, endDate)
 
@@ -75,8 +76,14 @@ export class GeneralReportsController {
     @param.query.number('limit') limit: number = 10,
   ): Promise<SupplierAnalytics[]> {
     this.validateDateRange(startDate, endDate)
-    const analytics = await this.getSupplierAnalytics(startDate, endDate, 'both')
-    return analytics.sort((a, b) => b.totalWeight - a.totalWeight).slice(0, limit)
+    const analytics = await this.getSupplierAnalytics(
+      startDate,
+      endDate,
+      'both',
+    )
+    return analytics
+      .sort((a, b) => b.totalWeight - a.totalWeight)
+      .slice(0, limit)
   }
 
   @get('/analytics/products/top')
@@ -87,7 +94,9 @@ export class GeneralReportsController {
   ): Promise<ProductAnalytics[]> {
     this.validateDateRange(startDate, endDate)
     const analytics = await this.getProductAnalytics(startDate, endDate, 'both')
-    return analytics.sort((a, b) => b.totalWeight - a.totalWeight).slice(0, limit)
+    return analytics
+      .sort((a, b) => b.totalWeight - a.totalWeight)
+      .slice(0, limit)
   }
 
   @get('/analytics/products/most-transactions')
@@ -98,7 +107,9 @@ export class GeneralReportsController {
   ): Promise<ProductAnalytics[]> {
     this.validateDateRange(startDate, endDate)
     const analytics = await this.getProductAnalytics(startDate, endDate, 'both')
-    return analytics.sort((a, b) => b.transactionCount - a.transactionCount).slice(0, limit)
+    return analytics
+      .sort((a, b) => b.transactionCount - a.transactionCount)
+      .slice(0, limit)
   }
 
   @get('/analytics/products/least-transactions')
@@ -122,8 +133,14 @@ export class GeneralReportsController {
     @param.query.number('limit') limit: number = 10,
   ): Promise<SupplierAnalytics[]> {
     this.validateDateRange(startDate, endDate)
-    const analytics = await this.getSupplierAnalytics(startDate, endDate, 'both')
-    return analytics.sort((a, b) => b.transactionCount - a.transactionCount).slice(0, limit)
+    const analytics = await this.getSupplierAnalytics(
+      startDate,
+      endDate,
+      'both',
+    )
+    return analytics
+      .sort((a, b) => b.transactionCount - a.transactionCount)
+      .slice(0, limit)
   }
 
   @get('/analytics/suppliers/least-transactions')
@@ -133,7 +150,11 @@ export class GeneralReportsController {
     @param.query.number('limit') limit: number = 10,
   ): Promise<SupplierAnalytics[]> {
     this.validateDateRange(startDate, endDate)
-    const analytics = await this.getSupplierAnalytics(startDate, endDate, 'both')
+    const analytics = await this.getSupplierAnalytics(
+      startDate,
+      endDate,
+      'both',
+    )
     return analytics
       .filter(s => s.transactionCount > 0) // Solo proveedores con al menos 1 transacción
       .sort((a, b) => a.transactionCount - b.transactionCount)
@@ -154,7 +175,7 @@ export class GeneralReportsController {
           {
             relation: 'purchase',
             scope: {
-              where: {date: dateFilter},
+              where: { date: dateFilter },
             },
           },
           {
@@ -172,7 +193,7 @@ export class GeneralReportsController {
           {
             relation: 'expense',
             scope: {
-              where: {date: dateFilter},
+              where: { date: dateFilter },
             },
           },
           {
@@ -201,7 +222,7 @@ export class GeneralReportsController {
           {
             relation: 'purchase',
             scope: {
-              where: {date: dateFilter},
+              where: { date: dateFilter },
             },
           },
           {
@@ -219,7 +240,7 @@ export class GeneralReportsController {
           {
             relation: 'expense',
             scope: {
-              where: {date: dateFilter},
+              where: { date: dateFilter },
             },
           },
           {
@@ -240,10 +261,12 @@ export class GeneralReportsController {
   ): void {
     for (const transaction of transactions) {
       // Skip transactions without required data or without valid date relation
-      if (!transaction.person ||
+      if (
+        !transaction.person ||
         !transaction.weight_kg ||
         transaction.weight_kg <= 0 ||
-        (!transaction.purchase && !transaction.expense)) {
+        (!transaction.purchase && !transaction.expense)
+      ) {
         continue
       }
 
@@ -270,10 +293,12 @@ export class GeneralReportsController {
   ): void {
     for (const transaction of transactions) {
       // Skip transactions without required data or without valid date relation
-      if (!transaction.product ||
+      if (
+        !transaction.product ||
         !transaction.weight_kg ||
         transaction.weight_kg <= 0 ||
-        (!transaction.purchase && !transaction.expense)) {
+        (!transaction.purchase && !transaction.expense)
+      ) {
         continue
       }
 
@@ -306,21 +331,25 @@ export class GeneralReportsController {
     return {
       totalSuppliers: supplierAnalytics.length,
       totalProducts: productAnalytics.length,
-      totalWeight: supplierAnalytics.reduce((sum, s) => sum + s.totalWeight, 0) +
+      totalWeight:
+        supplierAnalytics.reduce((sum, s) => sum + s.totalWeight, 0) +
         productAnalytics.reduce((sum, p) => sum + p.totalWeight, 0),
-      totalTransactions: supplierAnalytics.reduce((sum, s) => sum + s.transactionCount, 0) +
+      totalTransactions:
+        supplierAnalytics.reduce((sum, s) => sum + s.transactionCount, 0) +
         productAnalytics.reduce((sum, p) => sum + p.transactionCount, 0),
     }
   }
 
-  private getTopResults<T extends {totalWeight: number}>(
+  private getTopResults<T extends { totalWeight: number }>(
     data: T[],
     mode: 'max' | 'min',
   ): T[] {
     if (data.length === 0) return []
 
     const sortedData = data.sort((a, b) =>
-      mode === 'max' ? b.totalWeight - a.totalWeight : a.totalWeight - b.totalWeight
+      mode === 'max'
+        ? b.totalWeight - a.totalWeight
+        : a.totalWeight - b.totalWeight,
     )
 
     const targetValue = sortedData[0].totalWeight
@@ -335,7 +364,9 @@ export class GeneralReportsController {
     // Validate date format (YYYY-MM-DD)
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/
     if (!dateRegex.test(startDate)) {
-      throw new HttpErrors.BadRequest('Invalid startDate format. Use YYYY-MM-DD')
+      throw new HttpErrors.BadRequest(
+        'Invalid startDate format. Use YYYY-MM-DD',
+      )
     }
     if (!dateRegex.test(endDate)) {
       throw new HttpErrors.BadRequest('Invalid endDate format. Use YYYY-MM-DD')
@@ -353,14 +384,20 @@ export class GeneralReportsController {
     }
 
     if (start > end) {
-      throw new HttpErrors.BadRequest('startDate must be before or equal to endDate')
+      throw new HttpErrors.BadRequest(
+        'startDate must be before or equal to endDate',
+      )
     }
 
     // Validate date range is not too large (optional business rule)
     const maxDaysRange = 365 // 1 year
-    const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+    const daysDiff = Math.ceil(
+      (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24),
+    )
     if (daysDiff > maxDaysRange) {
-      throw new HttpErrors.BadRequest(`Date range cannot exceed ${maxDaysRange} days`)
+      throw new HttpErrors.BadRequest(
+        `Date range cannot exceed ${maxDaysRange} days`,
+      )
     }
   }
 
@@ -372,5 +409,4 @@ export class GeneralReportsController {
       between: [startDate, endDate],
     }
   }
-
 }

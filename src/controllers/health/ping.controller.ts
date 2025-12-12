@@ -1,12 +1,11 @@
-import {inject} from '@loopback/core';
+import { inject } from '@loopback/core'
 import {
-  Request,
-  RestBindings,
   get,
+  Request,
   response,
   ResponseObject,
-} from '@loopback/rest';
-
+  RestBindings,
+} from '@loopback/rest'
 
 const PING_RESPONSE: ResponseObject = {
   description: 'Ping Response',
@@ -16,13 +15,13 @@ const PING_RESPONSE: ResponseObject = {
         type: 'object',
         title: 'PingResponse',
         properties: {
-          greeting: {type: 'string'},
-          date: {type: 'string'},
-          url: {type: 'string'},
+          greeting: { type: 'string' },
+          date: { type: 'string' },
+          url: { type: 'string' },
           headers: {
             type: 'object',
             properties: {
-              'Content-Type': {type: 'string'},
+              'Content-Type': { type: 'string' },
             },
             additionalProperties: true,
           },
@@ -30,7 +29,7 @@ const PING_RESPONSE: ResponseObject = {
       },
     },
   },
-};
+}
 
 /**
  * A simple controller to bounce back http requests
@@ -48,6 +47,6 @@ export class PingController {
       date: new Date(),
       url: this.req.url,
       headers: Object.assign({}, this.req.headers),
-    };
+    }
   }
 }

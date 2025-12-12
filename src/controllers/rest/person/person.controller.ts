@@ -5,7 +5,7 @@ import {
   FilterExcludingWhere,
   repository,
   Where,
-} from '@loopback/repository';
+} from '@loopback/repository'
 import {
   del,
   get,
@@ -16,20 +16,20 @@ import {
   put,
   requestBody,
   response,
-} from '@loopback/rest';
-import {Pagination, Person} from '../../../models';
-import {PersonRepository} from '../../../repositories';
+} from '@loopback/rest'
+import { Pagination, Person } from '../../../models'
+import { PersonRepository } from '../../../repositories'
 
 export class PersonController {
   constructor(
     @repository(PersonRepository)
     public personRepository: PersonRepository,
-  ) { }
+  ) {}
 
   @post('/people')
   @response(200, {
     description: 'Person model instance',
-    content: {'application/json': {schema: getModelSchemaRef(Person)}},
+    content: { 'application/json': { schema: getModelSchemaRef(Person) } },
   })
   async create(
     @requestBody({
@@ -44,18 +44,16 @@ export class PersonController {
     })
     person: Omit<Person, 'id'>,
   ): Promise<Person> {
-    return this.personRepository.create(person);
+    return this.personRepository.create(person)
   }
 
   @get('/people/count')
   @response(200, {
     description: 'Person model count',
-    content: {'application/json': {schema: CountSchema}},
+    content: { 'application/json': { schema: CountSchema } },
   })
-  async count(
-    @param.where(Person) where?: Where<Person>,
-  ): Promise<Count> {
-    return this.personRepository.count(where);
+  async count(@param.where(Person) where?: Where<Person>): Promise<Count> {
+    return this.personRepository.count(where)
   }
 
   @get('/people')
@@ -65,7 +63,7 @@ export class PersonController {
       'application/json': {
         schema: {
           type: 'array',
-          items: getModelSchemaRef(Person, {includeRelations: true}),
+          items: getModelSchemaRef(Person, { includeRelations: true }),
         },
       },
     },
@@ -75,19 +73,19 @@ export class PersonController {
     @param.query.number('page') page: number = 1,
     @param.query.number('limit') limit: number = 10,
   ): Promise<Pagination<Person>> {
-    const newFilter: Filter<Person> = {...(filter ?? {}), order: ['name ASC']};
+    const newFilter: Filter<Person> = { ...(filter ?? {}), order: ['name ASC'] }
     const people = await this.personRepository.find({
       ...newFilter,
       skip: (page - 1) * limit,
-      limit: limit
-    });
-    const count = await this.personRepository.count(newFilter?.where);
+      limit: limit,
+    })
+    const count = await this.personRepository.count(newFilter?.where)
     return new Pagination<Person>({
       count: count.count,
       data: people,
       page: page,
-      limit: limit
-    });
+      limit: limit,
+    })
   }
 
   @get('/people/all')
@@ -97,7 +95,7 @@ export class PersonController {
       'application/json': {
         schema: {
           type: 'array',
-          items: getModelSchemaRef(Person, {includeRelations: true}),
+          items: getModelSchemaRef(Person, { includeRelations: true }),
         },
       },
     },
@@ -105,27 +103,27 @@ export class PersonController {
   async findAll(
     @param.filter(Person) filter?: Filter<Person>,
   ): Promise<Person[]> {
-    const newFilter: Filter<Person> = {...(filter ?? {}), order: ['name ASC']};
-    return this.personRepository.find(newFilter);
+    const newFilter: Filter<Person> = { ...(filter ?? {}), order: ['name ASC'] }
+    return this.personRepository.find(newFilter)
   }
 
   @patch('/people')
   @response(200, {
     description: 'Person PATCH success count',
-    content: {'application/json': {schema: CountSchema}},
+    content: { 'application/json': { schema: CountSchema } },
   })
   async updateAll(
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(Person, {partial: true}),
+          schema: getModelSchemaRef(Person, { partial: true }),
         },
       },
     })
     person: Person,
     @param.where(Person) where?: Where<Person>,
   ): Promise<Count> {
-    return this.personRepository.updateAll(person, where);
+    return this.personRepository.updateAll(person, where)
   }
 
   @get('/people/{id}')
@@ -133,15 +131,16 @@ export class PersonController {
     description: 'Person model instance',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(Person, {includeRelations: true}),
+        schema: getModelSchemaRef(Person, { includeRelations: true }),
       },
     },
   })
   async findById(
     @param.path.number('id') id: number,
-    @param.filter(Person, {exclude: 'where'}) filter?: FilterExcludingWhere<Person>
+    @param.filter(Person, { exclude: 'where' })
+    filter?: FilterExcludingWhere<Person>,
   ): Promise<Person> {
-    return this.personRepository.findById(id, filter);
+    return this.personRepository.findById(id, filter)
   }
 
   @patch('/people/{id}')
@@ -149,7 +148,7 @@ export class PersonController {
     description: 'Person PATCH success',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(Person, {includeRelations: true}),
+        schema: getModelSchemaRef(Person, { includeRelations: true }),
       },
     },
   })
@@ -158,14 +157,14 @@ export class PersonController {
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(Person, {partial: true}),
+          schema: getModelSchemaRef(Person, { partial: true }),
         },
       },
     })
     person: Partial<Person>,
   ): Promise<Person> {
-    await this.personRepository.updateById(id, person);
-    return this.personRepository.findById(id, {include: []});
+    await this.personRepository.updateById(id, person)
+    return this.personRepository.findById(id, { include: [] })
   }
 
   @put('/people/{id}')
@@ -173,7 +172,7 @@ export class PersonController {
     description: 'Person PUT success',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(Person, {includeRelations: true}),
+        schema: getModelSchemaRef(Person, { includeRelations: true }),
       },
     },
   })
@@ -191,8 +190,8 @@ export class PersonController {
     })
     person: Omit<Person, 'id'>,
   ): Promise<Person> {
-    await this.personRepository.replaceById(id, person);
-    return this.personRepository.findById(id, {include: []});
+    await this.personRepository.replaceById(id, person)
+    return this.personRepository.findById(id, { include: [] })
   }
 
   @del('/people/{id}')
@@ -200,6 +199,6 @@ export class PersonController {
     description: 'Person DELETE success',
   })
   async deleteById(@param.path.number('id') id: number): Promise<void> {
-    await this.personRepository.deleteById(id);
+    await this.personRepository.deleteById(id)
   }
 }

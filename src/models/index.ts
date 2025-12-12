@@ -1,5 +1,5 @@
 /** Entities */
-export * from './entities';
+export * from './entities'
 
 /** Types */
-export * from './types';
+export * from './types'

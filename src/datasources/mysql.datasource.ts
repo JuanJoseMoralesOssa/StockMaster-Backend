@@ -1,8 +1,8 @@
-import {inject, lifeCycleObserver, LifeCycleObserver} from '@loopback/core';
-import {juggler} from '@loopback/repository';
-import * as fs from 'fs';
-import * as path from 'path';
-import {securityConfig} from '../config/security';
+import { inject, lifeCycleObserver, LifeCycleObserver } from '@loopback/core'
+import { juggler } from '@loopback/repository'
+import * as fs from 'fs'
+import * as path from 'path'
+import { securityConfig } from '../config/security'
 
 // require('dotenv').config();
 
@@ -14,18 +14,22 @@ function getCertificatePath(): string {
     path.resolve(__dirname, '../certs/DigiCertGlobalRootCA.crt.pem'), // Relative to compiled file
     path.resolve(__dirname, '../../src/certs/DigiCertGlobalRootCA.crt.pem'), // From dist back to src
     securityConfig.SSL_CERT_PATH, // From environment variable
-  ].filter(Boolean); // Remove empty strings
+  ].filter(Boolean) // Remove empty strings
 
   for (const certPath of possiblePaths) {
     if (fs.existsSync(certPath)) {
-      console.log(`Using SSL certificate from: ${certPath}`);
-      return certPath;
+      console.log(`Using SSL certificate from: ${certPath}`)
+      return certPath
     }
   }
 
-  console.warn(`SSL certificate file not found. Searched in: ${possiblePaths.join(', ')}`);
-  console.warn('Continuing without SSL certificate file - Azure MySQL may still work with default SSL settings');
-  return '';
+  console.warn(
+    `SSL certificate file not found. Searched in: ${possiblePaths.join(', ')}`,
+  )
+  console.warn(
+    'Continuing without SSL certificate file - Azure MySQL may still work with default SSL settings',
+  )
+  return ''
 }
 
 const config = {
@@ -43,11 +47,12 @@ const config = {
   // password: 'toor',
   // database: 'jm_inv_db',
 
-
   // SSL configuration for Azure MySQL
   ssl: {
     rejectUnauthorized: false, // Set to false for Azure MySQL
-    ca: getCertificatePath() ? fs.readFileSync(getCertificatePath()).toString() : undefined,
+    ca: getCertificatePath()
+      ? fs.readFileSync(getCertificatePath()).toString()
+      : undefined,
   },
 
   // LoopBack MySQL connector specific options
@@ -57,7 +62,7 @@ const config = {
   // Valid MySQL2 options only
   connectTimeout: 60000,
   multipleStatements: false,
-};
+}
 
 // Observe application's life cycle to disconnect the datasource when
 // application is stopped. This allows the application to be shut down
@@ -66,14 +71,15 @@ const config = {
 @lifeCycleObserver('datasource')
 export class MysqlDataSource
   extends juggler.DataSource
-  implements LifeCycleObserver {
-  static readonly dataSourceName = 'mysql';
-  static readonly defaultConfig = config;
+  implements LifeCycleObserver
+{
+  static readonly dataSourceName = 'mysql'
+  static readonly defaultConfig = config
 
   constructor(
-    @inject('datasources.config.mysql', {optional: true})
+    @inject('datasources.config.mysql', { optional: true })
     dsConfig: object = config,
   ) {
-    super(dsConfig);
+    super(dsConfig)
   }
 }
