@@ -4,7 +4,7 @@ updates:
   - package-ecosystem: 'npm'
     directory: '/'
     schedule:
-      interval: 'weekly'
+      interval: 'monthly'
       day: 'monday'
       time: '09:00'
     open-pull-requests-limit: 10
@@ -16,12 +16,30 @@ updates:
     labels:
       - 'dependencies'
       - 'npm'
+    groups:
+      loopback:
+        patterns:
+          - '@loopback/*'
+        update-types:
+          - 'minor'
+          - 'patch'
+      types:
+        patterns:
+          - '@types/*'
+      dev-tools:
+        patterns:
+          - 'eslint*'
+          - 'prettier*'
+          - 'typescript'
+        update-types:
+          - 'minor'
+          - 'patch'
 
   # Mantener GitHub Actions actualizadas
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:
-      interval: 'weekly'
+      interval: 'monthly'
       day: 'monday'
       time: '09:00'
     open-pull-requests-limit: 5
@@ -37,7 +55,7 @@ updates:
   - package-ecosystem: 'docker'
     directory: '/'
     schedule:
-      interval: 'weekly'
+      interval: 'monthly'
       day: 'monday'
       time: '09:00'
     open-pull-requests-limit: 5

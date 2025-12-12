@@ -215,7 +215,7 @@ El CI usa matrix para probar múltiples versiones de Node.js:
 ```yaml
 strategy:
   matrix:
-    node-version: [24]
+    node-version: [22]
 ```
 
 ### 4. Cache
