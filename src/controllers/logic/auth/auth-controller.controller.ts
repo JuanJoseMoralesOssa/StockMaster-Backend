@@ -37,7 +37,7 @@ export class AuthControllerController {
     })
     credentials: Credentials,
   ): Promise<LoginResult> {
-    return await this.securityService.login(credentials);
+    return this.securityService.login(credentials);
   }
 
   /**
@@ -56,10 +56,10 @@ export class AuthControllerController {
     currentUser: UserProfile,
   ): Promise<WhoAmIResponse> {
     return new WhoAmIResponse({
-      id: currentUser.id || '',
-      name: currentUser.name || '',
-      email: currentUser.email || '',
-      role: (currentUser as UserProfile & {role?: string}).role || '',
+      id: currentUser.id ?? '',
+      name: currentUser.name ?? '',
+      email: currentUser.email ?? '',
+      role: (currentUser as UserProfile & {role?: string}).role ?? '',
     });
   }
 

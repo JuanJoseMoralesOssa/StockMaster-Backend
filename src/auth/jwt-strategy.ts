@@ -28,11 +28,11 @@ export class JWTAuthStrategy implements AuthenticationStrategy, OASEnhancer {
 
       // Convertir a UserProfile (formato que espera LoopBack)
       const userProfile: UserProfile = {
-        [securityId]: user.id?.toString() || '',
-        id: user.id?.toString() || '',
-        name: user.name || '',
-        email: user.email || '',
-        role: user.role || '',
+        [securityId]: user.id?.toString() ?? '',
+        id: user.id?.toString() ?? '',
+        name: user.name ?? '',
+        email: user.email ?? '',
+        role: user.role ?? '',
       };
 
       return userProfile;

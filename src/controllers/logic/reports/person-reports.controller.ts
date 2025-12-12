@@ -1,7 +1,7 @@
-import {repository} from '@loopback/repository';
-import {get, HttpErrors, param} from '@loopback/rest';
-import {Expense, ExpenseDetails, Person, Purchase, PurchaseDetails} from '../../../models';
-import {PersonRepository} from '../../../repositories';
+import {repository} from '@loopback/repository'
+import {get, HttpErrors, param} from '@loopback/rest'
+import {Expense, ExpenseDetails, Person, Purchase, PurchaseDetails} from '../../../models'
+import {PersonRepository} from '../../../repositories'
 
 
 // Definir interfaces para mejor tipado

@@ -13,7 +13,7 @@ export const requireAuth = () => authenticate('jwt');
  * @param roles - Array de roles permitidos
  */
 export const requireRoles = (...roles: string[]) => {
-  return (target: any, propertyKey: string, descriptor: PropertyDescriptor) => {
+  return (target: Object, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
     // Agregar metadata de roles requeridos usando constante
     Reflect.defineMetadata(REQUIRED_ROLES_METADATA, roles, target, propertyKey);
     return descriptor;
@@ -25,9 +25,10 @@ export const requireRoles = (...roles: string[]) => {
  * @param roles - Array de roles permitidos
  */
 export const requireAuthAndRoles = (...roles: string[]) => {
-  return (target: any, propertyKey: string, descriptor: PropertyDescriptor) => {
+  return (target: Object, propertyKey: string | symbol, descriptor: PropertyDescriptor) => {
     // Aplicar autenticación JWT
-    authenticate('jwt')(target, propertyKey, descriptor);
+    const key = typeof propertyKey === 'symbol' ? undefined : propertyKey;
+    authenticate('jwt')(target, key, descriptor);
     // Agregar metadata de roles usando constante
     Reflect.defineMetadata(REQUIRED_ROLES_METADATA, roles, target, propertyKey);
     return descriptor;

@@ -55,7 +55,7 @@ export class AuthorizeInterceptor implements Provider<Interceptor> {
       const userProfile = user as UserProfile & {role?: string};
       if (!userProfile.role || !requiredRoles.includes(userProfile.role)) {
         throw new HttpErrors.Forbidden(
-          `Access denied. Required roles: ${requiredRoles.join(', ')}. Your role: ${userProfile.role || 'none'}`
+          `Access denied. Required roles: ${requiredRoles.join(', ')}. Your role: ${userProfile.role ?? 'none'}`
         );
       }
     }
