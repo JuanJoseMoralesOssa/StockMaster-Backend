@@ -22,7 +22,11 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 # Copy built application and certs
 COPY --from=builder --chown=node:node /app/dist ./dist
-COPY --from=builder --chown=node:node /app/src/certs ./src/certs
+
+# Create an empty certs directory at runtime if the project doesn't include it
+# (avoids failing the build when `/app/src/certs` is absent in the source tree)
+RUN mkdir -p ./src/certs \
+  && chown -R node:node ./src/certs
 
 # Use built-in node user
 USER node
