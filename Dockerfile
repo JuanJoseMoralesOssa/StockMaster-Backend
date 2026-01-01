@@ -1,6 +1,6 @@
 # Multi-stage build for production optimization
 # Pin to specific Alpine version for security and reproducibility
-FROM docker.io/library/node:22-alpine3.21 AS builder
+FROM docker.io/library/node:25-alpine3.21 AS builder
 
 # Upgrade all Alpine packages for security
 RUN apk update && apk upgrade --no-cache && rm -rf /var/cache/apk/*
@@ -21,7 +21,7 @@ COPY . .
 RUN npm run build
 
 # Production stage
-FROM docker.io/library/node:22-alpine3.21 AS production
+FROM docker.io/library/node:25-alpine3.21 AS production
 
 # Install security updates and curl for health checks
 RUN apk update && \
