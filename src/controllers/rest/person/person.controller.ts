@@ -10,6 +10,7 @@ import {
   del,
   get,
   getModelSchemaRef,
+  HttpErrors,
   param,
   patch,
   post,
@@ -18,12 +19,20 @@ import {
   response,
 } from '@loopback/rest'
 import { Pagination, Person } from '../../../models'
-import { PersonRepository } from '../../../repositories'
+import {
+  ExpenseDetailsRepository,
+  PersonRepository,
+  PurchaseDetailsRepository,
+} from '../../../repositories'
 
 export class PersonController {
   constructor(
     @repository(PersonRepository)
     public personRepository: PersonRepository,
+    @repository(ExpenseDetailsRepository)
+    public expenseDetailsRepository: ExpenseDetailsRepository,
+    @repository(PurchaseDetailsRepository)
+    public purchaseDetailsRepository: PurchaseDetailsRepository,
   ) {}
 
   @post('/people')
@@ -44,7 +53,10 @@ export class PersonController {
     })
     person: Omit<Person, 'id'>,
   ): Promise<Person> {
-    return this.personRepository.create(person)
+    return this.personRepository.create({
+      ...person,
+      active: person.active ?? true,
+    })
   }
 
   @get('/people/count')
@@ -53,7 +65,7 @@ export class PersonController {
     content: { 'application/json': { schema: CountSchema } },
   })
   async count(@param.where(Person) where?: Where<Person>): Promise<Count> {
-    return this.personRepository.count(where)
+    return this.personRepository.count(this.withActiveWhere(where))
   }
 
   @get('/people')
@@ -73,7 +85,11 @@ export class PersonController {
     @param.query.number('page') page: number = 1,
     @param.query.number('limit') limit: number = 10,
   ): Promise<Pagination<Person>> {
-    const newFilter: Filter<Person> = { ...(filter ?? {}), order: ['name ASC'] }
+    const newFilter: Filter<Person> = {
+      ...(filter ?? {}),
+      where: this.withActiveWhere(filter?.where),
+      order: ['name ASC'],
+    }
     const people = await this.personRepository.find({
       ...newFilter,
       skip: (page - 1) * limit,
@@ -103,7 +119,11 @@ export class PersonController {
   async findAll(
     @param.filter(Person) filter?: Filter<Person>,
   ): Promise<Person[]> {
-    const newFilter: Filter<Person> = { ...(filter ?? {}), order: ['name ASC'] }
+    const newFilter: Filter<Person> = {
+      ...(filter ?? {}),
+      where: this.withActiveWhere(filter?.where),
+      order: ['name ASC'],
+    }
     return this.personRepository.find(newFilter)
   }
 
@@ -199,6 +219,64 @@ export class PersonController {
     description: 'Person DELETE success',
   })
   async deleteById(@param.path.number('id') id: number): Promise<void> {
-    await this.personRepository.deleteById(id)
+    const person = await this.personRepository.findById(id)
+    if (!person) {
+      throw new HttpErrors.NotFound(`Person with id ${id} not found`)
+    }
+
+    if (!person.active) {
+      return
+    }
+
+    const [expenseDetailsCount, purchaseDetailsCount] = await Promise.all([
+      this.expenseDetailsRepository.count({ personId: id }),
+      this.purchaseDetailsRepository.count({ personId: id }),
+    ])
+
+    const totalReferences =
+      expenseDetailsCount.count + purchaseDetailsCount.count
+
+    if (totalReferences > 0) {
+      throw new HttpErrors.Conflict(
+        'Cannot deactivate person with transaction history',
+      )
+    }
+
+    await this.personRepository.updateById(id, { active: false })
+  }
+
+  @patch('/people/{id}/reactivate')
+  @response(200, {
+    description: 'Person reactivation success',
+    content: {
+      'application/json': {
+        schema: getModelSchemaRef(Person, { includeRelations: true }),
+      },
+    },
+  })
+  async reactivateById(@param.path.number('id') id: number): Promise<Person> {
+    const person = await this.personRepository.findById(id)
+    if (!person) {
+      throw new HttpErrors.NotFound(`Person with id ${id} not found`)
+    }
+
+    if (person.active) {
+      return person
+    }
+
+    await this.personRepository.updateById(id, { active: true })
+    return this.personRepository.findById(id, { include: [] })
+  }
+
+  private withActiveWhere(where?: Where<Person>): Where<Person> {
+    if (!where) {
+      return { active: true }
+    }
+
+    if ('active' in where) {
+      return where
+    }
+
+    return { and: [where, { active: true }] }
   }
 }

@@ -1,10 +1,10 @@
-import {Getter, inject} from '@loopback/core'
+import { Getter, inject } from '@loopback/core'
 import {
   BelongsToAccessor,
   DefaultCrudRepository,
   repository,
 } from '@loopback/repository'
-import {PostgresDataSource} from '../datasources'
+import { PostgresDataSource } from '../datasources'
 // import {SqlserverDataSource} from '../datasources';
 import {
   Person,
@@ -13,9 +13,9 @@ import {
   PurchaseDetails,
   PurchaseDetailsRelations,
 } from '../models'
-import {PersonRepository} from './person.repository'
-import {ProductRepository} from './product.repository'
-import {PurchaseRepository} from './purchase.repository'
+import { PersonRepository } from './person.repository'
+import { ProductRepository } from './product.repository'
+import { PurchaseRepository } from './purchase.repository'
 
 export class PurchaseDetailsRepository extends DefaultCrudRepository<
   PurchaseDetails,

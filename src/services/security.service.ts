@@ -1,18 +1,18 @@
-import {BindingScope, injectable} from '@loopback/core'
-import {repository} from '@loopback/repository'
-import {HttpErrors} from '@loopback/rest'
-import {securityConfig} from '../config/security'
-import {Credentials, LoginResult, User} from '../models'
-import {UserRepository} from '../repositories'
+import { BindingScope, injectable } from '@loopback/core'
+import { repository } from '@loopback/repository'
+import { HttpErrors } from '@loopback/rest'
+import { securityConfig } from '../config/security'
+import { Credentials, LoginResult, User } from '../models'
+import { UserRepository } from '../repositories'
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 
-@injectable({scope: BindingScope.TRANSIENT})
+@injectable({ scope: BindingScope.TRANSIENT })
 export class SecurityService {
   constructor(
     @repository(UserRepository)
     public userRepository: UserRepository,
-  ) { }
+  ) {}
 
   /**
    * Hash a password using bcrypt
@@ -98,10 +98,7 @@ export class SecurityService {
   verifyToken(token: string): User {
     try {
       const secret = securityConfig.JWT_SECRET ?? 'default_secret'
-      return jwt.verify(
-        token,
-        secret,
-      ) as User
+      return jwt.verify(token, secret) as User
     } catch (error: unknown) {
       console.error('Error verifying token:', error)
       if (error instanceof jwt.TokenExpiredError) {

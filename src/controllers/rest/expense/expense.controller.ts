@@ -122,7 +122,7 @@ export class ExpenseController {
         productId: number
         personId: number
       }
-    >(newExpense, this.expenseRepository, 'expense_details')
+    >(newExpense, this.expenseRepository, 'expense_details', false)
   }
 
   @get('/expenses/count')
@@ -262,7 +262,12 @@ export class ExpenseController {
     description: 'Expense DELETE success',
   })
   async deleteById(@param.path.number('id') id: number): Promise<void> {
-    await this.expenseRepository.deleteById(id)
+    await this.transactionService.deleteWithDetails(
+      id,
+      this.expenseRepository,
+      'expense_details',
+      false,
+    )
   }
 
   @get('/expenses/filtered')

@@ -10,6 +10,7 @@ import {
   del,
   get,
   getModelSchemaRef,
+  HttpErrors,
   param,
   patch,
   post,
@@ -17,19 +18,30 @@ import {
   requestBody,
   response,
 } from '@loopback/rest'
-import {Pagination, Product} from '../../../models'
-import {ProductRepository} from '../../../repositories'
+import { Pagination, Product } from '../../../models'
+import {
+  ExpenseDetailsRepository,
+  KardexRepository,
+  ProductRepository,
+  PurchaseDetailsRepository,
+} from '../../../repositories'
 
 export class ProductController {
   constructor(
     @repository(ProductRepository)
     public productRepository: ProductRepository,
-  ) { }
+    @repository(ExpenseDetailsRepository)
+    public expenseDetailsRepository: ExpenseDetailsRepository,
+    @repository(PurchaseDetailsRepository)
+    public purchaseDetailsRepository: PurchaseDetailsRepository,
+    @repository(KardexRepository)
+    public kardexRepository: KardexRepository,
+  ) {}
 
   @post('/products')
   @response(200, {
     description: 'Product model instance',
-    content: {'application/json': {schema: getModelSchemaRef(Product)}},
+    content: { 'application/json': { schema: getModelSchemaRef(Product) } },
   })
   async create(
     @requestBody({
@@ -44,16 +56,19 @@ export class ProductController {
     })
     product: Omit<Product, 'id'>,
   ): Promise<Product> {
-    return this.productRepository.create(product)
+    return this.productRepository.create({
+      ...product,
+      active: product.active ?? true,
+    })
   }
 
   @get('/products/count')
   @response(200, {
     description: 'Product model count',
-    content: {'application/json': {schema: CountSchema}},
+    content: { 'application/json': { schema: CountSchema } },
   })
   async count(@param.where(Product) where?: Where<Product>): Promise<Count> {
-    return this.productRepository.count(where)
+    return this.productRepository.count(this.withActiveWhere(where))
   }
 
   @get('/products')
@@ -63,7 +78,7 @@ export class ProductController {
       'application/json': {
         schema: {
           type: 'array',
-          items: getModelSchemaRef(Product, {includeRelations: true}),
+          items: getModelSchemaRef(Product, { includeRelations: true }),
         },
       },
     },
@@ -73,12 +88,14 @@ export class ProductController {
     @param.query.number('page') page: number = 1,
     @param.query.number('limit') limit: number = 10,
   ): Promise<Pagination<Product>> {
+    const where = this.withActiveWhere(filter?.where)
     const products = await this.productRepository.find({
       ...filter,
+      where,
       skip: (page - 1) * limit,
       limit: limit,
     })
-    const count = await this.productRepository.count(filter?.where)
+    const count = await this.productRepository.count(where)
     return new Pagination<Product>({
       count: count.count,
       data: products,
@@ -94,7 +111,7 @@ export class ProductController {
       'application/json': {
         schema: {
           type: 'array',
-          items: getModelSchemaRef(Product, {includeRelations: true}),
+          items: getModelSchemaRef(Product, { includeRelations: true }),
         },
       },
     },
@@ -104,6 +121,7 @@ export class ProductController {
   ): Promise<Product[]> {
     const newFilter: Filter<Product> = {
       ...(filter ?? {}),
+      where: this.withActiveWhere(filter?.where),
       order: ['name ASC'],
     }
     return this.productRepository.find(newFilter)
@@ -112,13 +130,13 @@ export class ProductController {
   @patch('/products')
   @response(200, {
     description: 'Product PATCH success count',
-    content: {'application/json': {schema: CountSchema}},
+    content: { 'application/json': { schema: CountSchema } },
   })
   async updateAll(
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(Product, {partial: true}),
+          schema: getModelSchemaRef(Product, { partial: true }),
         },
       },
     })
@@ -133,13 +151,13 @@ export class ProductController {
     description: 'Product model instance',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(Product, {includeRelations: true}),
+        schema: getModelSchemaRef(Product, { includeRelations: true }),
       },
     },
   })
   async findById(
     @param.path.number('id') id: number,
-    @param.filter(Product, {exclude: 'where'})
+    @param.filter(Product, { exclude: 'where' })
     filter?: FilterExcludingWhere<Product>,
   ): Promise<Product> {
     return this.productRepository.findById(id, filter)
@@ -149,7 +167,7 @@ export class ProductController {
     description: 'Product PATCH success',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(Product, {includeRelations: true}),
+        schema: getModelSchemaRef(Product, { includeRelations: true }),
       },
     },
   })
@@ -158,14 +176,14 @@ export class ProductController {
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(Product, {partial: true}),
+          schema: getModelSchemaRef(Product, { partial: true }),
         },
       },
     })
     product: Partial<Product>,
   ): Promise<Product> {
     await this.productRepository.updateById(id, product)
-    return this.productRepository.findById(id, {include: []})
+    return this.productRepository.findById(id, { include: [] })
   }
 
   @put('/products/{id}')
@@ -173,7 +191,7 @@ export class ProductController {
     description: 'Product PUT success',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(Product, {includeRelations: true}),
+        schema: getModelSchemaRef(Product, { includeRelations: true }),
       },
     },
   })
@@ -192,7 +210,7 @@ export class ProductController {
     product: Omit<Product, 'id'>,
   ): Promise<Product> {
     await this.productRepository.replaceById(id, product)
-    return this.productRepository.findById(id, {include: []})
+    return this.productRepository.findById(id, { include: [] })
   }
 
   @del('/products/{id}')
@@ -200,6 +218,66 @@ export class ProductController {
     description: 'Product DELETE success',
   })
   async deleteById(@param.path.number('id') id: number): Promise<void> {
-    await this.productRepository.deleteById(id)
+    const product = await this.productRepository.findById(id)
+    if (!product) {
+      throw new HttpErrors.NotFound(`Product with id ${id} not found`)
+    }
+
+    if (!product.active) {
+      return
+    }
+
+    const [expenseDetailsCount, purchaseDetailsCount, kardexCount] =
+      await Promise.all([
+        this.expenseDetailsRepository.count({ productId: id }),
+        this.purchaseDetailsRepository.count({ productId: id }),
+        this.kardexRepository.count({ productId: id }),
+      ])
+
+    const totalReferences =
+      expenseDetailsCount.count + purchaseDetailsCount.count + kardexCount.count
+
+    if (totalReferences > 0) {
+      throw new HttpErrors.Conflict(
+        'Cannot deactivate product with transaction history',
+      )
+    }
+
+    await this.productRepository.updateById(id, { active: false })
+  }
+
+  @patch('/products/{id}/reactivate')
+  @response(200, {
+    description: 'Product reactivation success',
+    content: {
+      'application/json': {
+        schema: getModelSchemaRef(Product, { includeRelations: true }),
+      },
+    },
+  })
+  async reactivateById(@param.path.number('id') id: number): Promise<Product> {
+    const product = await this.productRepository.findById(id)
+    if (!product) {
+      throw new HttpErrors.NotFound(`Product with id ${id} not found`)
+    }
+
+    if (product.active) {
+      return product
+    }
+
+    await this.productRepository.updateById(id, { active: true })
+    return this.productRepository.findById(id, { include: [] })
+  }
+
+  private withActiveWhere(where?: Where<Product>): Where<Product> {
+    if (!where) {
+      return { active: true }
+    }
+
+    if ('active' in where) {
+      return where
+    }
+
+    return { and: [where, { active: true }] }
   }
 }

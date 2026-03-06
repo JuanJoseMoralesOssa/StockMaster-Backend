@@ -1,3 +1,4 @@
+import { service } from '@loopback/core'
 import {
   Count,
   CountSchema,
@@ -10,6 +11,7 @@ import {
   get,
   getModelSchemaRef,
   getWhereSchemaFor,
+  HttpErrors,
   param,
   patch,
   post,
@@ -17,11 +19,14 @@ import {
 } from '@loopback/rest'
 import { Expense, ExpenseDetails } from '../../../models'
 import { ExpenseRepository } from '../../../repositories'
+import { TransactionService } from '../../../services'
 
 export class ExpenseExpenseDetailsController {
   constructor(
     @repository(ExpenseRepository)
     protected expenseRepository: ExpenseRepository,
+    @service(TransactionService)
+    public transactionService: TransactionService,
   ) {}
 
   @get('/expenses/{id}/expense-details', {
@@ -68,7 +73,13 @@ export class ExpenseExpenseDetailsController {
     })
     expenseDetails: Omit<ExpenseDetails, 'id'>,
   ): Promise<ExpenseDetails> {
-    return this.expenseRepository.expense_details(id).create(expenseDetails)
+    return this.transactionService.createSingleDetail(
+      id!,
+      expenseDetails,
+      this.expenseRepository,
+      'expense_details',
+      false, // isPurchase = false (it's an expense)
+    )
   }
 
   @patch('/expenses/{id}/expense-details', {
@@ -88,13 +99,13 @@ export class ExpenseExpenseDetailsController {
         },
       },
     })
-    expenseDetails: Partial<ExpenseDetails>,
+    _expenseDetails: Partial<ExpenseDetails>,
     @param.query.object('where', getWhereSchemaFor(ExpenseDetails))
-    where?: Where<ExpenseDetails>,
+    _where?: Where<ExpenseDetails>,
   ): Promise<Count> {
-    return this.expenseRepository
-      .expense_details(id)
-      .patch(expenseDetails, where)
+    throw new HttpErrors.MethodNotAllowed(
+      'Bulk update is disabled for stock consistency. Use PATCH /expense-details/{id}.',
+    )
   }
 
   @del('/expenses/{id}/expense-details', {
@@ -108,8 +119,14 @@ export class ExpenseExpenseDetailsController {
   async delete(
     @param.path.number('id') id: number,
     @param.query.object('where', getWhereSchemaFor(ExpenseDetails))
-    where?: Where<ExpenseDetails>,
+    _where?: Where<ExpenseDetails>,
   ): Promise<Count> {
-    return this.expenseRepository.expense_details(id).delete(where)
+    await this.transactionService.deleteWithDetails(
+      id,
+      this.expenseRepository,
+      'expense_details',
+      false,
+    )
+    return { count: 1 }
   }
 }

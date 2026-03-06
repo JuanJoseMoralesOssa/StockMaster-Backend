@@ -2,9 +2,11 @@ import { repository } from '@loopback/repository'
 import { get, HttpErrors, param } from '@loopback/rest'
 import {
   ExpenseDetailsRepository,
+  ExpenseRepository,
   PersonRepository,
   ProductRepository,
   PurchaseDetailsRepository,
+  PurchaseRepository,
 } from '../../../repositories'
 
 interface SupplierAnalytics {
@@ -19,6 +21,34 @@ interface ProductAnalytics {
   productName: string
   totalWeight: number
   transactionCount: number
+}
+
+type RelatedEntity = {
+  id?: number
+  name?: string
+}
+
+type AggregatableTransaction = {
+  weight_kg?: number
+  person?: RelatedEntity
+  product?: RelatedEntity
+  purchase?: RelatedEntity
+  expense?: RelatedEntity
+}
+
+export interface DashboardSummaryResponse {
+  summary: {
+    totalSuppliers: number
+    totalProducts: number
+    totalWeight: number
+    totalTransactions: number
+  }
+  topSuppliersByWeight: SupplierAnalytics[]
+  bottomSuppliersByWeight: SupplierAnalytics[]
+  topProductsByWeight: ProductAnalytics[]
+  bottomProductsByWeight: ProductAnalytics[]
+  mostActiveSuppliers: SupplierAnalytics[]
+  mostTransactedProducts: ProductAnalytics[]
 }
 
 interface DateRangeAnalytics {
@@ -40,11 +70,57 @@ export class GeneralReportsController {
     protected purchaseDetailsRepository: PurchaseDetailsRepository,
     @repository(ExpenseDetailsRepository)
     protected expenseDetailsRepository: ExpenseDetailsRepository,
+    @repository(PurchaseRepository)
+    protected purchaseRepository: PurchaseRepository,
+    @repository(ExpenseRepository)
+    protected expenseRepository: ExpenseRepository,
     @repository(PersonRepository)
     protected personRepository: PersonRepository,
     @repository(ProductRepository)
     protected productRepository: ProductRepository,
   ) {}
+
+  @get('/analytics/dashboard-summary')
+  async getDashboardSummary(
+    @param.query.string('startDate') startDate: string,
+    @param.query.string('endDate') endDate: string,
+    @param.query.string('type')
+    type: 'purchases' | 'expenses' | 'both' = 'both',
+    @param.query.number('limit') limit: number = 10,
+  ): Promise<DashboardSummaryResponse> {
+    this.validateDateRange(startDate, endDate)
+
+    const [supplierAnalytics, productAnalytics] = await Promise.all([
+      this.getSupplierAnalytics(startDate, endDate, type),
+      this.getProductAnalytics(startDate, endDate, type),
+    ])
+
+    return {
+      summary: this.calculateSummary(supplierAnalytics, productAnalytics),
+      topSuppliersByWeight: this.getTopResults(supplierAnalytics, 'max', limit),
+      bottomSuppliersByWeight: this.getTopResults(
+        supplierAnalytics,
+        'min',
+        limit,
+      ),
+      topProductsByWeight: this.getTopResults(productAnalytics, 'max', limit),
+      bottomProductsByWeight: this.getTopResults(
+        productAnalytics,
+        'min',
+        limit,
+      ),
+      mostActiveSuppliers: this.getTopByTransactions(
+        supplierAnalytics,
+        'max',
+        limit,
+      ),
+      mostTransactedProducts: this.getTopByTransactions(
+        productAnalytics,
+        'max',
+        limit,
+      ),
+    }
+  }
 
   @get('/analytics/date-range')
   async getDateRangeAnalytics(
@@ -61,10 +137,10 @@ export class GeneralReportsController {
     ])
 
     return {
-      topSuppliers: this.getTopResults(supplierAnalytics, 'max'),
-      bottomSuppliers: this.getTopResults(supplierAnalytics, 'min'),
-      topProducts: this.getTopResults(productAnalytics, 'max'),
-      bottomProducts: this.getTopResults(productAnalytics, 'min'),
+      topSuppliers: this.getTopResults(supplierAnalytics, 'max', 10),
+      bottomSuppliers: this.getTopResults(supplierAnalytics, 'min', 10),
+      topProducts: this.getTopResults(productAnalytics, 'max', 10),
+      bottomProducts: this.getTopResults(productAnalytics, 'min', 10),
       summary: this.calculateSummary(supplierAnalytics, productAnalytics),
     }
   }
@@ -81,9 +157,7 @@ export class GeneralReportsController {
       endDate,
       'both',
     )
-    return analytics
-      .sort((a, b) => b.totalWeight - a.totalWeight)
-      .slice(0, limit)
+    return this.getTopResults(analytics, 'max', limit)
   }
 
   @get('/analytics/products/top')
@@ -94,9 +168,7 @@ export class GeneralReportsController {
   ): Promise<ProductAnalytics[]> {
     this.validateDateRange(startDate, endDate)
     const analytics = await this.getProductAnalytics(startDate, endDate, 'both')
-    return analytics
-      .sort((a, b) => b.totalWeight - a.totalWeight)
-      .slice(0, limit)
+    return this.getTopResults(analytics, 'max', limit)
   }
 
   @get('/analytics/products/most-transactions')
@@ -107,9 +179,7 @@ export class GeneralReportsController {
   ): Promise<ProductAnalytics[]> {
     this.validateDateRange(startDate, endDate)
     const analytics = await this.getProductAnalytics(startDate, endDate, 'both')
-    return analytics
-      .sort((a, b) => b.transactionCount - a.transactionCount)
-      .slice(0, limit)
+    return this.getTopByTransactions(analytics, 'max', limit)
   }
 
   @get('/analytics/products/least-transactions')
@@ -120,10 +190,7 @@ export class GeneralReportsController {
   ): Promise<ProductAnalytics[]> {
     this.validateDateRange(startDate, endDate)
     const analytics = await this.getProductAnalytics(startDate, endDate, 'both')
-    return analytics
-      .filter(p => p.transactionCount > 0) // Solo productos con al menos 1 transacción
-      .sort((a, b) => a.transactionCount - b.transactionCount)
-      .slice(0, limit)
+    return this.getTopByTransactions(analytics, 'min', limit)
   }
 
   @get('/analytics/suppliers/most-transactions')
@@ -138,9 +205,7 @@ export class GeneralReportsController {
       endDate,
       'both',
     )
-    return analytics
-      .sort((a, b) => b.transactionCount - a.transactionCount)
-      .slice(0, limit)
+    return this.getTopByTransactions(analytics, 'max', limit)
   }
 
   @get('/analytics/suppliers/least-transactions')
@@ -155,10 +220,7 @@ export class GeneralReportsController {
       endDate,
       'both',
     )
-    return analytics
-      .filter(s => s.transactionCount > 0) // Solo proveedores con al menos 1 transacción
-      .sort((a, b) => a.transactionCount - b.transactionCount)
-      .slice(0, limit)
+    return this.getTopByTransactions(analytics, 'min', limit)
   }
 
   private async getSupplierAnalytics(
@@ -170,39 +232,41 @@ export class GeneralReportsController {
     const dateFilter = this.createDateFilter(startDate, endDate)
 
     if (type === 'purchases' || type === 'both') {
-      const purchases = await this.purchaseDetailsRepository.find({
-        include: [
-          {
-            relation: 'purchase',
-            scope: {
-              where: { date: dateFilter },
-            },
-          },
-          {
-            relation: 'person',
-          },
-        ],
+      // Step 1: Pre-fetch purchase IDs in the date range to prevent loading all details
+      const purchasesInRange = await this.purchaseRepository.find({
+        where: { date: dateFilter },
+        fields: ['id'],
       })
+      const purchaseIds = purchasesInRange
+        .map(p => p.id)
+        .filter((id): id is number => id != null)
 
-      this.aggregateSupplierData(purchases, supplierMap)
+      if (purchaseIds.length > 0) {
+        const purchases = await this.purchaseDetailsRepository.find({
+          where: { purchaseId: { inq: purchaseIds } },
+          include: [{ relation: 'purchase' }, { relation: 'person' }],
+        })
+        this.aggregateSupplierData(purchases, supplierMap)
+      }
     }
 
     if (type === 'expenses' || type === 'both') {
-      const expenses = await this.expenseDetailsRepository.find({
-        include: [
-          {
-            relation: 'expense',
-            scope: {
-              where: { date: dateFilter },
-            },
-          },
-          {
-            relation: 'person',
-          },
-        ],
+      // Step 1: Pre-fetch expense IDs in the date range to prevent loading all details
+      const expensesInRange = await this.expenseRepository.find({
+        where: { date: dateFilter },
+        fields: ['id'],
       })
+      const expenseIds = expensesInRange
+        .map(e => e.id)
+        .filter((id): id is number => id != null)
 
-      this.aggregateSupplierData(expenses, supplierMap)
+      if (expenseIds.length > 0) {
+        const expenses = await this.expenseDetailsRepository.find({
+          where: { expenseId: { inq: expenseIds } },
+          include: [{ relation: 'expense' }, { relation: 'person' }],
+        })
+        this.aggregateSupplierData(expenses, supplierMap)
+      }
     }
 
     return Array.from(supplierMap.values())
@@ -217,46 +281,46 @@ export class GeneralReportsController {
     const dateFilter = this.createDateFilter(startDate, endDate)
 
     if (type === 'purchases' || type === 'both') {
-      const purchases = await this.purchaseDetailsRepository.find({
-        include: [
-          {
-            relation: 'purchase',
-            scope: {
-              where: { date: dateFilter },
-            },
-          },
-          {
-            relation: 'product',
-          },
-        ],
+      const purchasesInRange = await this.purchaseRepository.find({
+        where: { date: dateFilter },
+        fields: ['id'],
       })
+      const purchaseIds = purchasesInRange
+        .map(p => p.id)
+        .filter((id): id is number => id != null)
 
-      this.aggregateProductData(purchases, productMap)
+      if (purchaseIds.length > 0) {
+        const purchases = await this.purchaseDetailsRepository.find({
+          where: { purchaseId: { inq: purchaseIds } },
+          include: [{ relation: 'purchase' }, { relation: 'product' }],
+        })
+        this.aggregateProductData(purchases, productMap)
+      }
     }
 
     if (type === 'expenses' || type === 'both') {
-      const expenses = await this.expenseDetailsRepository.find({
-        include: [
-          {
-            relation: 'expense',
-            scope: {
-              where: { date: dateFilter },
-            },
-          },
-          {
-            relation: 'product',
-          },
-        ],
+      const expensesInRange = await this.expenseRepository.find({
+        where: { date: dateFilter },
+        fields: ['id'],
       })
+      const expenseIds = expensesInRange
+        .map(e => e.id)
+        .filter((id): id is number => id != null)
 
-      this.aggregateProductData(expenses, productMap)
+      if (expenseIds.length > 0) {
+        const expenses = await this.expenseDetailsRepository.find({
+          where: { expenseId: { inq: expenseIds } },
+          include: [{ relation: 'expense' }, { relation: 'product' }],
+        })
+        this.aggregateProductData(expenses, productMap)
+      }
     }
 
     return Array.from(productMap.values())
   }
 
   private aggregateSupplierData(
-    transactions: any[], // Using any due to LoopBack's include relations typing
+    transactions: AggregatableTransaction[],
     supplierMap: Map<number, SupplierAnalytics>,
   ): void {
     for (const transaction of transactions) {
@@ -271,6 +335,7 @@ export class GeneralReportsController {
       }
 
       const personId = transaction.person.id
+      if (personId == null) continue
       const existing = supplierMap.get(personId)
 
       if (existing) {
@@ -279,7 +344,7 @@ export class GeneralReportsController {
       } else {
         supplierMap.set(personId, {
           personId,
-          personName: transaction.person.name || `Proveedor ${personId}`,
+          personName: transaction.person.name ?? `Proveedor ${personId}`,
           totalWeight: transaction.weight_kg,
           transactionCount: 1,
         })
@@ -288,7 +353,7 @@ export class GeneralReportsController {
   }
 
   private aggregateProductData(
-    transactions: any[], // Using any due to LoopBack's include relations typing
+    transactions: AggregatableTransaction[],
     productMap: Map<number, ProductAnalytics>,
   ): void {
     for (const transaction of transactions) {
@@ -303,6 +368,7 @@ export class GeneralReportsController {
       }
 
       const productId = transaction.product.id
+      if (productId == null) continue
       const existing = productMap.get(productId)
 
       if (existing) {
@@ -311,7 +377,7 @@ export class GeneralReportsController {
       } else {
         productMap.set(productId, {
           productId,
-          productName: transaction.product.name || `Producto ${productId}`,
+          productName: transaction.product.name ?? `Producto ${productId}`,
           totalWeight: transaction.weight_kg,
           transactionCount: 1,
         })
@@ -328,32 +394,55 @@ export class GeneralReportsController {
     totalWeight: number
     totalTransactions: number
   } {
+    // Only reduce on ONE of the analytics arrays (e.g., products) to avoid double-counting
+    // the same transaction's weight and count since both arrays are derived
+    // from the exact same base of detail records.
     return {
       totalSuppliers: supplierAnalytics.length,
       totalProducts: productAnalytics.length,
-      totalWeight:
-        supplierAnalytics.reduce((sum, s) => sum + s.totalWeight, 0) +
-        productAnalytics.reduce((sum, p) => sum + p.totalWeight, 0),
-      totalTransactions:
-        supplierAnalytics.reduce((sum, s) => sum + s.transactionCount, 0) +
-        productAnalytics.reduce((sum, p) => sum + p.transactionCount, 0),
+      totalWeight: productAnalytics.reduce((sum, p) => sum + p.totalWeight, 0),
+      totalTransactions: productAnalytics.reduce(
+        (sum, p) => sum + p.transactionCount,
+        0,
+      ),
     }
   }
 
   private getTopResults<T extends { totalWeight: number }>(
     data: T[],
     mode: 'max' | 'min',
+    limit: number,
   ): T[] {
     if (data.length === 0) return []
 
-    const sortedData = data.sort((a, b) =>
+    // Creamos una copia del arreglo para no mutar el original en memoria con el `sort`
+    const sortedData = [...data].sort((a, b) =>
       mode === 'max'
         ? b.totalWeight - a.totalWeight
         : a.totalWeight - b.totalWeight,
     )
 
-    const targetValue = sortedData[0].totalWeight
-    return sortedData.filter(item => item.totalWeight === targetValue)
+    return sortedData.slice(0, limit)
+  }
+
+  private getTopByTransactions<T extends { transactionCount: number }>(
+    data: T[],
+    mode: 'max' | 'min',
+    limit: number,
+  ): T[] {
+    if (data.length === 0) return []
+
+    // Filtramos aquellos con al menos 1 transacción
+    const filteredData = data.filter(item => item.transactionCount > 0)
+
+    // Lo copiamos y ordenamos
+    const sortedData = [...filteredData].sort((a, b) =>
+      mode === 'max'
+        ? b.transactionCount - a.transactionCount
+        : a.transactionCount - b.transactionCount,
+    )
+
+    return sortedData.slice(0, limit)
   }
 
   private validateDateRange(startDate: string, endDate: string): void {
@@ -406,7 +495,7 @@ export class GeneralReportsController {
    */
   private createDateFilter(startDate: string, endDate: string) {
     return {
-      between: [startDate, endDate],
+      between: [startDate, endDate] as [string, string],
     }
   }
 }

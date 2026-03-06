@@ -38,6 +38,16 @@ interface TransactionDetailPerson {
   personName?: string // Opcional para mostrar el nombre del proveedor
 }
 
+type PurchaseDetailWithRelations = PurchaseDetails & {
+  purchase?: Pick<Purchase, 'date'>
+  person?: Pick<Person, 'name'>
+}
+
+type ExpenseDetailWithRelations = ExpenseDetails & {
+  expense?: Pick<Expense, 'date'>
+  person?: Pick<Person, 'name'>
+}
+
 export class DetailsReportsController {
   constructor(
     @repository(PurchaseDetailsRepository)
@@ -224,31 +234,35 @@ export class DetailsReportsController {
 
     // Procesar los resultados
     const transactions: TransactionDetailProduct[] = []
+    const purchaseDetailsWithRelations =
+      purchaseDetails as PurchaseDetailWithRelations[]
+    const expenseDetailsWithRelations =
+      expenseDetails as ExpenseDetailWithRelations[]
 
     // Procesar detalles de compra - USANDO LAS RELACIONES INCLUIDAS
-    for (const detail of purchaseDetails) {
+    for (const detail of purchaseDetailsWithRelations) {
       // Solo procesar si la relación purchase existe (ya filtrada por fecha)
-      if ((detail as any).purchase && detail.weight_kg) {
+      if (detail.purchase && detail.weight_kg) {
         transactions.push({
-          date: (detail as any).purchase.date,
+          date: detail.purchase.date,
           weight_kg: detail.weight_kg,
           type: 'Compra',
           personId: detail.personId,
-          personName: (detail as any).person?.name,
+          personName: detail.person?.name,
         })
       }
     }
 
     // Procesar detalles de gasto - USANDO LAS RELACIONES INCLUIDAS
-    for (const detail of expenseDetails) {
+    for (const detail of expenseDetailsWithRelations) {
       // Solo procesar si la relación expense existe (ya filtrada por fecha)
-      if ((detail as any).expense && detail.weight_kg) {
+      if (detail.expense && detail.weight_kg) {
         transactions.push({
-          date: (detail as any).expense.date,
+          date: detail.expense.date,
           weight_kg: detail.weight_kg,
           type: 'Gasto',
           personId: detail.personId,
-          personName: (detail as any).person?.name,
+          personName: detail.person?.name,
         })
       }
     }
@@ -324,13 +338,17 @@ export class DetailsReportsController {
 
     // Procesar los resultados
     const transactions: TransactionDetailPerson[] = []
+    const purchaseDetailsWithRelations =
+      purchaseDetails as PurchaseDetailWithRelations[]
+    const expenseDetailsWithRelations =
+      expenseDetails as ExpenseDetailWithRelations[]
 
     // Procesar detalles de compra - USANDO LAS RELACIONES INCLUIDAS
-    for (const detail of purchaseDetails) {
+    for (const detail of purchaseDetailsWithRelations) {
       // Solo procesar si la relación purchase existe (ya filtrada por fecha)
-      if ((detail as any).purchase && detail.weight_kg) {
+      if (detail.purchase && detail.weight_kg) {
         transactions.push({
-          date: (detail as any).purchase.date,
+          date: detail.purchase.date,
           weight_kg: detail.weight_kg,
           type: 'Compra',
           productId: detail.productId,
@@ -339,11 +357,11 @@ export class DetailsReportsController {
     }
 
     // Procesar detalles de gasto - USANDO LAS RELACIONES INCLUIDAS
-    for (const detail of expenseDetails) {
+    for (const detail of expenseDetailsWithRelations) {
       // Solo procesar si la relación expense existe (ya filtrada por fecha)
-      if ((detail as any).expense && detail.weight_kg) {
+      if (detail.expense && detail.weight_kg) {
         transactions.push({
-          date: (detail as any).expense.date,
+          date: detail.expense.date,
           weight_kg: detail.weight_kg,
           type: 'Gasto',
           productId: detail.productId,

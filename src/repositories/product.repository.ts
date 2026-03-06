@@ -1,11 +1,11 @@
-import {Getter, inject} from '@loopback/core'
+import { Getter, inject } from '@loopback/core'
 import {
   DefaultCrudRepository,
   HasManyRepositoryFactory,
   HasManyThroughRepositoryFactory,
   repository,
 } from '@loopback/repository'
-import {PostgresDataSource} from '../datasources'
+import { PostgresDataSource } from '../datasources'
 // import {SqlserverDataSource} from '../datasources';
 import {
   Expense,
@@ -17,12 +17,12 @@ import {
   Purchase,
   PurchaseDetails,
 } from '../models'
-import {ExpenseDetailsRepository} from './expense-details.repository'
-import {ExpenseRepository} from './expense.repository'
-import {KardexRepository} from './kardex.repository'
-import {PersonRepository} from './person.repository'
-import {PurchaseDetailsRepository} from './purchase-details.repository'
-import {PurchaseRepository} from './purchase.repository'
+import { ExpenseDetailsRepository } from './expense-details.repository'
+import { ExpenseRepository } from './expense.repository'
+import { KardexRepository } from './kardex.repository'
+import { PersonRepository } from './person.repository'
+import { PurchaseDetailsRepository } from './purchase-details.repository'
+import { PurchaseRepository } from './purchase.repository'
 
 export class ProductRepository extends DefaultCrudRepository<
   Product,

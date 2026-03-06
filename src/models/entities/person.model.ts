@@ -20,6 +20,13 @@ export class Person extends Entity {
   })
   name: string
 
+  @property({
+    type: 'boolean',
+    required: true,
+    default: true,
+  })
+  active: boolean
+
   @hasMany(() => Product, { through: { model: () => ExpenseDetails } })
   products_expense_details: Product[]
 

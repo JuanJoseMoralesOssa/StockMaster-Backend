@@ -192,7 +192,12 @@ export class PurchaseController {
     description: 'Purchase DELETE success',
   })
   async deleteById(@param.path.number('id') id: number): Promise<void> {
-    await this.purchaseRepository.deleteById(id)
+    await this.transactionService.deleteWithDetails(
+      id,
+      this.purchaseRepository,
+      'purchase_details',
+      true,
+    )
   }
 
   /**
@@ -260,7 +265,7 @@ export class PurchaseController {
         productId: number
         personId: number
       }
-    >(newPurchase, this.purchaseRepository, 'purchase_details')
+    >(newPurchase, this.purchaseRepository, 'purchase_details', true)
   }
 
   /**
@@ -321,12 +326,23 @@ export class PurchaseController {
   ): Promise<Purchase> {
     try {
       // Usar el TransactionService para manejar la lógica compleja
-      return await this.transactionService.updateWithDetails(
+      return await this.transactionService.updateWithDetails<
+        Purchase,
+        {
+          id?: number
+          weight_kg?: number
+          productId?: number
+          personId?: number
+          toCreate?: boolean
+          toUpdate?: boolean
+          toDelete?: boolean
+        }
+      >(
         {
           id: purchaseData.id,
           date: purchaseData.date,
           details: purchaseData.purchaseDetails,
-        } as any,
+        },
         this.purchaseRepository,
         'purchase_details',
       )

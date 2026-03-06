@@ -26,6 +26,13 @@ export class Product extends Entity {
   })
   stock?: number
 
+  @property({
+    type: 'boolean',
+    required: true,
+    default: true,
+  })
+  active: boolean
+
   @hasMany(() => Person, { through: { model: () => ExpenseDetails } })
   people_expense_details: Person[]
 

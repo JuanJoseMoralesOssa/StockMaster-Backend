@@ -1,11 +1,11 @@
-import {Getter, inject} from '@loopback/core'
+import { Getter, inject } from '@loopback/core'
 import {
   DefaultCrudRepository,
   HasManyRepositoryFactory,
   HasManyThroughRepositoryFactory,
   repository,
 } from '@loopback/repository'
-import {PostgresDataSource} from '../datasources'
+import { PostgresDataSource } from '../datasources'
 // import {SqlserverDataSource} from '../datasources';
 import {
   Person,
@@ -14,9 +14,9 @@ import {
   PurchaseDetails,
   PurchaseRelations,
 } from '../models'
-import {PersonRepository} from './person.repository'
-import {ProductRepository} from './product.repository'
-import {PurchaseDetailsRepository} from './purchase-details.repository'
+import { PersonRepository } from './person.repository'
+import { ProductRepository } from './product.repository'
+import { PurchaseDetailsRepository } from './purchase-details.repository'
 
 export class PurchaseRepository extends DefaultCrudRepository<
   Purchase,
@@ -109,15 +109,15 @@ export class PurchaseRepository extends DefaultCrudRepository<
 
     // Agregar filtro de fechas solo si se proporcionan
     if (startDate && endDate) {
-      purchaseWhere.date = {between: [startDate, endDate]}
+      purchaseWhere.date = { between: [startDate, endDate] }
     } else if (startDate) {
-      purchaseWhere.date = {gte: startDate}
+      purchaseWhere.date = { gte: startDate }
     } else if (endDate) {
-      purchaseWhere.date = {lte: endDate}
+      purchaseWhere.date = { lte: endDate }
     }
 
     if (purchaseIds) {
-      purchaseWhere.id = {inq: purchaseIds}
+      purchaseWhere.id = { inq: purchaseIds }
     }
 
     // Armar el scope del include dinámicamente
@@ -132,7 +132,7 @@ export class PurchaseRepository extends DefaultCrudRepository<
         {
           relation: 'purchase_details',
           ...(Object.keys(includeScope).length > 0
-            ? {scope: includeScope}
+            ? { scope: includeScope }
             : {}),
         },
       ],
