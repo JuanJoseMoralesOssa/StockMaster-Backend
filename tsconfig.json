@@ -6,6 +6,7 @@
     "rootDir": "src",
     "module": "nodenext",
     "moduleResolution": "nodenext",
+    "ignoreDeprecations": "6.0",
     "strict": true,
     "noImplicitAny": true,
     "types": [
