@@ -53,10 +53,7 @@ export class PersonController {
     })
     person: Omit<Person, 'id'>,
   ): Promise<Person> {
-    return this.personRepository.create({
-      ...person,
-      active: person.active ?? true,
-    })
+    return this.personRepository.create(person)
   }
 
   @get('/people/count')
@@ -65,7 +62,7 @@ export class PersonController {
     content: { 'application/json': { schema: CountSchema } },
   })
   async count(@param.where(Person) where?: Where<Person>): Promise<Count> {
-    return this.personRepository.count(this.withActiveWhere(where))
+    return this.personRepository.count(where)
   }
 
   @get('/people')
@@ -87,7 +84,6 @@ export class PersonController {
   ): Promise<Pagination<Person>> {
     const newFilter: Filter<Person> = {
       ...(filter ?? {}),
-      where: this.withActiveWhere(filter?.where),
       order: ['name ASC'],
     }
     const people = await this.personRepository.find({
@@ -95,7 +91,7 @@ export class PersonController {
       skip: (page - 1) * limit,
       limit: limit,
     })
-    const count = await this.personRepository.count(newFilter?.where)
+    const count = await this.personRepository.count(filter?.where)
     return new Pagination<Person>({
       count: count.count,
       data: people,
@@ -121,7 +117,6 @@ export class PersonController {
   ): Promise<Person[]> {
     const newFilter: Filter<Person> = {
       ...(filter ?? {}),
-      where: this.withActiveWhere(filter?.where),
       order: ['name ASC'],
     }
     return this.personRepository.find(newFilter)
@@ -224,10 +219,6 @@ export class PersonController {
       throw new HttpErrors.NotFound(`Person with id ${id} not found`)
     }
 
-    if (!person.active) {
-      return
-    }
-
     const [expenseDetailsCount, purchaseDetailsCount] = await Promise.all([
       this.expenseDetailsRepository.count({ personId: id }),
       this.purchaseDetailsRepository.count({ personId: id }),
@@ -241,42 +232,7 @@ export class PersonController {
         'Cannot deactivate person with transaction history',
       )
     }
-
-    await this.personRepository.updateById(id, { active: false })
+    await this.personRepository.deleteById(id)
   }
 
-  @patch('/people/{id}/reactivate')
-  @response(200, {
-    description: 'Person reactivation success',
-    content: {
-      'application/json': {
-        schema: getModelSchemaRef(Person, { includeRelations: true }),
-      },
-    },
-  })
-  async reactivateById(@param.path.number('id') id: number): Promise<Person> {
-    const person = await this.personRepository.findById(id)
-    if (!person) {
-      throw new HttpErrors.NotFound(`Person with id ${id} not found`)
-    }
-
-    if (person.active) {
-      return person
-    }
-
-    await this.personRepository.updateById(id, { active: true })
-    return this.personRepository.findById(id, { include: [] })
-  }
-
-  private withActiveWhere(where?: Where<Person>): Where<Person> {
-    if (!where) {
-      return { active: true }
-    }
-
-    if ('active' in where) {
-      return where
-    }
-
-    return { and: [where, { active: true }] }
-  }
 }

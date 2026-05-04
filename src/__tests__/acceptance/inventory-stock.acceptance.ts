@@ -20,7 +20,7 @@ describe('InventoryStockFlow', function () {
   async function createPerson(tag: string): Promise<number> {
     const res = await client
       .post('/people')
-      .send({ name: `Person-${tag}`, active: true })
+      .send({ name: `Person-${tag}`})
       .expect(200)
     return res.body.id
   }
@@ -28,7 +28,7 @@ describe('InventoryStockFlow', function () {
   async function createProduct(tag: string, stock: number): Promise<number> {
     const res = await client
       .post('/products')
-      .send({ name: `Product-${tag}`, stock, active: true })
+      .send({ name: `Product-${tag}`, stock })
       .expect(200)
     return res.body.id
   }
@@ -275,7 +275,7 @@ describe('InventoryStockFlow', function () {
     try {
       const expenseRes = await client
         .post('/expenses')
-        .send({ date: '2026-02-14', total_kg: 0 })
+        .send({ date: '2026-02-14' })
         .expect(200)
 
       expenseId = expenseRes.body?.id
@@ -305,7 +305,7 @@ describe('InventoryStockFlow', function () {
     try {
       const purchaseRes = await client
         .post('/purchases')
-        .send({ date: '2026-02-15', total_kg: 0 })
+        .send({ date: '2026-02-15' })
         .expect(200)
 
       purchaseId = purchaseRes.body?.id
@@ -412,39 +412,6 @@ describe('InventoryStockFlow', function () {
     }
   })
 
-  it('hides inactive products from default list queries', async () => {
-    const tag = `inactive-product-${Date.now()}`
-    const productRes = await client
-      .post('/products')
-      .send({ name: `Product-${tag}`, stock: 0, active: true })
-      .expect(200)
-    const productId = productRes.body.id
-
-    await client.delete(`/products/${productId}`).expect(204)
-
-    const listRes = await client.get('/products?page=1&limit=100').expect(200)
-    const ids = (listRes.body.data ?? []).map(
-      (item: { id?: number }) => item.id,
-    )
-    expect(ids).to.not.containEql(productId)
-  })
-
-  it('hides inactive people from default list queries', async () => {
-    const tag = `inactive-person-${Date.now()}`
-    const personRes = await client
-      .post('/people')
-      .send({ name: `Person-${tag}`, active: true })
-      .expect(200)
-    const personId = personRes.body.id
-
-    await client.delete(`/people/${personId}`).expect(204)
-
-    const listRes = await client.get('/people?page=1&limit=100').expect(200)
-    const ids = (listRes.body.data ?? []).map(
-      (item: { id?: number }) => item.id,
-    )
-    expect(ids).to.not.containEql(personId)
-  })
 
   it('creates kardex movement on direct purchase detail creation', async () => {
     const tag = `kardex-direct-${Date.now()}`
@@ -455,7 +422,7 @@ describe('InventoryStockFlow', function () {
     try {
       const purchaseRes = await client
         .post('/purchases')
-        .send({ date: '2026-02-18', total_kg: 0 })
+        .send({ date: '2026-02-18' })
         .expect(200)
       purchaseId = purchaseRes.body?.id
 
@@ -503,43 +470,4 @@ describe('InventoryStockFlow', function () {
     await client.delete('/kardexes/1').expect(405)
   })
 
-  it('reactivates inactive product explicitly', async () => {
-    const tag = `reactivate-product-${Date.now()}`
-    const productRes = await client
-      .post('/products')
-      .send({ name: `Product-${tag}`, stock: 0, active: true })
-      .expect(200)
-    const productId = productRes.body.id
-
-    await client.delete(`/products/${productId}`).expect(204)
-    await client.patch(`/products/${productId}/reactivate`).send({}).expect(200)
-
-    const listRes = await client.get('/products?page=1&limit=100').expect(200)
-    const ids = (listRes.body.data ?? []).map(
-      (item: { id?: number }) => item.id,
-    )
-    expect(ids).to.containEql(productId)
-
-    await client.del(`/products/${productId}`).catch(() => undefined)
-  })
-
-  it('reactivates inactive person explicitly', async () => {
-    const tag = `reactivate-person-${Date.now()}`
-    const personRes = await client
-      .post('/people')
-      .send({ name: `Person-${tag}`, active: true })
-      .expect(200)
-    const personId = personRes.body.id
-
-    await client.delete(`/people/${personId}`).expect(204)
-    await client.patch(`/people/${personId}/reactivate`).send({}).expect(200)
-
-    const listRes = await client.get('/people?page=1&limit=100').expect(200)
-    const ids = (listRes.body.data ?? []).map(
-      (item: { id?: number }) => item.id,
-    )
-    expect(ids).to.containEql(personId)
-
-    await client.del(`/people/${personId}`).catch(() => undefined)
-  })
 }).timeout(30000)

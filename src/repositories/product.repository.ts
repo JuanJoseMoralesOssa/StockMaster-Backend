@@ -6,7 +6,6 @@ import {
   repository,
 } from '@loopback/repository'
 import { PostgresDataSource } from '../datasources'
-// import {SqlserverDataSource} from '../datasources';
 import {
   Expense,
   ExpenseDetails,
@@ -64,7 +63,6 @@ export class ProductRepository extends DefaultCrudRepository<
 
   constructor(
     @inject('datasources.postgres') dataSource: PostgresDataSource,
-    // @inject('datasources.sqlserver') dataSource: SqlserverDataSource,
     @repository.getter('ExpenseDetailsRepository')
     protected expenseDetailsRepositoryGetter: Getter<ExpenseDetailsRepository>,
     @repository.getter('PersonRepository')

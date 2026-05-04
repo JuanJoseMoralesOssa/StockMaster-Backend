@@ -2,25 +2,6 @@ require('dotenv').config()
 
 import { App } from './application'
 
-async function ensureLifecycleColumns(app: App): Promise<void> {
-  const dataSource = (await app.get('datasources.postgres')) as {
-    execute: (sql: string) => Promise<unknown>
-  }
-
-  await dataSource.execute(
-    'ALTER TABLE IF EXISTS product ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE',
-  )
-  await dataSource.execute(
-    'ALTER TABLE IF EXISTS person ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE',
-  )
-  await dataSource.execute(
-    'UPDATE product SET active = TRUE WHERE active IS NULL',
-  )
-  await dataSource.execute(
-    'UPDATE person SET active = TRUE WHERE active IS NULL',
-  )
-}
-
 async function ensureInventoryForeignKeys(app: App): Promise<void> {
   const dataSource = (await app.get('datasources.postgres')) as {
     execute: (sql: string) => Promise<unknown>
@@ -125,15 +106,74 @@ END $$;
   `)
 }
 
+async function ensureProductConstraints(app: App): Promise<void> {
+  const dataSource = (await app.get('datasources.postgres')) as {
+    execute: (sql: string) => Promise<unknown>
+  }
+
+  // Sanitizar datos existentes que puedan violar la restricción
+  await dataSource.execute(`
+    UPDATE product SET stock = 0 WHERE stock < 0;
+  `)
+
+  await dataSource.execute(`
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'chk_product_stock_min'
+  ) THEN
+    ALTER TABLE product
+      ADD CONSTRAINT chk_product_stock_min
+      CHECK (stock >= 0);
+  END IF;
+END $$;
+  `)
+}
+
+async function ensureTotalViews(app: App): Promise<void> {
+  const ds = (await app.get('datasources.postgres')) as {
+    execute: (sql: string) => Promise<unknown>
+  }
+  await ds.execute(`
+    CREATE OR REPLACE VIEW expense_with_total AS
+    SELECT e.id, e.date, e.version,
+           COALESCE(SUM(d.weight_kg), 0)::numeric AS total_kg
+    FROM expense e
+    LEFT JOIN expensedetails d ON d.expenseid = e.id
+    GROUP BY e.id, e.date, e.version
+  `)
+  await ds.execute(`
+    CREATE OR REPLACE VIEW purchase_with_total AS
+    SELECT p.id, p.date, p.version,
+           COALESCE(SUM(d.weight_kg), 0)::numeric AS total_kg
+    FROM purchase p
+    LEFT JOIN purchasedetails d ON d.purchaseid = p.id
+    GROUP BY p.id, p.date, p.version
+  `)
+}
+
 export async function migrate(args: string[]) {
   const existingSchema = args.includes('--rebuild') ? 'drop' : 'alter'
   console.log('Migrating schemas (%s existing schema)', existingSchema)
 
   const app = new App()
   await app.boot()
-  await app.migrateSchema({ existingSchema })
-  await ensureLifecycleColumns(app)
+  await app.migrateSchema({
+    existingSchema,
+    models: [
+      'User',
+      'Person',
+      'Product',
+      'Expense',
+      'ExpenseDetails',
+      'Purchase',
+      'PurchaseDetails',
+      'Kardex',
+    ],
+  })
   await ensureInventoryForeignKeys(app)
+  await ensureProductConstraints(app)
+  await ensureTotalViews(app)
 
   // Connectors usually keep a pool of opened connections,
   // this keeps the process running even after all work is done.

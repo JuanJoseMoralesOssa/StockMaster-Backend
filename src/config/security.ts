@@ -1,11 +1,17 @@
+const NODE_ENV = process.env.NODE_ENV ?? 'development'
+const rawJwtSecret = process.env.JWT_SECRET
+const rawJwtExpiration = process.env.JWT_EXPIRATION
+
+// En producción, exigir explícitamente que se configure JWT_SECRET
+if (!rawJwtSecret && NODE_ENV === 'production') {
+  throw new Error(
+    'JWT_SECRET must be set in environment variables when NODE_ENV=production',
+  )
+}
+
 export const securityConfig = {
-  URL:
-    process.env.BD_URL ??
-    'postgresql://postgres:postgres@localhost:5432/postgres',
-  HOST: process.env.BD_HOST ?? 'localhost',
-  PORT: process.env.BD_PORT ?? 5432,
-  USER: process.env.BD_USER ?? 'postgres',
-  PASSWORD: process.env.BD_PASSWORD ?? 'postgres',
-  DATABASE: process.env.BD_DATABASE ?? 'postgres',
-  JWT_SECRET: process.env.JWT_SECRET ?? 'default_secret',
+  // En desarrollo se permite un valor por defecto; en producción es obligatorio configurarlo
+  JWT_SECRET: rawJwtSecret ?? 'default_secret',
+  // Expiración por defecto: 1 día, a menos que se provea en el .env
+  JWT_EXPIRATION: rawJwtExpiration ?? '1d',
 }

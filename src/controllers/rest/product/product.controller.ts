@@ -56,10 +56,7 @@ export class ProductController {
     })
     product: Omit<Product, 'id'>,
   ): Promise<Product> {
-    return this.productRepository.create({
-      ...product,
-      active: product.active ?? true,
-    })
+    return this.productRepository.create(product)
   }
 
   @get('/products/count')
@@ -68,7 +65,7 @@ export class ProductController {
     content: { 'application/json': { schema: CountSchema } },
   })
   async count(@param.where(Product) where?: Where<Product>): Promise<Count> {
-    return this.productRepository.count(this.withActiveWhere(where))
+    return this.productRepository.count(where)
   }
 
   @get('/products')
@@ -88,14 +85,12 @@ export class ProductController {
     @param.query.number('page') page: number = 1,
     @param.query.number('limit') limit: number = 10,
   ): Promise<Pagination<Product>> {
-    const where = this.withActiveWhere(filter?.where)
     const products = await this.productRepository.find({
       ...filter,
-      where,
       skip: (page - 1) * limit,
       limit: limit,
     })
-    const count = await this.productRepository.count(where)
+    const count = await this.productRepository.count(filter?.where)
     return new Pagination<Product>({
       count: count.count,
       data: products,
@@ -121,7 +116,6 @@ export class ProductController {
   ): Promise<Product[]> {
     const newFilter: Filter<Product> = {
       ...(filter ?? {}),
-      where: this.withActiveWhere(filter?.where),
       order: ['name ASC'],
     }
     return this.productRepository.find(newFilter)
@@ -223,10 +217,6 @@ export class ProductController {
       throw new HttpErrors.NotFound(`Product with id ${id} not found`)
     }
 
-    if (!product.active) {
-      return
-    }
-
     const [expenseDetailsCount, purchaseDetailsCount, kardexCount] =
       await Promise.all([
         this.expenseDetailsRepository.count({ productId: id }),
@@ -243,41 +233,6 @@ export class ProductController {
       )
     }
 
-    await this.productRepository.updateById(id, { active: false })
-  }
-
-  @patch('/products/{id}/reactivate')
-  @response(200, {
-    description: 'Product reactivation success',
-    content: {
-      'application/json': {
-        schema: getModelSchemaRef(Product, { includeRelations: true }),
-      },
-    },
-  })
-  async reactivateById(@param.path.number('id') id: number): Promise<Product> {
-    const product = await this.productRepository.findById(id)
-    if (!product) {
-      throw new HttpErrors.NotFound(`Product with id ${id} not found`)
-    }
-
-    if (product.active) {
-      return product
-    }
-
-    await this.productRepository.updateById(id, { active: true })
-    return this.productRepository.findById(id, { include: [] })
-  }
-
-  private withActiveWhere(where?: Where<Product>): Where<Product> {
-    if (!where) {
-      return { active: true }
-    }
-
-    if ('active' in where) {
-      return where
-    }
-
-    return { and: [where, { active: true }] }
+    await this.productRepository.deleteById(id)
   }
 }

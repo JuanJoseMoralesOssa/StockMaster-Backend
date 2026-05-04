@@ -5,7 +5,6 @@ import {
   repository,
 } from '@loopback/repository'
 import { PostgresDataSource } from '../datasources'
-// import {SqlserverDataSource} from '../datasources';
 import {
   Expense,
   ExpenseDetails,
@@ -45,7 +44,6 @@ export class ExpenseDetailsRepository extends DefaultCrudRepository<
     protected personRepositoryGetter: Getter<PersonRepository>,
     @repository.getter('ExpenseRepository')
     protected expenseRepositoryGetter: Getter<ExpenseRepository>,
-    // @inject('datasources.sqlserver') dataSource: SqlserverDataSource,
   ) {
     super(ExpenseDetails, dataSource)
     this.expense = this.createBelongsToAccessorFor(
