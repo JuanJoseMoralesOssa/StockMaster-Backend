@@ -41,7 +41,9 @@
     "rebuild": "npm run clean && npm run build",
     "ci:setup": "npm ci && npm run build",
     "ci:test": "npm run test:ci && npm run lint",
-    "release": "npm run ci:test && npm run build"
+    "release": "npm run ci:test && npm run build",
+    "create-admin": "node dist/scripts/create-admin.js",
+    "precreate-admin": "npm run build"
   },
   "repository": {
     "type": "git",
@@ -77,6 +79,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/mocha": "^10.0.10",
     "@types/node": "^25.6.0",
+    "@types/pg": "^8.20.0",
     "eslint": "^8.57.1",
     "source-map-support": "^0.5.21",
     "typescript": "~6.0.3"

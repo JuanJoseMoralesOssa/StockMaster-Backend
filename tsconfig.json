@@ -10,7 +10,8 @@
     "noImplicitAny": true,
     "types": [
       "node",
-      "mocha"
+      "mocha",
+      "pg"
     ]
   },
   "include": [

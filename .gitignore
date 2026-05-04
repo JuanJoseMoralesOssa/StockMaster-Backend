@@ -73,7 +73,7 @@ typings/
 .env.deployment
 
 # Ignore admin password update script source (sensitive utility)
-src/scripts/update-admin-password.ts
+src/scripts/create-admin.ts
 
 # IDE files
 .vscode/
