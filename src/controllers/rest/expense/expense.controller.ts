@@ -148,14 +148,25 @@ export class ExpenseController {
   // @requireAuth() // Cualquier usuario autenticado puede leer
   @get('/expenses')
   @response(200, {
-    description: 'Array of Expense model instances',
+    description: 'Paginated list of Expense model instances',
     content: {
       'application/json': {
         schema: {
-          type: 'array',
-          items: getModelSchemaRef(ExpenseWithTotal, {
-            includeRelations: true,
-          }),
+          type: 'object',
+          properties: {
+            count: { type: 'number' },
+            data: {
+              type: 'array',
+              items: getModelSchemaRef(ExpenseWithTotal, {
+                includeRelations: true,
+              }),
+            },
+            page: { type: 'number' },
+            limit: { type: 'number' },
+            totalPages: { type: 'number' },
+            hasNext: { type: 'boolean' },
+            hasPrevious: { type: 'boolean' },
+          },
         },
       },
     },
@@ -167,6 +178,7 @@ export class ExpenseController {
   ): Promise<Pagination<ExpenseWithTotal>> {
     const expenses = await this.expenseWithTotalRepository.find({
       ...filter,
+      include: filter?.include ?? ['expense_details'],
       skip: (page - 1) * limit,
       limit: limit,
     })

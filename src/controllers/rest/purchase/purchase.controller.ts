@@ -74,14 +74,25 @@ export class PurchaseController {
 
   @get('/purchases')
   @response(200, {
-    description: 'Array of Purchase model instances',
+    description: 'Paginated list of Purchase model instances',
     content: {
       'application/json': {
         schema: {
-          type: 'array',
-          items: getModelSchemaRef(PurchaseWithTotal, {
-            includeRelations: true,
-          }),
+          type: 'object',
+          properties: {
+            count: { type: 'number' },
+            data: {
+              type: 'array',
+              items: getModelSchemaRef(PurchaseWithTotal, {
+                includeRelations: true,
+              }),
+            },
+            page: { type: 'number' },
+            limit: { type: 'number' },
+            totalPages: { type: 'number' },
+            hasNext: { type: 'boolean' },
+            hasPrevious: { type: 'boolean' },
+          },
         },
       },
     },
@@ -93,6 +104,7 @@ export class PurchaseController {
   ): Promise<Pagination<PurchaseWithTotal>> {
     const purchases = await this.purchaseWithTotalRepository.find({
       ...filter,
+      include: filter?.include ?? ['purchase_details'],
       skip: (page - 1) * limit,
       limit: limit,
     })
