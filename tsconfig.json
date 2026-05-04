@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "@loopback/build/config/tsconfig.common.json",
-  "ignoreDeprecations": "6.0",
   "compilerOptions": {
+    "ignoreDeprecations": "6.0",
     "outDir": "dist",
     "rootDir": "src",
     "module": "nodenext",
