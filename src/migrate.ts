@@ -130,6 +130,24 @@ END $$;
   `)
 }
 
+async function cleanupObsoleteColumns(app: App): Promise<void> {
+  const ds = (await app.get('datasources.postgres')) as {
+    execute: (sql: string) => Promise<unknown>
+  }
+
+  await ds.execute(`
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'person' AND column_name = 'active'
+  ) THEN
+    ALTER TABLE person DROP COLUMN active;
+  END IF;
+END $$;
+  `)
+}
+
 async function ensureTotalViews(app: App): Promise<void> {
   const ds = (await app.get('datasources.postgres')) as {
     execute: (sql: string) => Promise<unknown>
@@ -171,6 +189,7 @@ export async function migrate(args: string[]) {
       'Kardex',
     ],
   })
+  await cleanupObsoleteColumns(app)
   await ensureInventoryForeignKeys(app)
   await ensureProductConstraints(app)
   await ensureTotalViews(app)
