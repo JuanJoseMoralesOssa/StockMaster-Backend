@@ -72,6 +72,9 @@ typings/
 .env.*.local
 .env.deployment
 
+# Ignore admin password update script source (sensitive utility)
+src/scripts/create-admin.ts
+
 # IDE files
 .vscode/
 .idea/
@@ -108,3 +111,5 @@ build/
 
 # Logs
 *.log
+
+docker

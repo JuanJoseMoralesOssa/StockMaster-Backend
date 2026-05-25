@@ -11,6 +11,7 @@ import {
   del,
   get,
   getModelSchemaRef,
+  HttpErrors,
   param,
   patch,
   post,
@@ -18,8 +19,11 @@ import {
   requestBody,
   response,
 } from '@loopback/rest'
-import { Expense, Pagination } from '../../../models'
-import { ExpenseRepository } from '../../../repositories'
+import { Expense, ExpenseWithTotal, Pagination } from '../../../models'
+import {
+  ExpenseRepository,
+  ExpenseWithTotalRepository,
+} from '../../../repositories'
 import { TransactionService } from '../../../services'
 // import {requireAuth, requireAuthAndRoles} from '../auth';
 
@@ -27,6 +31,8 @@ export class ExpenseController {
   constructor(
     @repository(ExpenseRepository)
     public expenseRepository: ExpenseRepository,
+    @repository(ExpenseWithTotalRepository)
+    public expenseWithTotalRepository: ExpenseWithTotalRepository,
     @service(TransactionService)
     public transactionService: TransactionService,
   ) {}
@@ -35,7 +41,9 @@ export class ExpenseController {
   @post('/expenses')
   @response(200, {
     description: 'Expense model instance',
-    content: { 'application/json': { schema: getModelSchemaRef(Expense) } },
+    content: {
+      'application/json': { schema: getModelSchemaRef(ExpenseWithTotal) },
+    },
   })
   async create(
     @requestBody({
@@ -43,16 +51,16 @@ export class ExpenseController {
         'application/json': {
           schema: getModelSchemaRef(Expense, {
             title: 'NewExpense',
-            exclude: ['id'],
+            exclude: ['id', 'version'],
           }),
         },
       },
     })
     expense: Omit<Expense, 'id'>,
-  ): Promise<Expense> {
+  ): Promise<ExpenseWithTotal> {
     this.transactionService.validateDate(expense.date)
     const createdExpense = await this.expenseRepository.create(expense)
-    return this.expenseRepository.findById(createdExpense.id!, {
+    return this.expenseWithTotalRepository.findById(createdExpense.id!, {
       include: ['expense_details'],
     })
   }
@@ -65,7 +73,7 @@ export class ExpenseController {
     description: 'Expense created with details',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(Expense, { includeRelations: true }),
+        schema: getModelSchemaRef(ExpenseWithTotal, { includeRelations: true }),
       },
     },
   })
@@ -103,7 +111,7 @@ export class ExpenseController {
         personId: number
       }>
     },
-  ): Promise<Expense> {
+  ): Promise<ExpenseWithTotal> {
     const details = expense.expenseDetails ?? []
     const newExpense = {
       date: expense.date,
@@ -115,14 +123,17 @@ export class ExpenseController {
         personId: number
       }>
     }
-    return this.transactionService.createWithDetails<
+    const createdExpense = await this.transactionService.createWithDetails<
       Expense,
       {
         weight_kg: number
         productId: number
         personId: number
       }
-    >(newExpense, this.expenseRepository, 'expense_details')
+    >(newExpense, this.expenseRepository, 'expense_details', false)
+    return this.expenseWithTotalRepository.findById(createdExpense.id!, {
+      include: ['expense_details'],
+    })
   }
 
   @get('/expenses/count')
@@ -137,28 +148,42 @@ export class ExpenseController {
   // @requireAuth() // Cualquier usuario autenticado puede leer
   @get('/expenses')
   @response(200, {
-    description: 'Array of Expense model instances',
+    description: 'Paginated list of Expense model instances',
     content: {
       'application/json': {
         schema: {
-          type: 'array',
-          items: getModelSchemaRef(Expense, { includeRelations: true }),
+          type: 'object',
+          properties: {
+            count: { type: 'number' },
+            data: {
+              type: 'array',
+              items: getModelSchemaRef(ExpenseWithTotal, {
+                includeRelations: true,
+              }),
+            },
+            page: { type: 'number' },
+            limit: { type: 'number' },
+            totalPages: { type: 'number' },
+            hasNext: { type: 'boolean' },
+            hasPrevious: { type: 'boolean' },
+          },
         },
       },
     },
   })
   async find(
-    @param.filter(Expense) filter?: Filter<Expense>,
+    @param.filter(ExpenseWithTotal) filter?: Filter<ExpenseWithTotal>,
     @param.query.number('page') page: number = 1,
     @param.query.number('limit') limit: number = 10,
-  ): Promise<Pagination<Expense>> {
-    const expenses = await this.expenseRepository.find({
+  ): Promise<Pagination<ExpenseWithTotal>> {
+    const expenses = await this.expenseWithTotalRepository.find({
       ...filter,
+      include: filter?.include ?? ['expense_details'],
       skip: (page - 1) * limit,
       limit: limit,
     })
-    const count = await this.expenseRepository.count(filter?.where)
-    return new Pagination<Expense>({
+    const count = await this.expenseWithTotalRepository.count(filter?.where)
+    return new Pagination<ExpenseWithTotal>({
       count: count.count,
       data: expenses,
       page: page,
@@ -193,16 +218,16 @@ export class ExpenseController {
     description: 'Expense model instance',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(Expense, { includeRelations: true }),
+        schema: getModelSchemaRef(ExpenseWithTotal, { includeRelations: true }),
       },
     },
   })
   async findById(
     @param.path.number('id') id: number,
-    @param.filter(Expense, { exclude: 'where' })
-    filter?: FilterExcludingWhere<Expense>,
-  ): Promise<Expense> {
-    return this.expenseRepository.findById(id, filter)
+    @param.filter(ExpenseWithTotal, { exclude: 'where' })
+    filter?: FilterExcludingWhere<ExpenseWithTotal>,
+  ): Promise<ExpenseWithTotal> {
+    return this.expenseWithTotalRepository.findById(id, filter)
   }
 
   @patch('/expenses/{id}')
@@ -210,7 +235,7 @@ export class ExpenseController {
     description: 'Expense PATCH success',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(Expense, { includeRelations: true }),
+        schema: getModelSchemaRef(ExpenseWithTotal, { includeRelations: true }),
       },
     },
   })
@@ -224,36 +249,95 @@ export class ExpenseController {
       },
     })
     expense: Partial<Expense>,
-  ): Promise<Expense> {
+  ): Promise<ExpenseWithTotal> {
     await this.expenseRepository.updateById(id, expense)
-    return this.expenseRepository.findById(id, { include: ['expense_details'] })
+    return this.expenseWithTotalRepository.findById(id, {
+      include: ['expense_details'],
+    })
   }
 
-  @put('/expenses/{id}')
+  /**
+   * Actualiza un gasto con sus detalles (crear, actualizar, eliminar detalles) usando Server-Side Reconciliation
+   */
+  @put('/expenses/with-details')
   @response(200, {
-    description: 'Expense PUT success',
+    description: 'Expense updated with details',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(Expense, { includeRelations: true }),
+        schema: getModelSchemaRef(ExpenseWithTotal, { includeRelations: true }),
       },
     },
   })
-  async replaceById(
-    @param.path.number('id') id: number,
+  async updateWithDetails(
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(Expense, {
-            title: 'ExpenseReplace',
-            exclude: ['id'],
-          }),
+          schema: {
+            type: 'object',
+            required: ['id', 'version'],
+            properties: {
+              id: { type: 'number' },
+              version: { type: 'number' },
+              date: { type: 'string', format: 'date' },
+              expenseDetails: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'number' },
+                    weight_kg: { type: 'number' },
+                    productId: { type: 'number' },
+                    personId: { type: 'number' },
+                  },
+                },
+              },
+            },
+          },
         },
       },
     })
-    expense: Omit<Expense, 'id'>,
-  ): Promise<Expense> {
-    await this.expenseRepository.replaceById(id, expense)
-    return this.expenseRepository.findById(id, { include: ['expense_details'] })
+    expenseData: {
+      id: number
+      version: number
+      date?: string
+      expenseDetails?: Array<{
+        id?: number
+        weight_kg: number
+        productId: number
+        personId: number
+      }>
+    },
+  ): Promise<ExpenseWithTotal> {
+    try {
+      // Usar el TransactionService para manejar la lógica compleja
+      await this.transactionService.updateWithDetails<
+        Expense,
+        {
+          id?: number
+          weight_kg: number
+          productId: number
+          personId: number
+        }
+      >(
+        {
+          id: expenseData.id,
+          version: expenseData.version,
+          date: expenseData.date,
+          details: expenseData.expenseDetails,
+        },
+        this.expenseRepository,
+        'expense_details',
+        false,
+      )
+      return await this.expenseWithTotalRepository.findById(expenseData.id, {
+        include: ['expense_details'],
+      })
+    } catch (error) {
+      if (error && (error as { statusCode?: number }).statusCode) throw error
+      throw new HttpErrors.BadRequest(
+        `Error updating expense with details: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      )
+    }
   }
 
   // @requireAuthAndRoles('admin') // Solo admin puede eliminar
@@ -262,7 +346,12 @@ export class ExpenseController {
     description: 'Expense DELETE success',
   })
   async deleteById(@param.path.number('id') id: number): Promise<void> {
-    await this.expenseRepository.deleteById(id)
+    await this.transactionService.deleteWithDetails(
+      id,
+      this.expenseRepository,
+      'expense_details',
+      false,
+    )
   }
 
   @get('/expenses/filtered')
@@ -276,7 +365,9 @@ export class ExpenseController {
             count: { type: 'number' },
             data: {
               type: 'array',
-              items: getModelSchemaRef(Expense, { includeRelations: true }),
+              items: getModelSchemaRef(ExpenseWithTotal, {
+                includeRelations: true,
+              }),
             },
             page: { type: 'number' },
             limit: { type: 'number' },
@@ -292,7 +383,7 @@ export class ExpenseController {
     @param.query.number('productId') productId?: number,
     @param.query.number('page') page: number = 1,
     @param.query.number('limit') limit: number = 10,
-  ): Promise<Pagination<Expense>> {
+  ): Promise<Pagination<ExpenseWithTotal>> {
     // Validar fechas si se proporcionan
     if (startDate) {
       this.transactionService.validateDate(startDate)
@@ -301,25 +392,21 @@ export class ExpenseController {
       this.transactionService.validateDate(endDate)
     }
 
-    // Obtener todos los gastos filtrados
-    const allFilteredExpenses =
-      await this.expenseRepository.findFilteredExpenses(
+    const { data, count } =
+      await this.expenseWithTotalRepository.findFilteredExpenses(
         startDate,
         endDate,
         personId,
         productId,
+        page,
+        limit,
       )
 
-    // Aplicar paginación manualmente
-    const startIndex = (page - 1) * limit
-    const endIndex = startIndex + limit
-    const paginatedExpenses = allFilteredExpenses.slice(startIndex, endIndex)
-
-    return new Pagination<Expense>({
-      count: allFilteredExpenses.length,
-      data: paginatedExpenses,
-      page: page,
-      limit: limit,
+    return new Pagination<ExpenseWithTotal>({
+      count,
+      data,
+      page,
+      limit,
     })
   }
 }

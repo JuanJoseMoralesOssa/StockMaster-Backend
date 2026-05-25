@@ -13,6 +13,7 @@ import {
 } from '@loopback/rest'
 import { securityId, UserProfile } from '@loopback/security'
 import { SecurityService } from '../services/security.service'
+
 @injectable(asAuthStrategy, asSpecEnhancer)
 export class JWTAuthStrategy implements AuthenticationStrategy, OASEnhancer {
   name: string = 'jwt'
@@ -26,21 +27,18 @@ export class JWTAuthStrategy implements AuthenticationStrategy, OASEnhancer {
     const token: string = this.extractCredentials(request)
 
     try {
-      // Usar tu SecurityService existente
-      const user = this.securityService.verifyToken(token)
+      const decodedToken = this.securityService.verifyToken(token)
 
-      // Convertir a UserProfile (formato que espera LoopBack)
       const userProfile: UserProfile = {
-        [securityId]: user.id?.toString() ?? '',
-        id: user.id?.toString() ?? '',
-        name: user.name ?? '',
-        email: user.email ?? '',
-        role: user.role ?? '',
+        [securityId]: decodedToken.id,
+        id: decodedToken.id,
+        name: decodedToken.name,
+        email: decodedToken.email,
+        role: decodedToken.role,
       }
 
       return userProfile
     } catch (error) {
-      // Re-lanzar el error del SecurityService que ya tiene el formato correcto
       if (error instanceof Error) {
         throw error
       }
@@ -53,31 +51,24 @@ export class JWTAuthStrategy implements AuthenticationStrategy, OASEnhancer {
       throw new HttpErrors.Unauthorized('Authorization header not found.')
     }
 
-    // Por ejemplo: Bearer xxx.yyy.zzz
-    const authHeaderValue = request.headers.authorization
+    const authHeaderValue = request.headers.authorization.trim()
 
-    if (!authHeaderValue.startsWith('Bearer')) {
+    if (!/^Bearer\s+/i.test(authHeaderValue)) {
       throw new HttpErrors.Unauthorized(
         'Authorization header is not of type "Bearer".',
       )
     }
 
-    // Dividir el valor del header para obtener el token
-    const parts = authHeaderValue.split(' ')
+    const parts = authHeaderValue.split(/\s+/)
     if (parts.length !== 2) {
       throw new HttpErrors.Unauthorized(
-        'Authorization header value has too many parts. It must follow the pattern: "Bearer xx.yy.zz" where xx.yy.zz is a valid JWT token.',
+        'Authorization header value has too many parts. It must follow the pattern: "Bearer xx.yy.zz"',
       )
     }
 
-    const token = parts[1]
-    return token
+    return parts[1]
   }
 
-  /**
-   * Modifica automáticamente la especificación OpenAPI para incluir
-   * la documentación de autenticación JWT Bearer
-   */
   modifySpec(spec: OpenApiSpec): OpenApiSpec {
     return mergeSecuritySchemeToSpec(spec, this.name, {
       type: 'http',

@@ -24,7 +24,7 @@ export class User extends Entity {
     jsonSchema: {
       format: 'email',
     },
-    mysql: {
+    postgresql: {
       columnName: 'email',
       dataType: 'varchar',
       dataLength: 255,

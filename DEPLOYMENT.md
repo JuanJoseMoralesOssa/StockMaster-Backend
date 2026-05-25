@@ -21,10 +21,11 @@ Ve a tu repositorio en GitHub → Settings → Secrets and variables → Actions
 **Secretos requeridos:**
 
 - `AZURE_CREDENTIALS`: Credenciales de Azure (Service Principal)
-- `MYSQL_PASSWORD`: Password de tu base de datos MySQL
-- `MYSQL_HOST`: Host de MySQL (opcional, default: mysql-jm-inv-bd.mysql.database.azure.com)
-- `MYSQL_USER`: Usuario de MySQL (opcional, default: bbjbzdifjkMaestraioAdmin)
-- `MYSQL_DATABASE`: Base de datos (opcional, default: jm_inv_db)
+- `BD_PASSWORD`: Password de tu base de datos PostgreSQL
+- `BD_HOST`: Host de PostgreSQL
+- `BD_USER`: Usuario de PostgreSQL
+- `BD_DATABASE`: Base de datos PostgreSQL
+- `BD_PORT`: Puerto de PostgreSQL (opcional, default: 5432)
 
 **Secretos opcionales:**
 
@@ -86,10 +87,11 @@ az login
 
 ```bash
 # Windows PowerShell
-$env:MYSQL_PASSWORD="TU_PASSWORD_REAL_AQUI"
-$env:MYSQL_HOST="mysql-jm-inv-bd.mysql.database.azure.com"
-$env:MYSQL_USER="bbjbzdifjkMaestraioAdmin"
-$env:MYSQL_DATABASE="jm_inv_db"
+$env:BD_PASSWORD="TU_PASSWORD_REAL_AQUI"
+$env:BD_HOST="TU_HOST_POSTGRES"
+$env:BD_USER="TU_USUARIO_POSTGRES"
+$env:BD_DATABASE="TU_BASE_DE_DATOS_POSTGRES"
+$env:BD_PORT="5432"
 
 # O crear archivo .env.deployment
 cp .env.deployment.example .env.deployment
@@ -233,11 +235,11 @@ $RegistryName = "acrinventorybackend$(Get-Random)"
 az acr repository list --name acrinventorybackend
 ```
 
-### Error de conexión a MySQL
+### Error de conexión a PostgreSQL
 
-- Verificar que el servidor MySQL permite conexiones de Azure
+- Verificar que el servidor PostgreSQL permite conexiones desde Azure Container Apps
 - Verificar las credenciales de base de datos
-- Revisar las reglas de firewall del servidor MySQL
+- Revisar las reglas de firewall / networking del servidor PostgreSQL
 
 ## 📞 Soporte
 
