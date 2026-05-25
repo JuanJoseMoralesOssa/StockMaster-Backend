@@ -4,8 +4,7 @@ import {
   HasManyThroughRepositoryFactory,
   repository,
 } from '@loopback/repository'
-import { MysqlDataSource } from '../datasources'
-// import {SqlserverDataSource} from '../datasources';
+import { PostgresDataSource } from '../datasources'
 import {
   Expense,
   ExpenseDetails,
@@ -55,8 +54,7 @@ export class PersonRepository extends DefaultCrudRepository<
   >
 
   constructor(
-    @inject('datasources.mysql') dataSource: MysqlDataSource,
-    // @inject('datasources.sqlserver') dataSource: SqlserverDataSource,
+    @inject('datasources.postgres') dataSource: PostgresDataSource,
     @repository.getter('ExpenseDetailsRepository')
     protected expenseDetailsRepositoryGetter: Getter<ExpenseDetailsRepository>,
     @repository.getter('ProductRepository')

@@ -1,3 +1,4 @@
+import { service } from '@loopback/core'
 import {
   Count,
   CountSchema,
@@ -10,6 +11,7 @@ import {
   get,
   getModelSchemaRef,
   getWhereSchemaFor,
+  HttpErrors,
   param,
   patch,
   post,
@@ -17,11 +19,14 @@ import {
 } from '@loopback/rest'
 import { Purchase, PurchaseDetails } from '../../../models'
 import { PurchaseRepository } from '../../../repositories/purchase.repository'
+import { TransactionService } from '../../../services'
 
 export class PurchasePurchaseDetailsController {
   constructor(
     @repository(PurchaseRepository)
     protected purchaseRepository: PurchaseRepository,
+    @service(TransactionService)
+    public transactionService: TransactionService,
   ) {}
 
   @get('/purchases/{id}/purchase-details', {
@@ -71,7 +76,13 @@ export class PurchasePurchaseDetailsController {
     })
     purchaseDetails: Omit<PurchaseDetails, 'id'>,
   ): Promise<PurchaseDetails> {
-    return this.purchaseRepository.purchase_details(id).create(purchaseDetails)
+    return this.transactionService.createSingleDetail(
+      id!,
+      purchaseDetails,
+      this.purchaseRepository,
+      'purchase_details',
+      true, // isPurchase = true (it's a purchase)
+    )
   }
 
   @patch('/purchases/{id}/purchase-details', {
@@ -91,13 +102,13 @@ export class PurchasePurchaseDetailsController {
         },
       },
     })
-    purchaseDetails: Partial<PurchaseDetails>,
+    _purchaseDetails: Partial<PurchaseDetails>,
     @param.query.object('where', getWhereSchemaFor(PurchaseDetails))
-    where?: Where<PurchaseDetails>,
+    _where?: Where<PurchaseDetails>,
   ): Promise<Count> {
-    return this.purchaseRepository
-      .purchase_details(id)
-      .patch(purchaseDetails, where)
+    throw new HttpErrors.MethodNotAllowed(
+      'Bulk update is disabled for stock consistency. Use PATCH /purchase-details/{id}.',
+    )
   }
 
   @del('/purchases/{id}/purchase-details', {
@@ -111,8 +122,14 @@ export class PurchasePurchaseDetailsController {
   async delete(
     @param.path.number('id') id: number,
     @param.query.object('where', getWhereSchemaFor(PurchaseDetails))
-    where?: Where<PurchaseDetails>,
+    _where?: Where<PurchaseDetails>,
   ): Promise<Count> {
-    return this.purchaseRepository.purchase_details(id).delete(where)
+    await this.transactionService.deleteWithDetails(
+      id,
+      this.purchaseRepository,
+      'purchase_details',
+      true,
+    )
+    return { count: 1 }
   }
 }

@@ -3,7 +3,21 @@ import { Person } from './person.model'
 import { Product } from './product.model'
 import { Purchase } from './purchase.model'
 
-@model()
+@model({
+  settings: {
+    indexes: {
+      idx_purchase_details_purchase: {
+        keys: { purchaseId: 1 },
+      },
+      idx_purchase_details_product: {
+        keys: { productId: 1 },
+      },
+      idx_purchase_details_person: {
+        keys: { personId: 1 },
+      },
+    },
+  },
+})
 export class PurchaseDetails extends Entity {
   @property({
     type: 'number',
