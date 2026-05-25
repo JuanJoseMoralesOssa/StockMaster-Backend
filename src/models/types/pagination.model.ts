@@ -1,7 +1,7 @@
 import { Model, model, property } from '@loopback/repository'
 
 @model()
-export class Pagination<T = any> extends Model {
+export class Pagination<T = unknown> extends Model {
   @property({
     type: 'number',
     required: true,
@@ -61,7 +61,7 @@ export interface PaginationRelations {
   // describe navigational properties here
 }
 
-export type PaginationWithRelations<T = any> = Pagination<T> &
+export type PaginationWithRelations<T = unknown> = Pagination<T> &
   PaginationRelations
 
 // Utility type for creating paginated responses

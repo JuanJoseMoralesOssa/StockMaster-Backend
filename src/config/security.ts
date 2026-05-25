@@ -1,10 +1,17 @@
+const NODE_ENV = process.env.NODE_ENV ?? 'development'
+const rawJwtSecret = process.env.JWT_SECRET
+const rawJwtExpiration = process.env.JWT_EXPIRATION
+
+// En producción, exigir explícitamente que se configure JWT_SECRET
+if (!rawJwtSecret && NODE_ENV === 'production') {
+  throw new Error(
+    'JWT_SECRET must be set in environment variables when NODE_ENV=production',
+  )
+}
+
 export const securityConfig = {
-  URL: process.env.BD_URL ?? '',
-  HOST: process.env.BD_HOST ?? '',
-  PORT: process.env.BD_PORT ?? 3306,
-  USER: process.env.BD_USER ?? '',
-  PASSWORD: process.env.BD_PASSWORD ?? '',
-  DATABASE: process.env.BD_DATABASE ?? '',
-  SSL_CERT_PATH: process.env.SSL_CERT_PATH ?? '',
-  JWT_SECRET: process.env.JWT_SECRET ?? '',
+  // En desarrollo se permite un valor por defecto; en producción es obligatorio configurarlo
+  JWT_SECRET: rawJwtSecret ?? 'default_secret',
+  // Expiración por defecto: 1 día, a menos que se provea en el .env
+  JWT_EXPIRATION: rawJwtExpiration ?? '1d',
 }

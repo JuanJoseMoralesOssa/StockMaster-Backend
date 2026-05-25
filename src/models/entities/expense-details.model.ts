@@ -3,7 +3,21 @@ import { Expense } from './expense.model'
 import { Person } from './person.model'
 import { Product } from './product.model'
 
-@model()
+@model({
+  settings: {
+    indexes: {
+      idx_expense_details_expense: {
+        keys: { expenseId: 1 },
+      },
+      idx_expense_details_product: {
+        keys: { productId: 1 },
+      },
+      idx_expense_details_person: {
+        keys: { personId: 1 },
+      },
+    },
+  },
+})
 export class ExpenseDetails extends Entity {
   @property({
     type: 'number',

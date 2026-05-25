@@ -1,3 +1,4 @@
+import { service } from '@loopback/core'
 import {
   Count,
   CountSchema,
@@ -10,6 +11,7 @@ import {
   del,
   get,
   getModelSchemaRef,
+  HttpErrors,
   param,
   patch,
   post,
@@ -19,11 +21,14 @@ import {
 } from '@loopback/rest'
 import { Pagination, User } from '../../../models'
 import { UserRepository } from '../../../repositories'
+import { SecurityService } from '../../../services'
 
 export class UserController {
   constructor(
     @repository(UserRepository)
     public userRepository: UserRepository,
+    @service(SecurityService)
+    public securityService: SecurityService,
   ) {}
 
   @post('/users')
@@ -44,7 +49,20 @@ export class UserController {
     })
     user: Omit<User, 'id'>,
   ): Promise<User> {
-    return this.userRepository.create(user)
+    if (user.password) {
+      // Hash the password before saving the user
+      user.password = await this.securityService.hashPassword(user.password)
+    } else if (
+      !user.password ||
+      user.password.trim() === '' ||
+      user.password.length === 0
+    ) {
+      throw new HttpErrors.BadRequest('Password is required')
+    }
+    const createdUser = await this.userRepository.create(user)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password: _password, ...userWithoutPassword } = createdUser
+    return userWithoutPassword as User
   }
 
   @get('/users/count')
@@ -150,8 +168,17 @@ export class UserController {
     })
     user: Partial<User>,
   ): Promise<User> {
+    if (user.password) {
+      // Hash the password before updating the user
+      user.password = await this.securityService.hashPassword(user.password)
+    }
     await this.userRepository.updateById(id, user)
-    return this.userRepository.findById(id, { include: [] })
+    return this.userRepository.findById(id, {
+      include: [],
+      fields: {
+        password: false,
+      },
+    })
   }
 
   @put('/users/{id}')
@@ -177,8 +204,17 @@ export class UserController {
     })
     user: Omit<User, 'id'>,
   ): Promise<User> {
+    if (user.password) {
+      // Hash the password before saving the user
+      user.password = await this.securityService.hashPassword(user.password)
+    }
     await this.userRepository.replaceById(id, user)
-    return this.userRepository.findById(id, { include: [] })
+    return this.userRepository.findById(id, {
+      include: [],
+      fields: {
+        password: false,
+      },
+    })
   }
 
   @del('/users/{id}')

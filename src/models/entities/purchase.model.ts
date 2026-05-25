@@ -3,7 +3,15 @@ import { Person } from './person.model'
 import { Product } from './product.model'
 import { PurchaseDetails } from './purchase-details.model'
 
-@model()
+@model({
+  settings: {
+    indexes: {
+      idx_purchase_date: {
+        keys: { date: 1 },
+      },
+    },
+  },
+})
 export class Purchase extends Entity {
   @property({
     type: 'number',
@@ -18,7 +26,7 @@ export class Purchase extends Entity {
       format: 'date',
     },
     required: true,
-    mysql: {
+    postgresql: {
       columnName: 'date',
       dataType: 'date',
       dataLength: null,
@@ -29,11 +37,6 @@ export class Purchase extends Entity {
   })
   date: string
 
-  @property({
-    type: 'number',
-  })
-  total_kg?: number
-
   @hasMany(() => PurchaseDetails)
   purchase_details?: PurchaseDetails[]
 
@@ -42,6 +45,13 @@ export class Purchase extends Entity {
 
   @hasMany(() => Product, { through: { model: () => PurchaseDetails } })
   products: Product[]
+
+  @property({
+    type: 'number',
+    required: true,
+    default: 1,
+  })
+  version: number
 
   constructor(data?: Partial<Purchase>) {
     super(data)

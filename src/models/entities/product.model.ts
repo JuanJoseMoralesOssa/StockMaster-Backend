@@ -26,11 +26,6 @@ export class Product extends Entity {
   })
   stock?: number
 
-  @property({
-    type: 'string',
-  })
-  code?: string
-
   @hasMany(() => Person, { through: { model: () => ExpenseDetails } })
   people_expense_details: Person[]
 

@@ -10,6 +10,7 @@ import {
   del,
   get,
   getModelSchemaRef,
+  HttpErrors,
   param,
   patch,
   post,
@@ -29,7 +30,9 @@ export class KardexController {
   @post('/kardexes')
   @response(200, {
     description: 'Kardex model instance',
-    content: { 'application/json': { schema: getModelSchemaRef(Kardex) } },
+    content: {
+      'application/json': { schema: getModelSchemaRef(Kardex) },
+    },
   })
   async create(
     @requestBody({
@@ -42,9 +45,11 @@ export class KardexController {
         },
       },
     })
-    kardex: Omit<Kardex, 'id'>,
+    _kardex: Omit<Kardex, 'id'>,
   ): Promise<Kardex> {
-    return this.kardexRepository.create(kardex)
+    throw new HttpErrors.MethodNotAllowed(
+      'Creating kardex entries manually is disabled. Entries are system-generated.',
+    )
   }
 
   @get('/kardexes/count')
@@ -100,10 +105,12 @@ export class KardexController {
         },
       },
     })
-    kardex: Kardex,
-    @param.where(Kardex) where?: Where<Kardex>,
+    _kardex: Kardex,
+    @param.where(Kardex) _where?: Where<Kardex>,
   ): Promise<Count> {
-    return this.kardexRepository.updateAll(kardex, where)
+    throw new HttpErrors.MethodNotAllowed(
+      'Updating kardex entries is disabled. Entries are append-only.',
+    )
   }
 
   @get('/kardexes/{id}')
@@ -128,7 +135,7 @@ export class KardexController {
     description: 'Kardex PATCH success',
   })
   async updateById(
-    @param.path.number('id') id: number,
+    @param.path.number('id') _id: number,
     @requestBody({
       content: {
         'application/json': {
@@ -136,9 +143,11 @@ export class KardexController {
         },
       },
     })
-    kardex: Kardex,
+    _kardex: Kardex,
   ): Promise<void> {
-    await this.kardexRepository.updateById(id, kardex)
+    throw new HttpErrors.MethodNotAllowed(
+      'Updating kardex entries is disabled. Entries are append-only.',
+    )
   }
 
   @put('/kardexes/{id}')
@@ -146,17 +155,21 @@ export class KardexController {
     description: 'Kardex PUT success',
   })
   async replaceById(
-    @param.path.number('id') id: number,
-    @requestBody() kardex: Kardex,
+    @param.path.number('id') _id: number,
+    @requestBody() _kardex: Kardex,
   ): Promise<void> {
-    await this.kardexRepository.replaceById(id, kardex)
+    throw new HttpErrors.MethodNotAllowed(
+      'Replacing kardex entries is disabled. Entries are append-only.',
+    )
   }
 
   @del('/kardexes/{id}')
   @response(204, {
     description: 'Kardex DELETE success',
   })
-  async deleteById(@param.path.number('id') id: number): Promise<void> {
-    await this.kardexRepository.deleteById(id)
+  async deleteById(@param.path.number('id') _id: number): Promise<void> {
+    throw new HttpErrors.MethodNotAllowed(
+      'Deleting kardex entries is disabled. Entries are append-only.',
+    )
   }
 }
