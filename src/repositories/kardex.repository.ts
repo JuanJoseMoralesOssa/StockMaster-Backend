@@ -4,8 +4,7 @@ import {
   DefaultCrudRepository,
   repository,
 } from '@loopback/repository'
-import { MysqlDataSource } from '../datasources'
-// import {SqlserverDataSource} from '../datasources';
+import { PostgresDataSource } from '../datasources'
 import { Kardex, KardexRelations, Product } from '../models'
 import { ProductRepository } from './product.repository'
 
@@ -20,8 +19,7 @@ export class KardexRepository extends DefaultCrudRepository<
   >
 
   constructor(
-    @inject('datasources.mysql') dataSource: MysqlDataSource,
-    // @inject('datasources.sqlserver') dataSource: SqlserverDataSource,
+    @inject('datasources.postgres') dataSource: PostgresDataSource,
     @repository.getter('ProductRepository')
     protected productRepositoryGetter: Getter<ProductRepository>,
   ) {

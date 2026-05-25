@@ -1,146 +1,146 @@
-name: 🚀 Release
+# name: 🚀 Release
 
-on:
-  push:
-    tags:
-      - 'v*.*.*'
+# on:
+#   push:
+#     tags:
+#       - 'v*.*.*'
 
-env:
-  RESOURCE_GROUP: rg-inventory-backend
-  LOCATION: eastus
-  ENVIRONMENT_NAME: env-inventory-backend
-  APP_NAME: backend-inventory-app
-  REGISTRY_NAME: acrinventorybackend
-  IMAGE_NAME: backend-inventory
+# env:
+#   RESOURCE_GROUP: rg-inventory-backend
+#   LOCATION: eastus
+#   ENVIRONMENT_NAME: env-inventory-backend
+#   APP_NAME: backend-inventory-app
+#   REGISTRY_NAME: acrinventorybackend
+#   IMAGE_NAME: backend-inventory
 
-jobs:
-  release:
-    name: 🏷️ Create Release
-    runs-on: ubuntu-latest
+# jobs:
+#   release:
+#     name: 🏷️ Create Release
+#     runs-on: ubuntu-latest
 
-    steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
+#     steps:
+#       - name: 📥 Checkout code
+#         uses: actions/checkout@v6
+#         with:
+#           fetch-depth: 0
 
-      - name: 📦 Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: 'npm'
+#       - name: 📦 Setup Node.js
+#         uses: actions/setup-node@v6
+#         with:
+#           node-version: '22'
+#           cache: 'npm'
 
-      - name: 📚 Install dependencies
-        run: npm ci
+#       - name: 📚 Install dependencies
+#         run: npm ci
 
-      - name: 🧪 Run tests
-        run: npm test
+#       - name: 🧪 Run tests
+#         run: npm test
 
-      - name: 🔨 Build project
-        run: npm run build
+#       - name: 🔨 Build project
+#         run: npm run build
 
-      - name: 📝 Generate changelog
-        id: changelog
-        run: |
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 HEAD^)..HEAD >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+#       - name: 📝 Generate changelog
+#         id: changelog
+#         run: |
+#           echo "changelog<<EOF" >> $GITHUB_OUTPUT
+#           git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 HEAD^)..HEAD >> $GITHUB_OUTPUT
+#           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: 🎉 Create Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          body: |
-            ## 🚀 Release ${{ github.ref }}
+#       - name: 🎉 Create Release
+#         uses: actions/create-release@v1
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#         with:
+#           tag_name: ${{ github.ref }}
+#           release_name: Release ${{ github.ref }}
+#           body: |
+#             ## 🚀 Release ${{ github.ref }}
 
-            ### 📋 Changes in this release:
-            ${{ steps.changelog.outputs.changelog }}
+#             ### 📋 Changes in this release:
+#             ${{ steps.changelog.outputs.changelog }}
 
-            ### 🐳 Docker Image
-            ```bash
-            docker pull ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
-            ```
+#             ### 🐳 Docker Image
+#             ```bash
+#             docker pull ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+#             ```
 
-            ### 🌐 Deployed to Azure Container Apps
-            This release has been automatically deployed to production.
-          draft: false
-          prerelease: false
+#             ### 🌐 Deployed to Azure Container Apps
+#             This release has been automatically deployed to production.
+#           draft: false
+#           prerelease: false
 
-  deploy-production:
-    name: 🚀 Deploy to Production
-    runs-on: ubuntu-latest
-    needs: release
+#   deploy-production:
+#     name: 🚀 Deploy to Production
+#     runs-on: ubuntu-latest
+#     needs: release
 
-    steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v6
+#     steps:
+#       - name: 📥 Checkout code
+#         uses: actions/checkout@v6
 
-      - name: 🔑 Azure Login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      # - name: 🔑 Azure Login
+      #   uses: azure/login@v2
+      #   with:
+      #     creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: 🔑 Get ACR credentials
-        id: acr-creds
-        run: |
-          ACR_SERVER=$(az acr show --name ${{ env.REGISTRY_NAME }} --query loginServer --output tsv)
-          ACR_USERNAME=$(az acr credential show --name ${{ env.REGISTRY_NAME }} --query username --output tsv)
-          ACR_PASSWORD=$(az acr credential show --name ${{ env.REGISTRY_NAME }} --query passwords[0].value --output tsv)
+      # - name: 🔑 Get ACR credentials
+      #   id: acr-creds
+      #   run: |
+      #     ACR_SERVER=$(az acr show --name ${{ env.REGISTRY_NAME }} --query loginServer --output tsv)
+      #     ACR_USERNAME=$(az acr credential show --name ${{ env.REGISTRY_NAME }} --query username --output tsv)
+      #     ACR_PASSWORD=$(az acr credential show --name ${{ env.REGISTRY_NAME }} --query passwords[0].value --output tsv)
 
-          echo "acr-server=$ACR_SERVER" >> $GITHUB_OUTPUT
-          echo "acr-username=$ACR_USERNAME" >> $GITHUB_OUTPUT
-          echo "::add-mask::$ACR_PASSWORD"
-          echo "acr-password=$ACR_PASSWORD" >> $GITHUB_OUTPUT
+      #     echo "acr-server=$ACR_SERVER" >> $GITHUB_OUTPUT
+      #     echo "acr-username=$ACR_USERNAME" >> $GITHUB_OUTPUT
+      #     echo "::add-mask::$ACR_PASSWORD"
+      #     echo "acr-password=$ACR_PASSWORD" >> $GITHUB_OUTPUT
 
-      - name: 🐳 Build and push release image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ steps.acr-creds.outputs.acr-server }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
-            ${{ steps.acr-creds.outputs.acr-server }}/${{ env.IMAGE_NAME }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      # - name: 🐳 Build and push release image
+      #   uses: docker/build-push-action@v6
+      #   with:
+      #     context: .
+      #     push: true
+      #     tags: |
+      #       ${{ steps.acr-creds.outputs.acr-server }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+      #       ${{ steps.acr-creds.outputs.acr-server }}/${{ env.IMAGE_NAME }}:latest
+      #     cache-from: type=gha
+      #     cache-to: type=gha,mode=max
 
-      - name: 🔑 Login to ACR
-        run: |
-          echo "${{ steps.acr-creds.outputs.acr-password }}" | docker login ${{ steps.acr-creds.outputs.acr-server }} \
-            --username ${{ steps.acr-creds.outputs.acr-username }} \
-            --password-stdin
+      # - name: 🔑 Login to ACR
+      #   run: |
+      #     echo "${{ steps.acr-creds.outputs.acr-password }}" | docker login ${{ steps.acr-creds.outputs.acr-server }} \
+      #       --username ${{ steps.acr-creds.outputs.acr-username }} \
+      #       --password-stdin
 
-      - name: 🚀 Deploy release to Azure Container Apps
-        run: |
-          az containerapp update \
-            --name ${{ env.APP_NAME }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --image ${{ steps.acr-creds.outputs.acr-server }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+      # - name: 🚀 Deploy release to Azure Container Apps
+      #   run: |
+      #     az containerapp update \
+      #       --name ${{ env.APP_NAME }} \
+      #       --resource-group ${{ env.RESOURCE_GROUP }} \
+      #       --image ${{ steps.acr-creds.outputs.acr-server }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
 
-      - name: 🎉 Get Application URL
-        id: get-url
-        run: |
-          APP_URL=$(az containerapp show --name ${{ env.APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query properties.configuration.ingress.fqdn --output tsv)
-          echo "app-url=https://$APP_URL" >> $GITHUB_OUTPUT
-          echo "### 🎉 Release ${{ github.ref_name }} Deployed!" >> $GITHUB_STEP_SUMMARY
-          echo "- **Application URL**: https://$APP_URL" >> $GITHUB_STEP_SUMMARY
-          echo "- **Health Check**: https://$APP_URL/ping" >> $GITHUB_STEP_SUMMARY
-          echo "- **API Explorer**: https://$APP_URL/explorer" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+      # - name: 🎉 Get Application URL
+      #   id: get-url
+      #   run: |
+      #     APP_URL=$(az containerapp show --name ${{ env.APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query properties.configuration.ingress.fqdn --output tsv)
+      #     echo "app-url=https://$APP_URL" >> $GITHUB_OUTPUT
+      #     echo "### 🎉 Release ${{ github.ref_name }} Deployed!" >> $GITHUB_STEP_SUMMARY
+      #     echo "- **Application URL**: https://$APP_URL" >> $GITHUB_STEP_SUMMARY
+      #     echo "- **Health Check**: https://$APP_URL/ping" >> $GITHUB_STEP_SUMMARY
+      #     echo "- **API Explorer**: https://$APP_URL/explorer" >> $GITHUB_STEP_SUMMARY
+      #     echo "- **Version**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
 
-      - name: 🏥 Health Check
-        run: |
-          echo "Waiting for application to be ready..."
-          sleep 30
+      # - name: 🏥 Health Check
+      #   run: |
+      #     echo "Waiting for application to be ready..."
+      #     sleep 30
 
-          APP_URL=${{ steps.get-url.outputs.app-url }}
+      #     APP_URL=${{ steps.get-url.outputs.app-url }}
 
-          if curl -f -s "$APP_URL/ping" > /dev/null; then
-            echo "✅ Release ${{ github.ref_name }} is healthy!"
-            echo "🌐 Application URL: $APP_URL"
-          else
-            echo "❌ Health check failed for release ${{ github.ref_name }}"
-            exit 1
-          fi
+      #     if curl -f -s "$APP_URL/ping" > /dev/null; then
+      #       echo "✅ Release ${{ github.ref_name }} is healthy!"
+      #       echo "🌐 Application URL: $APP_URL"
+      #     else
+      #       echo "❌ Health check failed for release ${{ github.ref_name }}"
+      #       exit 1
+      #     fi

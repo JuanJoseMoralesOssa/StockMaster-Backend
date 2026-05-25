@@ -19,14 +19,19 @@ import {
   requestBody,
   response,
 } from '@loopback/rest'
-import { Pagination, Purchase } from '../../../models'
-import { PurchaseRepository } from '../../../repositories/purchase.repository'
+import { Pagination, Purchase, PurchaseWithTotal } from '../../../models'
+import {
+  PurchaseRepository,
+  PurchaseWithTotalRepository,
+} from '../../../repositories'
 import { TransactionService } from '../../../services'
 
 export class PurchaseController {
   constructor(
     @repository(PurchaseRepository)
     public purchaseRepository: PurchaseRepository,
+    @repository(PurchaseWithTotalRepository)
+    public purchaseWithTotalRepository: PurchaseWithTotalRepository,
     @service(TransactionService)
     public transactionService: TransactionService,
   ) {}
@@ -34,7 +39,9 @@ export class PurchaseController {
   @post('/purchases')
   @response(200, {
     description: 'Purchase model instance',
-    content: { 'application/json': { schema: getModelSchemaRef(Purchase) } },
+    content: {
+      'application/json': { schema: getModelSchemaRef(PurchaseWithTotal) },
+    },
   })
   async create(
     @requestBody({
@@ -42,16 +49,16 @@ export class PurchaseController {
         'application/json': {
           schema: getModelSchemaRef(Purchase, {
             title: 'NewPurchase',
-            exclude: ['id'],
+            exclude: ['id', 'version'],
           }),
         },
       },
     })
     purchase: Omit<Purchase, 'id'>,
-  ): Promise<Purchase> {
+  ): Promise<PurchaseWithTotal> {
     this.transactionService.validateDate(purchase.date)
     const createdPurchase = await this.purchaseRepository.create(purchase)
-    return this.purchaseRepository.findById(createdPurchase.id!, {
+    return this.purchaseWithTotalRepository.findById(createdPurchase.id!, {
       include: ['purchase_details'],
     })
   }
@@ -67,28 +74,42 @@ export class PurchaseController {
 
   @get('/purchases')
   @response(200, {
-    description: 'Array of Purchase model instances',
+    description: 'Paginated list of Purchase model instances',
     content: {
       'application/json': {
         schema: {
-          type: 'array',
-          items: getModelSchemaRef(Purchase, { includeRelations: true }),
+          type: 'object',
+          properties: {
+            count: { type: 'number' },
+            data: {
+              type: 'array',
+              items: getModelSchemaRef(PurchaseWithTotal, {
+                includeRelations: true,
+              }),
+            },
+            page: { type: 'number' },
+            limit: { type: 'number' },
+            totalPages: { type: 'number' },
+            hasNext: { type: 'boolean' },
+            hasPrevious: { type: 'boolean' },
+          },
         },
       },
     },
   })
   async find(
-    @param.filter(Purchase) filter?: Filter<Purchase>,
+    @param.filter(PurchaseWithTotal) filter?: Filter<PurchaseWithTotal>,
     @param.query.number('page') page: number = 1,
     @param.query.number('limit') limit: number = 10,
-  ): Promise<Pagination<Purchase>> {
-    const purchases = await this.purchaseRepository.find({
+  ): Promise<Pagination<PurchaseWithTotal>> {
+    const purchases = await this.purchaseWithTotalRepository.find({
       ...filter,
+      include: filter?.include ?? ['purchase_details'],
       skip: (page - 1) * limit,
       limit: limit,
     })
-    const count = await this.purchaseRepository.count(filter?.where)
-    return new Pagination<Purchase>({
+    const count = await this.purchaseWithTotalRepository.count(filter?.where)
+    return new Pagination<PurchaseWithTotal>({
       count: count.count,
       data: purchases,
       page: page,
@@ -120,16 +141,18 @@ export class PurchaseController {
     description: 'Purchase model instance',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(Purchase, { includeRelations: true }),
+        schema: getModelSchemaRef(PurchaseWithTotal, {
+          includeRelations: true,
+        }),
       },
     },
   })
   async findById(
     @param.path.number('id') id: number,
-    @param.filter(Purchase, { exclude: 'where' })
-    filter?: FilterExcludingWhere<Purchase>,
-  ): Promise<Purchase> {
-    return this.purchaseRepository.findById(id, filter)
+    @param.filter(PurchaseWithTotal, { exclude: 'where' })
+    filter?: FilterExcludingWhere<PurchaseWithTotal>,
+  ): Promise<PurchaseWithTotal> {
+    return this.purchaseWithTotalRepository.findById(id, filter)
   }
 
   @patch('/purchases/{id}')
@@ -137,7 +160,9 @@ export class PurchaseController {
     description: 'Purchase PATCH success',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(Purchase, { includeRelations: true }),
+        schema: getModelSchemaRef(PurchaseWithTotal, {
+          includeRelations: true,
+        }),
       },
     },
   })
@@ -151,9 +176,9 @@ export class PurchaseController {
       },
     })
     purchase: Partial<Purchase>,
-  ): Promise<Purchase> {
+  ): Promise<PurchaseWithTotal> {
     await this.purchaseRepository.updateById(id, purchase)
-    return this.purchaseRepository.findById(id, {
+    return this.purchaseWithTotalRepository.findById(id, {
       include: ['purchase_details'],
     })
   }
@@ -163,7 +188,9 @@ export class PurchaseController {
     description: 'Purchase PUT success',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(Purchase, { includeRelations: true }),
+        schema: getModelSchemaRef(PurchaseWithTotal, {
+          includeRelations: true,
+        }),
       },
     },
   })
@@ -174,15 +201,15 @@ export class PurchaseController {
         'application/json': {
           schema: getModelSchemaRef(Purchase, {
             title: 'PurchaseReplace',
-            exclude: ['id'],
+            exclude: ['id', 'version'],
           }),
         },
       },
     })
     purchase: Omit<Purchase, 'id'>,
-  ): Promise<Purchase> {
+  ): Promise<PurchaseWithTotal> {
     await this.purchaseRepository.replaceById(id, purchase)
-    return this.purchaseRepository.findById(id, {
+    return this.purchaseWithTotalRepository.findById(id, {
       include: ['purchase_details'],
     })
   }
@@ -192,7 +219,12 @@ export class PurchaseController {
     description: 'Purchase DELETE success',
   })
   async deleteById(@param.path.number('id') id: number): Promise<void> {
-    await this.purchaseRepository.deleteById(id)
+    await this.transactionService.deleteWithDetails(
+      id,
+      this.purchaseRepository,
+      'purchase_details',
+      true,
+    )
   }
 
   /**
@@ -203,7 +235,9 @@ export class PurchaseController {
     description: 'Purchase created with details',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(Purchase, { includeRelations: true }),
+        schema: getModelSchemaRef(PurchaseWithTotal, {
+          includeRelations: true,
+        }),
       },
     },
   })
@@ -241,7 +275,7 @@ export class PurchaseController {
         personId: number
       }>
     },
-  ): Promise<Purchase> {
+  ): Promise<PurchaseWithTotal> {
     const details = purchase.purchaseDetails ?? []
     const newPurchase = {
       date: purchase.date,
@@ -253,25 +287,30 @@ export class PurchaseController {
         personId: number
       }>
     }
-    return this.transactionService.createWithDetails<
+    const createdPurchase = await this.transactionService.createWithDetails<
       Purchase,
       {
         weight_kg: number
         productId: number
         personId: number
       }
-    >(newPurchase, this.purchaseRepository, 'purchase_details')
+    >(newPurchase, this.purchaseRepository, 'purchase_details', true)
+    return this.purchaseWithTotalRepository.findById(createdPurchase.id!, {
+      include: ['purchase_details'],
+    })
   }
 
   /**
-   * Actualiza una compra con sus detalles (crear, actualizar, eliminar detalles)
+   * Actualiza una compra con sus detalles usando Server-Side Reconciliation
    */
   @put('/purchases/with-details')
   @response(200, {
     description: 'Purchase updated with details',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(Purchase, { includeRelations: true }),
+        schema: getModelSchemaRef(PurchaseWithTotal, {
+          includeRelations: true,
+        }),
       },
     },
   })
@@ -281,9 +320,10 @@ export class PurchaseController {
         'application/json': {
           schema: {
             type: 'object',
-            required: ['id'],
+            required: ['id', 'version'],
             properties: {
               id: { type: 'number' },
+              version: { type: 'number' },
               date: { type: 'string', format: 'date' },
               purchaseDetails: {
                 type: 'array',
@@ -294,9 +334,6 @@ export class PurchaseController {
                     weight_kg: { type: 'number' },
                     productId: { type: 'number' },
                     personId: { type: 'number' },
-                    toCreate: { type: 'boolean' },
-                    toUpdate: { type: 'boolean' },
-                    toDelete: { type: 'boolean' },
                   },
                 },
               },
@@ -307,30 +344,42 @@ export class PurchaseController {
     })
     purchaseData: {
       id: number
+      version: number
       date?: string
       purchaseDetails?: Array<{
         id?: number
-        weight_kg?: number
-        productId?: number
-        personId?: number
-        toCreate?: boolean
-        toUpdate?: boolean
-        toDelete?: boolean
+        weight_kg: number
+        productId: number
+        personId: number
       }>
     },
-  ): Promise<Purchase> {
+  ): Promise<PurchaseWithTotal> {
     try {
       // Usar el TransactionService para manejar la lógica compleja
-      return await this.transactionService.updateWithDetails(
+      await this.transactionService.updateWithDetails<
+        Purchase,
+        {
+          id?: number
+          weight_kg: number
+          productId: number
+          personId: number
+        }
+      >(
         {
           id: purchaseData.id,
+          version: purchaseData.version,
           date: purchaseData.date,
           details: purchaseData.purchaseDetails,
-        } as any,
+        },
         this.purchaseRepository,
         'purchase_details',
+        true,
       )
+      return await this.purchaseWithTotalRepository.findById(purchaseData.id, {
+        include: ['purchase_details'],
+      })
     } catch (error) {
+      if (error && (error as { statusCode?: number }).statusCode) throw error
       throw new HttpErrors.BadRequest(
         `Error updating purchase with details: ${error instanceof Error ? error.message : 'Unknown error'}`,
       )
@@ -348,7 +397,9 @@ export class PurchaseController {
             count: { type: 'number' },
             data: {
               type: 'array',
-              items: getModelSchemaRef(Purchase, { includeRelations: true }),
+              items: getModelSchemaRef(PurchaseWithTotal, {
+                includeRelations: true,
+              }),
             },
             page: { type: 'number' },
             limit: { type: 'number' },
@@ -364,7 +415,7 @@ export class PurchaseController {
     @param.query.number('productId') productId?: number,
     @param.query.number('page') page: number = 1,
     @param.query.number('limit') limit: number = 10,
-  ): Promise<Pagination<Purchase>> {
+  ): Promise<Pagination<PurchaseWithTotal>> {
     // Validar fechas si se proporcionan
     if (startDate) {
       this.transactionService.validateDate(startDate)
@@ -373,25 +424,21 @@ export class PurchaseController {
       this.transactionService.validateDate(endDate)
     }
 
-    // Obtener todas las compras filtradas
-    const allFilteredPurchases =
-      await this.purchaseRepository.findFilteredPurchases(
+    const { data, count } =
+      await this.purchaseWithTotalRepository.findFilteredPurchases(
         startDate,
         endDate,
         personId,
         productId,
+        page,
+        limit,
       )
 
-    // Aplicar paginación manualmente
-    const startIndex = (page - 1) * limit
-    const endIndex = startIndex + limit
-    const paginatedPurchases = allFilteredPurchases.slice(startIndex, endIndex)
-
-    return new Pagination<Purchase>({
-      count: allFilteredPurchases.length,
-      data: paginatedPurchases,
-      page: page,
-      limit: limit,
+    return new Pagination<PurchaseWithTotal>({
+      count,
+      data,
+      page,
+      limit,
     })
   }
 }

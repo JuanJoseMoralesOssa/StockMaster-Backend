@@ -1,3 +1,4 @@
+import { service } from '@loopback/core'
 import {
   Count,
   CountSchema,
@@ -10,6 +11,7 @@ import {
   del,
   get,
   getModelSchemaRef,
+  HttpErrors,
   param,
   patch,
   post,
@@ -18,12 +20,20 @@ import {
   response,
 } from '@loopback/rest'
 import { PurchaseDetails } from '../../../models'
-import { PurchaseDetailsRepository } from '../../../repositories'
+import {
+  PurchaseDetailsRepository,
+  PurchaseRepository,
+} from '../../../repositories'
+import { TransactionService } from '../../../services'
 
 export class PurchaseDetailsController {
   constructor(
     @repository(PurchaseDetailsRepository)
     public purchaseDetailsRepository: PurchaseDetailsRepository,
+    @repository(PurchaseRepository)
+    public purchaseRepository: PurchaseRepository,
+    @service(TransactionService)
+    public transactionService: TransactionService,
   ) {}
 
   @post('/purchase-details')
@@ -46,7 +56,17 @@ export class PurchaseDetailsController {
     })
     purchaseDetails: Omit<PurchaseDetails, 'id'>,
   ): Promise<PurchaseDetails> {
-    return this.purchaseDetailsRepository.create(purchaseDetails)
+    if (purchaseDetails.purchaseId == null) {
+      throw new HttpErrors.BadRequest('purchaseId is required')
+    }
+
+    return this.transactionService.createSingleDetail(
+      purchaseDetails.purchaseId,
+      purchaseDetails,
+      this.purchaseRepository,
+      'purchase_details',
+      true,
+    )
   }
 
   @get('/purchase-details/count')
@@ -94,7 +114,9 @@ export class PurchaseDetailsController {
     purchaseDetails: PurchaseDetails,
     @param.where(PurchaseDetails) where?: Where<PurchaseDetails>,
   ): Promise<Count> {
-    return this.purchaseDetailsRepository.updateAll(purchaseDetails, where)
+    throw new HttpErrors.MethodNotAllowed(
+      'Bulk update is disabled for stock consistency. Use PATCH /purchase-details/{id}.',
+    )
   }
 
   @get('/purchase-details/{id}')
@@ -134,8 +156,12 @@ export class PurchaseDetailsController {
     })
     purchaseDetails: Partial<PurchaseDetails>,
   ): Promise<PurchaseDetails> {
-    await this.purchaseDetailsRepository.updateById(id, purchaseDetails)
-    return this.purchaseDetailsRepository.findById(id, { include: [] })
+    return this.transactionService.updateSingleDetail(
+      id,
+      purchaseDetails,
+      this.purchaseDetailsRepository,
+      true, // isPurchase = true
+    )
   }
 
   @put('/purchase-details/{id}')
@@ -161,8 +187,12 @@ export class PurchaseDetailsController {
     })
     purchaseDetails: Omit<PurchaseDetails, 'id'>,
   ): Promise<PurchaseDetails> {
-    await this.purchaseDetailsRepository.replaceById(id, purchaseDetails)
-    return this.purchaseDetailsRepository.findById(id, { include: [] })
+    return this.transactionService.updateSingleDetail(
+      id,
+      purchaseDetails,
+      this.purchaseDetailsRepository,
+      true, // isPurchase = true
+    )
   }
 
   @del('/purchase-details/{id}')
@@ -170,6 +200,10 @@ export class PurchaseDetailsController {
     description: 'PurchaseDetails DELETE success',
   })
   async deleteById(@param.path.number('id') id: number): Promise<void> {
-    await this.purchaseDetailsRepository.deleteById(id)
+    await this.transactionService.deleteSingleDetail(
+      id,
+      this.purchaseDetailsRepository,
+      true, // isPurchase = true
+    )
   }
 }

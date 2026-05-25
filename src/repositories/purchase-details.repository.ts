@@ -4,8 +4,7 @@ import {
   DefaultCrudRepository,
   repository,
 } from '@loopback/repository'
-import { MysqlDataSource } from '../datasources'
-// import {SqlserverDataSource} from '../datasources';
+import { PostgresDataSource } from '../datasources'
 import {
   Person,
   Product,
@@ -38,14 +37,13 @@ export class PurchaseDetailsRepository extends DefaultCrudRepository<
   >
 
   constructor(
-    @inject('datasources.mysql') dataSource: MysqlDataSource,
+    @inject('datasources.postgres') dataSource: PostgresDataSource,
     @repository.getter('ProductRepository')
     protected productRepositoryGetter: Getter<ProductRepository>,
     @repository.getter('PersonRepository')
     protected personRepositoryGetter: Getter<PersonRepository>,
     @repository.getter('PurchaseRepository')
     protected purchaseRepositoryGetter: Getter<PurchaseRepository>,
-    // @inject('datasources.sqlserver') dataSource: SqlserverDataSource,
   ) {
     super(PurchaseDetails, dataSource)
     this.purchase = this.createBelongsToAccessorFor(

@@ -42,3 +42,8 @@ CODEOWNERS
 tsconfig.json
 .eslintrc*
 .prettierrc*
+
+*.md
+
+Dockerfile
+.dockerignore

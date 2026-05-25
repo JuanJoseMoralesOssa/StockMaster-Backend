@@ -10,6 +10,7 @@ import {
   del,
   get,
   getModelSchemaRef,
+  HttpErrors,
   param,
   patch,
   post,
@@ -18,12 +19,23 @@ import {
   response,
 } from '@loopback/rest'
 import { Pagination, Product } from '../../../models'
-import { ProductRepository } from '../../../repositories'
+import {
+  ExpenseDetailsRepository,
+  KardexRepository,
+  ProductRepository,
+  PurchaseDetailsRepository,
+} from '../../../repositories'
 
 export class ProductController {
   constructor(
     @repository(ProductRepository)
     public productRepository: ProductRepository,
+    @repository(ExpenseDetailsRepository)
+    public expenseDetailsRepository: ExpenseDetailsRepository,
+    @repository(PurchaseDetailsRepository)
+    public purchaseDetailsRepository: PurchaseDetailsRepository,
+    @repository(KardexRepository)
+    public kardexRepository: KardexRepository,
   ) {}
 
   @post('/products')
@@ -105,7 +117,6 @@ export class ProductController {
     const newFilter: Filter<Product> = {
       ...(filter ?? {}),
       order: ['name ASC'],
-      fields: { id: true, name: true },
     }
     return this.productRepository.find(newFilter)
   }
@@ -201,6 +212,27 @@ export class ProductController {
     description: 'Product DELETE success',
   })
   async deleteById(@param.path.number('id') id: number): Promise<void> {
+    const product = await this.productRepository.findById(id)
+    if (!product) {
+      throw new HttpErrors.NotFound(`Product with id ${id} not found`)
+    }
+
+    const [expenseDetailsCount, purchaseDetailsCount, kardexCount] =
+      await Promise.all([
+        this.expenseDetailsRepository.count({ productId: id }),
+        this.purchaseDetailsRepository.count({ productId: id }),
+        this.kardexRepository.count({ productId: id }),
+      ])
+
+    const totalReferences =
+      expenseDetailsCount.count + purchaseDetailsCount.count + kardexCount.count
+
+    if (totalReferences > 0) {
+      throw new HttpErrors.Conflict(
+        'Cannot deactivate product with transaction history',
+      )
+    }
+
     await this.productRepository.deleteById(id)
   }
 }

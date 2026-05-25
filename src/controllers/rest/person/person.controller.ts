@@ -10,6 +10,7 @@ import {
   del,
   get,
   getModelSchemaRef,
+  HttpErrors,
   param,
   patch,
   post,
@@ -18,12 +19,20 @@ import {
   response,
 } from '@loopback/rest'
 import { Pagination, Person } from '../../../models'
-import { PersonRepository } from '../../../repositories'
+import {
+  ExpenseDetailsRepository,
+  PersonRepository,
+  PurchaseDetailsRepository,
+} from '../../../repositories'
 
 export class PersonController {
   constructor(
     @repository(PersonRepository)
     public personRepository: PersonRepository,
+    @repository(ExpenseDetailsRepository)
+    public expenseDetailsRepository: ExpenseDetailsRepository,
+    @repository(PurchaseDetailsRepository)
+    public purchaseDetailsRepository: PurchaseDetailsRepository,
   ) {}
 
   @post('/people')
@@ -73,13 +82,16 @@ export class PersonController {
     @param.query.number('page') page: number = 1,
     @param.query.number('limit') limit: number = 10,
   ): Promise<Pagination<Person>> {
-    const newFilter: Filter<Person> = { ...(filter ?? {}), order: ['name ASC'] }
+    const newFilter: Filter<Person> = {
+      ...(filter ?? {}),
+      order: ['name ASC'],
+    }
     const people = await this.personRepository.find({
       ...newFilter,
       skip: (page - 1) * limit,
       limit: limit,
     })
-    const count = await this.personRepository.count(newFilter?.where)
+    const count = await this.personRepository.count(filter?.where)
     return new Pagination<Person>({
       count: count.count,
       data: people,
@@ -103,7 +115,10 @@ export class PersonController {
   async findAll(
     @param.filter(Person) filter?: Filter<Person>,
   ): Promise<Person[]> {
-    const newFilter: Filter<Person> = { ...(filter ?? {}), order: ['name ASC'] }
+    const newFilter: Filter<Person> = {
+      ...(filter ?? {}),
+      order: ['name ASC'],
+    }
     return this.personRepository.find(newFilter)
   }
 
@@ -199,6 +214,25 @@ export class PersonController {
     description: 'Person DELETE success',
   })
   async deleteById(@param.path.number('id') id: number): Promise<void> {
+    const person = await this.personRepository.findById(id)
+    if (!person) {
+      throw new HttpErrors.NotFound(`Person with id ${id} not found`)
+    }
+
+    const [expenseDetailsCount, purchaseDetailsCount] = await Promise.all([
+      this.expenseDetailsRepository.count({ personId: id }),
+      this.purchaseDetailsRepository.count({ personId: id }),
+    ])
+
+    const totalReferences =
+      expenseDetailsCount.count + purchaseDetailsCount.count
+
+    if (totalReferences > 0) {
+      throw new HttpErrors.Conflict(
+        'Cannot deactivate person with transaction history',
+      )
+    }
     await this.personRepository.deleteById(id)
   }
+
 }
