@@ -65,7 +65,9 @@ export class AuthorizeInterceptor implements Provider<Interceptor> {
   }
 
   /**
-   * Obtiene los roles requeridos de los metadatos del método
+   * Obtiene los roles requeridos: primero del método y, si no hay, de la clase.
+   * Esto permite decorar un controlador completo con `@requireRoles(...)` y
+   * sobrescribir métodos individuales (p.ej. escrituras solo ADMIN).
    */
   private getRequiredRoles(
     invocationCtx: InvocationContext,
@@ -74,10 +76,17 @@ export class AuthorizeInterceptor implements Provider<Interceptor> {
       return undefined
     }
 
-    return Reflect.getMetadata(
+    const methodRoles = Reflect.getMetadata(
       REQUIRED_ROLES_METADATA,
       invocationCtx.target,
       invocationCtx.methodName,
     )
+    if (methodRoles) return methodRoles
+
+    // Fallback a metadata de clase (definida sobre el constructor)
+    const ctor = (invocationCtx.target as { constructor?: object })?.constructor
+    return ctor
+      ? Reflect.getMetadata(REQUIRED_ROLES_METADATA, ctor)
+      : undefined
   }
 }

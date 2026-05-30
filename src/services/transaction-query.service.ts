@@ -375,69 +375,62 @@ export class TransactionQueryService {
     )
   }
 
+  /**
+   * Drill-down: todas las transacciones de un proveedor para un producto dado
+   * dentro de un rango de fechas. Devuelve compras y gastos entrelazados,
+   * ordenados cronológicamente. Usado en la vista de detalle del dashboard.
+   */
   public async getSupplierProductDetails(
     supplierId: number,
     productId: number,
     startDate: Date,
     endDate: Date,
-  ) {
+  ): Promise<Array<{date: string; weight_kg: number; type: 'Compra' | 'Gasto'}>> {
     const supplier = await this.personRepository.findOne({
-      where: { id: supplierId },
+      where: {id: supplierId},
       include: [
         {
           relation: 'purchases',
           scope: {
-            where: { date: { between: [startDate, endDate] } },
-            include: [
-              {
-                relation: 'purchase_details',
-                scope: { where: { productId } },
-              },
-            ],
+            where: {date: {between: [startDate, endDate]}},
+            include: [{relation: 'purchase_details', scope: {where: {productId}}}],
           },
         },
         {
           relation: 'expenses',
           scope: {
-            where: { date: { between: [startDate, endDate] } },
-            include: [
-              {
-                relation: 'expense_details',
-                scope: { where: { productId } },
-              },
-            ],
+            where: {date: {between: [startDate, endDate]}},
+            include: [{relation: 'expense_details', scope: {where: {productId}}}],
           },
         },
       ],
     })
 
     if (!supplier) {
-      throw new HttpErrors.NotFound(
-        `Proveedor con ID ${supplierId} no encontrado`,
-      )
+      throw new HttpErrors.NotFound(`Proveedor con ID ${supplierId} no encontrado`)
     }
 
-    const purchaseDetails =
+    const purchaseRows =
       supplier.purchases?.flatMap(
-        (purchase: Purchase) =>
-          purchase.purchase_details?.map((detail: PurchaseDetails) => ({
-            date: purchase.date,
-            weight_kg: detail.weight_kg,
+        (p: Purchase) =>
+          p.purchase_details?.map((d: PurchaseDetails) => ({
+            date: p.date,
+            weight_kg: d.weight_kg ?? 0,
             type: 'Compra' as const,
           })) ?? [],
       ) ?? []
 
-    const expenseDetails =
+    const expenseRows =
       supplier.expenses?.flatMap(
-        (expense: Expense) =>
-          expense.expense_details?.map((detail: ExpenseDetails) => ({
-            date: expense.date,
-            weight_kg: detail.weight_kg,
+        (e: Expense) =>
+          e.expense_details?.map((d: ExpenseDetails) => ({
+            date: e.date,
+            weight_kg: d.weight_kg ?? 0,
             type: 'Gasto' as const,
           })) ?? [],
       ) ?? []
 
-    return [...purchaseDetails, ...expenseDetails].sort(
+    return [...purchaseRows, ...expenseRows].sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
     )
   }

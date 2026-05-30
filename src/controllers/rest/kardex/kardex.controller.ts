@@ -18,9 +18,13 @@ import {
   requestBody,
   response,
 } from '@loopback/rest'
+import { Roles, requireRoles } from '../../../auth'
 import { Kardex, Pagination } from '../../../models'
 import { KardexRepository } from '../../../repositories'
 
+// Kardex: lectura para Oficina y Admin (Operador sin acceso). Las mutaciones
+// directas están bloqueadas (MethodNotAllowed); el kardex lo genera el sistema.
+@requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class KardexController {
   constructor(
     @repository(KardexRepository)

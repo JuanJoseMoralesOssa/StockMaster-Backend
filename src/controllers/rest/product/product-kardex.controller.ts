@@ -15,9 +15,12 @@ import {
   post,
   requestBody,
 } from '@loopback/rest'
+import { Roles, requireRoles } from '../../../auth'
 import { Kardex, Product } from '../../../models'
 import { ProductRepository } from '../../../repositories'
 
+// Kardex vía producto: lectura Oficina+Admin; las mutaciones (abajo) solo Admin.
+@requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class ProductKardexController {
   constructor(
     @repository(ProductRepository)
@@ -51,6 +54,7 @@ export class ProductKardexController {
       },
     },
   })
+  @requireRoles(Roles.ADMIN)
   async create(
     @param.path.number('id') id: typeof Product.prototype.id,
     @requestBody({
@@ -77,6 +81,7 @@ export class ProductKardexController {
       },
     },
   })
+  @requireRoles(Roles.ADMIN)
   async patch(
     @param.path.number('id') id: number,
     @requestBody({
@@ -101,6 +106,7 @@ export class ProductKardexController {
       },
     },
   })
+  @requireRoles(Roles.ADMIN)
   async delete(
     @param.path.number('id') id: number,
     @param.query.object('where', getWhereSchemaFor(Kardex))

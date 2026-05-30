@@ -1,3 +1,4 @@
+export * from './purchase-extract.controller'
 export * from './purchase-person.controller'
 export * from './purchase-product.controller'
 export * from './purchase-purchase-details.controller'

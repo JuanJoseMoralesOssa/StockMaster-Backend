@@ -36,13 +36,26 @@ type AggregatableTransaction = {
   expense?: RelatedEntity
 }
 
+export interface AnalyticsSummary {
+  totalSuppliers: number
+  totalProducts: number
+  totalWeight: number
+  /** Number of detail lines (each product line within a document). */
+  totalTransactions: number
+  /** Number of purchase documents ("Compra") in the range. */
+  purchaseCount: number
+  /** Number of expense documents ("Gasto") in the range. */
+  expenseCount: number
+  /** Total weight ordered (purchases / "Compra") in the range. */
+  totalPurchaseWeight: number
+  /** Total weight paid/delivered (expenses / "Gasto") in the range. */
+  totalExpenseWeight: number
+  /** Outstanding weight: purchases minus expenses. */
+  pendingWeight: number
+}
+
 export interface DashboardSummaryResponse {
-  summary: {
-    totalSuppliers: number
-    totalProducts: number
-    totalWeight: number
-    totalTransactions: number
-  }
+  summary: AnalyticsSummary
   topSuppliersByWeight: SupplierAnalytics[]
   bottomSuppliersByWeight: SupplierAnalytics[]
   topProductsByWeight: ProductAnalytics[]
@@ -51,17 +64,22 @@ export interface DashboardSummaryResponse {
   mostTransactedProducts: ProductAnalytics[]
 }
 
-export interface DateRangeAnalytics {
-  topSuppliers: SupplierAnalytics[]
-  bottomSuppliers: SupplierAnalytics[]
-  topProducts: ProductAnalytics[]
-  bottomProducts: ProductAnalytics[]
-  summary: {
-    totalSuppliers: number
-    totalProducts: number
-    totalWeight: number
-    totalTransactions: number
-  }
+export interface LowStockProduct {
+  productId: number
+  productName: string
+  stock: number
+}
+
+export interface InventorySummaryResponse {
+  /** Sum of current stock (kg) across all products. */
+  totalStock: number
+  productCount: number
+  inStockCount: number
+  outOfStockCount: number
+  /** Products with 0 < stock <= lowStockThreshold. */
+  lowStockCount: number
+  lowStockThreshold: number
+  lowStockProducts: LowStockProduct[]
 }
 
 import { injectable, BindingScope } from '@loopback/core'
@@ -92,13 +110,19 @@ export class AnalyticsService {
   ): Promise<DashboardSummaryResponse> {
     this.validateDateRange(startDate, endDate)
 
-    const [supplierAnalytics, productAnalytics] = await Promise.all([
-      this.getSupplierAnalytics(startDate, endDate, type),
-      this.getProductAnalytics(startDate, endDate, type),
-    ])
+    const [supplierAnalytics, productAnalytics, weightTotals] =
+      await Promise.all([
+        this.getSupplierAnalytics(startDate, endDate, type),
+        this.getProductAnalytics(startDate, endDate, type),
+        this.getWeightTotalsByType(startDate, endDate, type),
+      ])
 
     return {
-      summary: this.calculateSummary(supplierAnalytics, productAnalytics),
+      summary: this.calculateSummary(
+        supplierAnalytics,
+        productAnalytics,
+        weightTotals,
+      ),
       topSuppliersByWeight: this.getTopResults(supplierAnalytics, 'max', limit),
       bottomSuppliersByWeight: this.getTopResults(
         supplierAnalytics,
@@ -124,98 +148,56 @@ export class AnalyticsService {
     }
   }
 
-  async getDateRangeAnalytics(
-    startDate: string,
-    endDate: string,
+  /**
+   * Current inventory snapshot derived from the authoritative Product.stock
+   * field (kept in sync atomically by StockReconciliationService). This is a
+   * point-in-time value and intentionally NOT scoped by a date range.
+   */
+  async getInventorySummary(
+    lowStockThreshold: number = 10,
+  ): Promise<InventorySummaryResponse> {
+    const threshold =
+      Number.isFinite(lowStockThreshold) && lowStockThreshold > 0
+        ? lowStockThreshold
+        : 0
 
-    type: 'purchases' | 'expenses' | 'both' = 'both',
-  ): Promise<DateRangeAnalytics> {
-    this.validateDateRange(startDate, endDate)
+    const products = await this.productRepository.find({
+      fields: ['id', 'name', 'stock'],
+    })
 
-    const [supplierAnalytics, productAnalytics] = await Promise.all([
-      this.getSupplierAnalytics(startDate, endDate, type),
-      this.getProductAnalytics(startDate, endDate, type),
-    ])
+    let totalStock = 0
+    let inStockCount = 0
+    let outOfStockCount = 0
+    const lowStockProducts: LowStockProduct[] = []
+
+    for (const product of products) {
+      const stock = product.stock ?? 0
+      totalStock += stock
+      if (stock > 0) {
+        inStockCount += 1
+        if (threshold > 0 && stock <= threshold) {
+          lowStockProducts.push({
+            productId: product.id ?? 0,
+            productName: product.name,
+            stock,
+          })
+        }
+      } else {
+        outOfStockCount += 1
+      }
+    }
+
+    lowStockProducts.sort((a, b) => a.stock - b.stock)
 
     return {
-      topSuppliers: this.getTopResults(supplierAnalytics, 'max', 10),
-      bottomSuppliers: this.getTopResults(supplierAnalytics, 'min', 10),
-      topProducts: this.getTopResults(productAnalytics, 'max', 10),
-      bottomProducts: this.getTopResults(productAnalytics, 'min', 10),
-      summary: this.calculateSummary(supplierAnalytics, productAnalytics),
+      totalStock,
+      productCount: products.length,
+      inStockCount,
+      outOfStockCount,
+      lowStockCount: lowStockProducts.length,
+      lowStockThreshold: threshold,
+      lowStockProducts,
     }
-  }
-
-  async getTopSuppliers(
-    startDate: string,
-    endDate: string,
-    limit: number = 10,
-  ): Promise<SupplierAnalytics[]> {
-    this.validateDateRange(startDate, endDate)
-    const analytics = await this.getSupplierAnalytics(
-      startDate,
-      endDate,
-      'both',
-    )
-    return this.getTopResults(analytics, 'max', limit)
-  }
-
-  async getTopProducts(
-    startDate: string,
-    endDate: string,
-    limit: number = 10,
-  ): Promise<ProductAnalytics[]> {
-    this.validateDateRange(startDate, endDate)
-    const analytics = await this.getProductAnalytics(startDate, endDate, 'both')
-    return this.getTopResults(analytics, 'max', limit)
-  }
-
-  async getProductsByTransactionCount(
-    startDate: string,
-    endDate: string,
-    limit: number = 10,
-  ): Promise<ProductAnalytics[]> {
-    this.validateDateRange(startDate, endDate)
-    const analytics = await this.getProductAnalytics(startDate, endDate, 'both')
-    return this.getTopByTransactions(analytics, 'max', limit)
-  }
-
-  async getProductsWithLeastTransactions(
-    startDate: string,
-    endDate: string,
-    limit: number = 10,
-  ): Promise<ProductAnalytics[]> {
-    this.validateDateRange(startDate, endDate)
-    const analytics = await this.getProductAnalytics(startDate, endDate, 'both')
-    return this.getTopByTransactions(analytics, 'min', limit)
-  }
-
-  async getSuppliersByTransactionCount(
-    startDate: string,
-    endDate: string,
-    limit: number = 10,
-  ): Promise<SupplierAnalytics[]> {
-    this.validateDateRange(startDate, endDate)
-    const analytics = await this.getSupplierAnalytics(
-      startDate,
-      endDate,
-      'both',
-    )
-    return this.getTopByTransactions(analytics, 'max', limit)
-  }
-
-  async getSuppliersWithLeastTransactions(
-    startDate: string,
-    endDate: string,
-    limit: number = 10,
-  ): Promise<SupplierAnalytics[]> {
-    this.validateDateRange(startDate, endDate)
-    const analytics = await this.getSupplierAnalytics(
-      startDate,
-      endDate,
-      'both',
-    )
-    return this.getTopByTransactions(analytics, 'min', limit)
   }
 
   private async getSupplierAnalytics(
@@ -383,12 +365,13 @@ export class AnalyticsService {
   private calculateSummary(
     supplierAnalytics: SupplierAnalytics[],
     productAnalytics: ProductAnalytics[],
-  ): {
-    totalSuppliers: number
-    totalProducts: number
-    totalWeight: number
-    totalTransactions: number
-  } {
+    weightTotals: {
+      purchaseWeight: number
+      expenseWeight: number
+      purchaseCount: number
+      expenseCount: number
+    },
+  ): AnalyticsSummary {
     // Only reduce on ONE of the analytics arrays (e.g., products) to avoid double-counting
     // the same transaction's weight and count since both arrays are derived
     // from the exact same base of detail records.
@@ -400,7 +383,78 @@ export class AnalyticsService {
         (sum, p) => sum + p.transactionCount,
         0,
       ),
+      purchaseCount: weightTotals.purchaseCount,
+      expenseCount: weightTotals.expenseCount,
+      totalPurchaseWeight: weightTotals.purchaseWeight,
+      totalExpenseWeight: weightTotals.expenseWeight,
+      pendingWeight: weightTotals.purchaseWeight - weightTotals.expenseWeight,
     }
+  }
+
+  /**
+   * Sums detail weight (kg) for purchases ("Compra") and expenses ("Gasto")
+   * separately in the given range, so the dashboard can show outstanding
+   * (pending) weight = purchases - expenses.
+   */
+  private async getWeightTotalsByType(
+    startDate: string,
+    endDate: string,
+    type: 'purchases' | 'expenses' | 'both',
+  ): Promise<{
+    purchaseWeight: number
+    expenseWeight: number
+    purchaseCount: number
+    expenseCount: number
+  }> {
+    const dateFilter = this.createDateFilter(startDate, endDate)
+    const sumWeights = (rows: { weight_kg?: number }[]) =>
+      rows.reduce(
+        (sum, r) => sum + (r.weight_kg && r.weight_kg > 0 ? r.weight_kg : 0),
+        0,
+      )
+
+    let purchaseWeight = 0
+    let expenseWeight = 0
+    let purchaseCount = 0
+    let expenseCount = 0
+
+    if (type === 'purchases' || type === 'both') {
+      const purchasesInRange = await this.purchaseRepository.find({
+        where: { date: dateFilter },
+        fields: ['id'],
+      })
+      const purchaseIds = purchasesInRange
+        .map(p => p.id)
+        .filter((id): id is number => id != null)
+      purchaseCount = purchaseIds.length
+      if (purchaseIds.length > 0) {
+        const details = await this.purchaseDetailsRepository.find({
+          where: { purchaseId: { inq: purchaseIds } },
+          fields: ['weight_kg'],
+        })
+        purchaseWeight = sumWeights(details)
+      }
+    }
+
+    if (type === 'expenses' || type === 'both') {
+      const expensesInRange = await this.expenseRepository.find({
+        where: { date: dateFilter },
+        fields: ['id'],
+      })
+      const expenseIds = expensesInRange
+        .map(e => e.id)
+        .filter((id): id is number => id != null)
+      expenseCount = expenseIds.length
+      if (expenseIds.length > 0) {
+        const details = await this.expenseDetailsRepository.find({
+          where: { expenseId: { inq: expenseIds } },
+          fields: ['weight_kg'],
+        })
+        expenseWeight = sumWeights(details)
+      }
+    }
+
+    return { purchaseWeight, expenseWeight, purchaseCount, expenseCount }
   }
 
   private getTopResults<T extends { totalWeight: number }>(

@@ -1,13 +1,14 @@
 import { service } from '@loopback/core'
 import { get, param } from '@loopback/rest'
+import { Roles, requireRoles } from '../../../auth'
 import {
   AnalyticsService,
   DashboardSummaryResponse,
-  DateRangeAnalytics,
-  SupplierAnalytics,
-  ProductAnalytics,
+  InventorySummaryResponse,
 } from '../../../services/analytics.service'
 
+// Dashboard/analytics: solo Oficina y Admin (Operador no tiene acceso)
+@requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class GeneralReportsController {
   constructor(
     @service(AnalyticsService)
@@ -30,83 +31,10 @@ export class GeneralReportsController {
     )
   }
 
-  @get('/analytics/date-range')
-  async getDateRangeAnalytics(
-    @param.query.string('startDate') startDate: string,
-    @param.query.string('endDate') endDate: string,
-    @param.query.string('type')
-    type: 'purchases' | 'expenses' | 'both' = 'both',
-  ): Promise<DateRangeAnalytics> {
-    return this.analyticsService.getDateRangeAnalytics(startDate, endDate, type)
-  }
-
-  @get('/analytics/suppliers/top')
-  async getTopSuppliers(
-    @param.query.string('startDate') startDate: string,
-    @param.query.string('endDate') endDate: string,
-    @param.query.number('limit') limit: number = 10,
-  ): Promise<SupplierAnalytics[]> {
-    return this.analyticsService.getTopSuppliers(startDate, endDate, limit)
-  }
-
-  @get('/analytics/products/top')
-  async getTopProducts(
-    @param.query.string('startDate') startDate: string,
-    @param.query.string('endDate') endDate: string,
-    @param.query.number('limit') limit: number = 10,
-  ): Promise<ProductAnalytics[]> {
-    return this.analyticsService.getTopProducts(startDate, endDate, limit)
-  }
-
-  @get('/analytics/products/most-transactions')
-  async getProductsByTransactionCount(
-    @param.query.string('startDate') startDate: string,
-    @param.query.string('endDate') endDate: string,
-    @param.query.number('limit') limit: number = 10,
-  ): Promise<ProductAnalytics[]> {
-    return this.analyticsService.getProductsByTransactionCount(
-      startDate,
-      endDate,
-      limit,
-    )
-  }
-
-  @get('/analytics/products/least-transactions')
-  async getProductsWithLeastTransactions(
-    @param.query.string('startDate') startDate: string,
-    @param.query.string('endDate') endDate: string,
-    @param.query.number('limit') limit: number = 10,
-  ): Promise<ProductAnalytics[]> {
-    return this.analyticsService.getProductsWithLeastTransactions(
-      startDate,
-      endDate,
-      limit,
-    )
-  }
-
-  @get('/analytics/suppliers/most-transactions')
-  async getSuppliersByTransactionCount(
-    @param.query.string('startDate') startDate: string,
-    @param.query.string('endDate') endDate: string,
-    @param.query.number('limit') limit: number = 10,
-  ): Promise<SupplierAnalytics[]> {
-    return this.analyticsService.getSuppliersByTransactionCount(
-      startDate,
-      endDate,
-      limit,
-    )
-  }
-
-  @get('/analytics/suppliers/least-transactions')
-  async getSuppliersWithLeastTransactions(
-    @param.query.string('startDate') startDate: string,
-    @param.query.string('endDate') endDate: string,
-    @param.query.number('limit') limit: number = 10,
-  ): Promise<SupplierAnalytics[]> {
-    return this.analyticsService.getSuppliersWithLeastTransactions(
-      startDate,
-      endDate,
-      limit,
-    )
+  @get('/analytics/inventory-summary')
+  async getInventorySummary(
+    @param.query.number('lowStockThreshold') lowStockThreshold: number = 10,
+  ): Promise<InventorySummaryResponse> {
+    return this.analyticsService.getInventorySummary(lowStockThreshold)
   }
 }

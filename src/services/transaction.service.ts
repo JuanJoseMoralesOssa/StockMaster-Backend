@@ -2,6 +2,11 @@ import { /* inject, */ BindingScope, injectable, service } from '@loopback/core'
 import { HttpErrors } from '@loopback/rest'
 import { StockReconciliationService } from './stock-reconciliation.service'
 
+/** Redondea un peso a 3 decimales (la precisión de kg que persistimos). */
+export function roundWeightKg(n: number): number {
+  return Math.round(n * 1000) / 1000
+}
+
 type TransactionContext = unknown
 
 type TransactionOptions = {
@@ -148,10 +153,11 @@ export class TransactionService {
             )
 
             const detailPromises = details.map(async detail => {
+              const weightKg = roundWeightKg(detail.weight_kg)
               // 1. Crear el detalle
               await detailsRelation.create(
                 {
-                  weight_kg: detail.weight_kg,
+                  weight_kg: weightKg,
                   productId: detail.productId,
                   personId: detail.personId,
                 } as Partial<D>,
@@ -162,7 +168,7 @@ export class TransactionService {
               await this.stockReconciliationService.adjustStock(
                 transactionRepository.dataSource,
                 detail.productId,
-                detail.weight_kg,
+                weightKg,
                 isPurchase,
                 'apply',
                 tx,
@@ -342,6 +348,7 @@ export class TransactionService {
           if (toUpdate.length > 0) {
             const tableName = this.getTableName(detailsRelationName)
             const updatePromises = toUpdate.map(async ({ old, new: det }) => {
+              const newWeight = roundWeightKg(det.weight_kg)
               // Si cambia de producto
               if (old.productId !== det.productId) {
                 // Deshacer el viejo
@@ -357,14 +364,14 @@ export class TransactionService {
                 await this.stockReconciliationService.adjustStock(
                   transactionRepository.dataSource,
                   det.productId,
-                  det.weight_kg,
+                  newWeight,
                   isPurchase,
                   'apply',
                   tx,
                 )
               } else {
                 // Solo cambia el peso
-                const diff = det.weight_kg - old.weight_kg
+                const diff = roundWeightKg(newWeight - old.weight_kg)
                 if (diff !== 0) {
                   await this.stockReconciliationService.adjustStock(
                     transactionRepository.dataSource,
@@ -379,7 +386,7 @@ export class TransactionService {
 
               return transactionRepository.dataSource.execute(
                 `UPDATE ${tableName} SET weight_kg = $1, productId = $2, personId = $3 WHERE id = $4`,
-                [det.weight_kg, det.productId, det.personId, det.id],
+                [newWeight, det.productId, det.personId, det.id],
                 { transaction: tx },
               )
             })
@@ -389,9 +396,10 @@ export class TransactionService {
           // 7. OPERACIÓN: Creaciones
           if (toCreate.length > 0) {
             const createPromises = toCreate.map(async det => {
+              const weightKg = roundWeightKg(det.weight_kg)
               await detailsRelation.create(
                 {
-                  weight_kg: det.weight_kg,
+                  weight_kg: weightKg,
                   productId: det.productId,
                   personId: det.personId,
                 } as Partial<D>,
@@ -401,7 +409,7 @@ export class TransactionService {
               await this.stockReconciliationService.adjustStock(
                 transactionRepository.dataSource,
                 det.productId,
-                det.weight_kg,
+                weightKg,
                 isPurchase,
                 'apply',
                 tx,
@@ -636,6 +644,9 @@ export class TransactionService {
     isPurchase: boolean,
   ): Promise<TDetail> {
     try {
+      if (updatedDetail.weight_kg != null) {
+        updatedDetail.weight_kg = roundWeightKg(updatedDetail.weight_kg)
+      }
       return await this.runInTransaction(
         detailsRepository.dataSource,
         async (tx: TransactionContext) => {
@@ -768,6 +779,9 @@ export class TransactionService {
   ): Promise<TDetail> {
     try {
       this.validateDetailForCreate(newDetail)
+      if (newDetail.weight_kg != null) {
+        newDetail.weight_kg = roundWeightKg(newDetail.weight_kg)
+      }
 
       return await this.runInTransaction(
         parentRepository.dataSource,

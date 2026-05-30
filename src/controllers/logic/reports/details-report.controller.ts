@@ -1,5 +1,6 @@
 import { service } from '@loopback/core'
 import { get, param } from '@loopback/rest'
+import { Roles, requireRoles } from '../../../auth'
 import {
   TransactionDetailPersonProduct,
   TransactionDetailProduct,
@@ -7,6 +8,8 @@ import {
 } from '../../../models'
 import { TransactionQueryService } from '../../../services/transaction-query.service'
 
+// Reportes detallados del dashboard: solo Oficina y Admin
+@requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class DetailsReportsController {
   constructor(
     @service(TransactionQueryService)
@@ -51,6 +54,22 @@ export class DetailsReportsController {
       personId,
       startDate,
       endDate,
+    )
+  }
+
+  /** Drill-down: historial de un proveedor para un producto en un rango de fechas. */
+  @get('/reports/details/supplier/{supplierId}/product/{productId}')
+  async getSupplierProductDetails(
+    @param.path.number('supplierId') supplierId: number,
+    @param.path.number('productId') productId: number,
+    @param.query.string('startDate') startDate: string,
+    @param.query.string('endDate') endDate: string,
+  ): Promise<Array<{date: string; weight_kg: number; type: 'Compra' | 'Gasto'}>> {
+    return this.transactionQueryService.getSupplierProductDetails(
+      supplierId,
+      productId,
+      new Date(startDate),
+      new Date(endDate),
     )
   }
 }

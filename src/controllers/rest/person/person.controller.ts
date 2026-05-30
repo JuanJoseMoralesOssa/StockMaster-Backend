@@ -122,6 +122,54 @@ export class PersonController {
     return this.personRepository.find(newFilter)
   }
 
+  @get('/people/filtered')
+  @response(200, {
+    description: 'Array of filtered Person model instances with pagination',
+    content: {
+      'application/json': {
+        schema: {
+          type: 'object',
+          properties: {
+            count: { type: 'number' },
+            data: {
+              type: 'array',
+              items: getModelSchemaRef(Person, { includeRelations: true }),
+            },
+            page: { type: 'number' },
+            limit: { type: 'number' },
+          },
+        },
+      },
+    },
+  })
+  async findFiltered(
+    @param.query.string('name') name?: string,
+    @param.query.number('page') page: number = 1,
+    @param.query.number('limit') limit: number = 10,
+  ): Promise<Pagination<Person>> {
+    const trimmedName = name?.trim()
+    const where: Where<Person> = trimmedName
+      ? { name: { ilike: `%${trimmedName}%` } }
+      : {}
+
+    const [data, count] = await Promise.all([
+      this.personRepository.find({
+        where,
+        order: ['name ASC'],
+        skip: (page - 1) * limit,
+        limit,
+      }),
+      this.personRepository.count(where),
+    ])
+
+    return new Pagination<Person>({
+      count: count.count,
+      data,
+      page,
+      limit,
+    })
+  }
+
   @patch('/people')
   @response(200, {
     description: 'Person PATCH success count',

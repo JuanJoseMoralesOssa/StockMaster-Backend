@@ -32,6 +32,15 @@ if (require.main === module) {
         // useful when used with OpenAPI-to-GraphQL to locate your application
         setServersFromRequest: true,
       },
+      // CORS: restringir a los orígenes del frontend. En prod, definir
+      // FRONTEND_ORIGIN (coma-separado). Default: orígenes de Vite en dev.
+      cors: {
+        origin: process.env.FRONTEND_ORIGIN
+          ? process.env.FRONTEND_ORIGIN.split(',').map(o => o.trim())
+          : ['http://localhost:5173', 'http://127.0.0.1:5173'],
+        credentials: true,
+        maxAge: 86400,
+      },
     },
   }
   main(config).catch(err => {

@@ -25,7 +25,6 @@ import {
   ExpenseWithTotalRepository,
 } from '../../../repositories'
 import { TransactionService } from '../../../services'
-// import {requireAuth, requireAuthAndRoles} from '../auth';
 
 export class ExpenseController {
   constructor(

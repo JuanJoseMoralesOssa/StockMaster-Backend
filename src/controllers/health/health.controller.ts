@@ -1,3 +1,4 @@
+import { authenticate } from '@loopback/authentication'
 import { inject } from '@loopback/core'
 import {
   Request,
@@ -35,6 +36,7 @@ const HEALTH_RESPONSE: ResponseObject = {
 export class HealthController {
   constructor(@inject(RestBindings.Http.REQUEST) private req: Request) {}
 
+  @authenticate.skip()
   @get('/health')
   @response(200, HEALTH_RESPONSE)
   health(): object {

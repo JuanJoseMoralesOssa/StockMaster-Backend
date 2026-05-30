@@ -1,3 +1,4 @@
+import { authenticate } from '@loopback/authentication'
 import { inject, service } from '@loopback/core'
 import {
   get,
@@ -24,6 +25,7 @@ export class AuthControllerController {
    * @description This method allows a user to sign in using their email and password.
    * It returns the user instance if the credentials are valid.
    */
+  @authenticate.skip()
   @post('/sign-in')
   @response(200, {
     description: 'User sign-in with credentials (email and password)',
