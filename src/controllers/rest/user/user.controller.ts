@@ -20,6 +20,10 @@ import {
   response,
 } from '@loopback/rest'
 import { Roles, requireRoles } from '../../../auth'
+import {
+  normalizePagination,
+  paginationConfig,
+} from '../../../config/pagination'
 import { Pagination, User } from '../../../models'
 import { UserRepository } from '../../../repositories'
 import { SecurityService } from '../../../services'
@@ -92,9 +96,10 @@ export class UserController {
   })
   async find(
     @param.filter(User) filter?: Filter<User>,
-    @param.query.number('page') page: number = 1,
-    @param.query.number('limit') limit: number = 10,
+    @param.query.number('page') page: number = paginationConfig.DEFAULT_PAGE,
+    @param.query.number('limit') limit: number = paginationConfig.DEFAULT_LIMIT,
   ): Promise<Pagination<User>> {
+    const pagination = normalizePagination(page, limit)
     const users = await this.userRepository.find({
       ...filter,
       fields: {
@@ -104,15 +109,15 @@ export class UserController {
         role: true,
         password: false,
       },
-      skip: (page - 1) * limit,
-      limit: limit,
+      skip: pagination.skip,
+      limit: pagination.limit,
     })
     const count = await this.userRepository.count(filter?.where)
     return new Pagination<User>({
       count: count.count,
       data: users,
-      page: page,
-      limit: limit,
+      page: pagination.page,
+      limit: pagination.limit,
     })
   }
 
@@ -140,9 +145,10 @@ export class UserController {
     @param.query.string('name') name?: string,
     @param.query.string('email') email?: string,
     @param.query.string('role') role?: string,
-    @param.query.number('page') page: number = 1,
-    @param.query.number('limit') limit: number = 10,
+    @param.query.number('page') page: number = paginationConfig.DEFAULT_PAGE,
+    @param.query.number('limit') limit: number = paginationConfig.DEFAULT_LIMIT,
   ): Promise<Pagination<User>> {
+    const pagination = normalizePagination(page, limit)
     const conditions: Where<User>[] = []
     const trimmedName = name?.trim()
     const trimmedEmail = email?.trim()
@@ -162,8 +168,8 @@ export class UserController {
           role: true,
           password: false,
         },
-        skip: (page - 1) * limit,
-        limit,
+        skip: pagination.skip,
+        limit: pagination.limit,
       }),
       this.userRepository.count(where),
     ])
@@ -171,8 +177,8 @@ export class UserController {
     return new Pagination<User>({
       count: count.count,
       data: users,
-      page,
-      limit,
+      page: pagination.page,
+      limit: pagination.limit,
     })
   }
 

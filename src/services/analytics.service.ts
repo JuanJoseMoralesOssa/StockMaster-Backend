@@ -1,5 +1,6 @@
+import { BindingScope, injectable } from '@loopback/core'
 import { repository } from '@loopback/repository'
-import { HttpErrors } from '@loopback/rest'
+import { normalizeLimit } from '../config/pagination'
 import {
   ExpenseDetailsRepository,
   ExpenseRepository,
@@ -8,6 +9,7 @@ import {
   PurchaseDetailsRepository,
   PurchaseRepository,
 } from '../repositories'
+import { validateDateRange as validateAnalyticsDateRange } from './date-validation.utils'
 
 export interface SupplierAnalytics {
   personId: number
@@ -82,8 +84,6 @@ export interface InventorySummaryResponse {
   lowStockProducts: LowStockProduct[]
 }
 
-import { injectable, BindingScope } from '@loopback/core'
-
 @injectable({ scope: BindingScope.TRANSIENT })
 export class AnalyticsService {
   constructor(
@@ -109,6 +109,7 @@ export class AnalyticsService {
     limit: number = 10,
   ): Promise<DashboardSummaryResponse> {
     this.validateDateRange(startDate, endDate)
+    const normalizedLimit = normalizeLimit(limit)
 
     const [supplierAnalytics, productAnalytics, weightTotals] =
       await Promise.all([
@@ -123,27 +124,35 @@ export class AnalyticsService {
         productAnalytics,
         weightTotals,
       ),
-      topSuppliersByWeight: this.getTopResults(supplierAnalytics, 'max', limit),
+      topSuppliersByWeight: this.getTopResults(
+        supplierAnalytics,
+        'max',
+        normalizedLimit,
+      ),
       bottomSuppliersByWeight: this.getTopResults(
         supplierAnalytics,
         'min',
-        limit,
+        normalizedLimit,
       ),
-      topProductsByWeight: this.getTopResults(productAnalytics, 'max', limit),
+      topProductsByWeight: this.getTopResults(
+        productAnalytics,
+        'max',
+        normalizedLimit,
+      ),
       bottomProductsByWeight: this.getTopResults(
         productAnalytics,
         'min',
-        limit,
+        normalizedLimit,
       ),
       mostActiveSuppliers: this.getTopByTransactions(
         supplierAnalytics,
         'max',
-        limit,
+        normalizedLimit,
       ),
       mostTransactedProducts: this.getTopByTransactions(
         productAnalytics,
         'max',
-        limit,
+        normalizedLimit,
       ),
     }
   }
@@ -495,48 +504,7 @@ export class AnalyticsService {
   }
 
   private validateDateRange(startDate: string, endDate: string): void {
-    if (!startDate || !endDate) {
-      throw new HttpErrors.BadRequest('Both startDate and endDate are required')
-    }
-
-    // Validate date format (YYYY-MM-DD)
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/
-    if (!dateRegex.test(startDate)) {
-      throw new HttpErrors.BadRequest(
-        'Invalid startDate format. Use YYYY-MM-DD',
-      )
-    }
-    if (!dateRegex.test(endDate)) {
-      throw new HttpErrors.BadRequest('Invalid endDate format. Use YYYY-MM-DD')
-    }
-
-    // Validate date values
-    const start = new Date(startDate)
-    const end = new Date(endDate)
-
-    if (isNaN(start.getTime())) {
-      throw new HttpErrors.BadRequest('Invalid startDate value')
-    }
-    if (isNaN(end.getTime())) {
-      throw new HttpErrors.BadRequest('Invalid endDate value')
-    }
-
-    if (start > end) {
-      throw new HttpErrors.BadRequest(
-        'startDate must be before or equal to endDate',
-      )
-    }
-
-    // Validate date range is not too large (optional business rule)
-    const maxDaysRange = 365 // 1 year
-    const daysDiff = Math.ceil(
-      (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24),
-    )
-    if (daysDiff > maxDaysRange) {
-      throw new HttpErrors.BadRequest(
-        `Date range cannot exceed ${maxDaysRange} days`,
-      )
-    }
+    validateAnalyticsDateRange(startDate, endDate)
   }
 
   /**

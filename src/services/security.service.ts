@@ -75,7 +75,6 @@ export class SecurityService {
       const secret = securityConfig.JWT_SECRET
       return jwt.verify(token, secret) as TokenPayload
     } catch (error: unknown) {
-      console.error('Error verifying token:', error)
       if (error instanceof jwt.TokenExpiredError) {
         throw new HttpErrors.Unauthorized('Token has expired')
       } else if (error instanceof jwt.JsonWebTokenError) {

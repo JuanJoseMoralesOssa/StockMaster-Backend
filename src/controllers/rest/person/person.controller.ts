@@ -18,6 +18,11 @@ import {
   requestBody,
   response,
 } from '@loopback/rest'
+import { Roles, requireRoles } from '../../../auth'
+import {
+  normalizePagination,
+  paginationConfig,
+} from '../../../config/pagination'
 import { Pagination, Person } from '../../../models'
 import {
   ExpenseDetailsRepository,
@@ -25,6 +30,8 @@ import {
   PurchaseDetailsRepository,
 } from '../../../repositories'
 
+// Personas: lectura y mutaciones para Oficina y Admin.
+@requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class PersonController {
   constructor(
     @repository(PersonRepository)
@@ -79,24 +86,25 @@ export class PersonController {
   })
   async find(
     @param.filter(Person) filter?: Filter<Person>,
-    @param.query.number('page') page: number = 1,
-    @param.query.number('limit') limit: number = 10,
+    @param.query.number('page') page: number = paginationConfig.DEFAULT_PAGE,
+    @param.query.number('limit') limit: number = paginationConfig.DEFAULT_LIMIT,
   ): Promise<Pagination<Person>> {
+    const pagination = normalizePagination(page, limit)
     const newFilter: Filter<Person> = {
       ...(filter ?? {}),
       order: ['name ASC'],
     }
     const people = await this.personRepository.find({
       ...newFilter,
-      skip: (page - 1) * limit,
-      limit: limit,
+      skip: pagination.skip,
+      limit: pagination.limit,
     })
     const count = await this.personRepository.count(filter?.where)
     return new Pagination<Person>({
       count: count.count,
       data: people,
-      page: page,
-      limit: limit,
+      page: pagination.page,
+      limit: pagination.limit,
     })
   }
 
@@ -144,9 +152,10 @@ export class PersonController {
   })
   async findFiltered(
     @param.query.string('name') name?: string,
-    @param.query.number('page') page: number = 1,
-    @param.query.number('limit') limit: number = 10,
+    @param.query.number('page') page: number = paginationConfig.DEFAULT_PAGE,
+    @param.query.number('limit') limit: number = paginationConfig.DEFAULT_LIMIT,
   ): Promise<Pagination<Person>> {
+    const pagination = normalizePagination(page, limit)
     const trimmedName = name?.trim()
     const where: Where<Person> = trimmedName
       ? { name: { ilike: `%${trimmedName}%` } }
@@ -156,8 +165,8 @@ export class PersonController {
       this.personRepository.find({
         where,
         order: ['name ASC'],
-        skip: (page - 1) * limit,
-        limit,
+        skip: pagination.skip,
+        limit: pagination.limit,
       }),
       this.personRepository.count(where),
     ])
@@ -165,8 +174,8 @@ export class PersonController {
     return new Pagination<Person>({
       count: count.count,
       data,
-      page,
-      limit,
+      page: pagination.page,
+      limit: pagination.limit,
     })
   }
 
@@ -282,5 +291,4 @@ export class PersonController {
     }
     await this.personRepository.deleteById(id)
   }
-
 }

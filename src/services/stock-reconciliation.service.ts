@@ -60,42 +60,18 @@ export class StockReconciliationService {
     mode: StockMutationMode,
     tx: TransactionContext,
   ): Promise<void> {
-    await dataSource.execute(
-      `UPDATE product SET stock = COALESCE(stock, 0) ${operator} $1 WHERE id = $2`,
+    // Single round-trip: update stock and read the new balance atomically.
+    // Using RETURNING eliminates the separate SELECT and the race where a
+    // concurrent detail could change the balance between the two statements.
+    const updateResult = await dataSource.execute(
+      `UPDATE product SET stock = COALESCE(stock, 0) ${operator} $1 WHERE id = $2 RETURNING stock`,
       [weightKg, productId],
       { transaction: tx },
     )
 
-    await this.recordKardexMovement(
-      dataSource,
-      productId,
-      weightKg,
-      operator,
-      isPurchase,
-      mode,
-      tx,
-    )
-  }
-
-  private async recordKardexMovement(
-    dataSource: DataSourceWithTransactions,
-    productId: number,
-    weightKg: number,
-    operator: '+' | '-',
-    isPurchase: boolean,
-    mode: StockMutationMode,
-    tx: TransactionContext,
-  ): Promise<void> {
+    const balance = this.extractProductStock(updateResult)
     const input = operator === '+' ? weightKg : 0
     const output = operator === '-' ? weightKg : 0
-
-    const stockResult = await dataSource.execute(
-      'SELECT COALESCE(stock, 0) as stock FROM product WHERE id = $1',
-      [productId],
-      { transaction: tx },
-    )
-
-    const balance = this.extractProductStock(stockResult)
 
     await this.kardexRepository.create(
       {

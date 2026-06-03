@@ -18,6 +18,10 @@ import {
   requestBody,
   response,
 } from '@loopback/rest'
+import {
+  normalizePagination,
+  paginationConfig,
+} from '../../../config/pagination'
 import { Pagination, Product } from '../../../models'
 import {
   ExpenseDetailsRepository,
@@ -82,20 +86,21 @@ export class ProductController {
   })
   async find(
     @param.filter(Product) filter?: Filter<Product>,
-    @param.query.number('page') page: number = 1,
-    @param.query.number('limit') limit: number = 10,
+    @param.query.number('page') page: number = paginationConfig.DEFAULT_PAGE,
+    @param.query.number('limit') limit: number = paginationConfig.DEFAULT_LIMIT,
   ): Promise<Pagination<Product>> {
+    const pagination = normalizePagination(page, limit)
     const products = await this.productRepository.find({
       ...filter,
-      skip: (page - 1) * limit,
-      limit: limit,
+      skip: pagination.skip,
+      limit: pagination.limit,
     })
     const count = await this.productRepository.count(filter?.where)
     return new Pagination<Product>({
       count: count.count,
       data: products,
-      page: page,
-      limit: limit,
+      page: pagination.page,
+      limit: pagination.limit,
     })
   }
 

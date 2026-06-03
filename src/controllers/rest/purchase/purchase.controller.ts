@@ -19,6 +19,11 @@ import {
   requestBody,
   response,
 } from '@loopback/rest'
+import { Roles, requireRoles } from '../../../auth'
+import {
+  normalizePagination,
+  paginationConfig,
+} from '../../../config/pagination'
 import { Pagination, Purchase, PurchaseWithTotal } from '../../../models'
 import {
   PurchaseRepository,
@@ -26,6 +31,8 @@ import {
 } from '../../../repositories'
 import { TransactionService } from '../../../services'
 
+// Compras: lectura y mutaciones para Oficina y Admin.
+@requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class PurchaseController {
   constructor(
     @repository(PurchaseRepository)
@@ -99,21 +106,22 @@ export class PurchaseController {
   })
   async find(
     @param.filter(PurchaseWithTotal) filter?: Filter<PurchaseWithTotal>,
-    @param.query.number('page') page: number = 1,
-    @param.query.number('limit') limit: number = 10,
+    @param.query.number('page') page: number = paginationConfig.DEFAULT_PAGE,
+    @param.query.number('limit') limit: number = paginationConfig.DEFAULT_LIMIT,
   ): Promise<Pagination<PurchaseWithTotal>> {
+    const pagination = normalizePagination(page, limit)
     const purchases = await this.purchaseWithTotalRepository.find({
       ...filter,
       include: filter?.include ?? ['purchase_details'],
-      skip: (page - 1) * limit,
-      limit: limit,
+      skip: pagination.skip,
+      limit: pagination.limit,
     })
     const count = await this.purchaseWithTotalRepository.count(filter?.where)
     return new Pagination<PurchaseWithTotal>({
       count: count.count,
       data: purchases,
-      page: page,
-      limit: limit,
+      page: pagination.page,
+      limit: pagination.limit,
     })
   }
 
@@ -130,10 +138,12 @@ export class PurchaseController {
         },
       },
     })
-    purchase: Purchase,
-    @param.where(Purchase) where?: Where<Purchase>,
+    _purchase: Purchase,
+    @param.where(Purchase) _where?: Where<Purchase>,
   ): Promise<Count> {
-    return this.purchaseRepository.updateAll(purchase, where)
+    throw new HttpErrors.MethodNotAllowed(
+      'Bulk purchase updates are disabled. Use PUT /purchases/with-details.',
+    )
   }
 
   @get('/purchases/{id}')
@@ -195,7 +205,7 @@ export class PurchaseController {
     },
   })
   async replaceById(
-    @param.path.number('id') id: number,
+    @param.path.number('id') _id: number,
     @requestBody({
       content: {
         'application/json': {
@@ -206,12 +216,11 @@ export class PurchaseController {
         },
       },
     })
-    purchase: Omit<Purchase, 'id'>,
+    _purchase: Omit<Purchase, 'id'>,
   ): Promise<PurchaseWithTotal> {
-    await this.purchaseRepository.replaceById(id, purchase)
-    return this.purchaseWithTotalRepository.findById(id, {
-      include: ['purchase_details'],
-    })
+    throw new HttpErrors.MethodNotAllowed(
+      'Replacing purchases is disabled. Use PUT /purchases/with-details.',
+    )
   }
 
   @del('/purchases/{id}')
@@ -354,36 +363,28 @@ export class PurchaseController {
       }>
     },
   ): Promise<PurchaseWithTotal> {
-    try {
-      // Usar el TransactionService para manejar la lógica compleja
-      await this.transactionService.updateWithDetails<
-        Purchase,
-        {
-          id?: number
-          weight_kg: number
-          productId: number
-          personId: number
-        }
-      >(
-        {
-          id: purchaseData.id,
-          version: purchaseData.version,
-          date: purchaseData.date,
-          details: purchaseData.purchaseDetails,
-        },
-        this.purchaseRepository,
-        'purchase_details',
-        true,
-      )
-      return await this.purchaseWithTotalRepository.findById(purchaseData.id, {
-        include: ['purchase_details'],
-      })
-    } catch (error) {
-      if (error && (error as { statusCode?: number }).statusCode) throw error
-      throw new HttpErrors.BadRequest(
-        `Error updating purchase with details: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      )
-    }
+    await this.transactionService.updateWithDetails<
+      Purchase,
+      {
+        id?: number
+        weight_kg: number
+        productId: number
+        personId: number
+      }
+    >(
+      {
+        id: purchaseData.id,
+        version: purchaseData.version,
+        date: purchaseData.date,
+        details: purchaseData.purchaseDetails,
+      },
+      this.purchaseRepository,
+      'purchase_details',
+      true,
+    )
+    return this.purchaseWithTotalRepository.findById(purchaseData.id, {
+      include: ['purchase_details'],
+    })
   }
 
   @get('/purchases/filtered')
@@ -413,9 +414,10 @@ export class PurchaseController {
     @param.query.string('endDate') endDate?: string,
     @param.query.number('personId') personId?: number,
     @param.query.number('productId') productId?: number,
-    @param.query.number('page') page: number = 1,
-    @param.query.number('limit') limit: number = 10,
+    @param.query.number('page') page: number = paginationConfig.DEFAULT_PAGE,
+    @param.query.number('limit') limit: number = paginationConfig.DEFAULT_LIMIT,
   ): Promise<Pagination<PurchaseWithTotal>> {
+    const pagination = normalizePagination(page, limit)
     // Validar fechas si se proporcionan
     if (startDate) {
       this.transactionService.validateDate(startDate)
@@ -430,15 +432,15 @@ export class PurchaseController {
         endDate,
         personId,
         productId,
-        page,
-        limit,
+        pagination.page,
+        pagination.limit,
       )
 
     return new Pagination<PurchaseWithTotal>({
       count,
       data,
-      page,
-      limit,
+      page: pagination.page,
+      limit: pagination.limit,
     })
   }
 }

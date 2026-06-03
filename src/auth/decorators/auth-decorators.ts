@@ -18,7 +18,6 @@ export const requireRoles = (...roles: string[]) => {
   return (
     target: Object,
     propertyKey?: string | symbol,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _descriptor?: PropertyDescriptor,
   ): void => {
     if (propertyKey === undefined) {
@@ -26,7 +25,12 @@ export const requireRoles = (...roles: string[]) => {
       Reflect.defineMetadata(REQUIRED_ROLES_METADATA, roles, target)
     } else {
       // Decorador de método
-      Reflect.defineMetadata(REQUIRED_ROLES_METADATA, roles, target, propertyKey)
+      Reflect.defineMetadata(
+        REQUIRED_ROLES_METADATA,
+        roles,
+        target,
+        propertyKey,
+      )
     }
   }
 }

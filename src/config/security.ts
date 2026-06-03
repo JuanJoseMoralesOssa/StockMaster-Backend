@@ -9,6 +9,12 @@ if (!rawJwtSecret && NODE_ENV === 'production') {
   )
 }
 
+if (!rawJwtSecret && NODE_ENV !== 'production' && NODE_ENV !== 'test') {
+  console.warn(
+    'JWT_SECRET is not set. Using an insecure development-only default secret.',
+  )
+}
+
 export const securityConfig = {
   // En desarrollo se permite un valor por defecto; en producción es obligatorio configurarlo
   JWT_SECRET: rawJwtSecret ?? 'default_secret',

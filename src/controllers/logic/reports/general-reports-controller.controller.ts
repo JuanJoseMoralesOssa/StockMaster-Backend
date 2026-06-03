@@ -1,6 +1,7 @@
 import { service } from '@loopback/core'
 import { get, param } from '@loopback/rest'
 import { Roles, requireRoles } from '../../../auth'
+import { normalizeLimit, paginationConfig } from '../../../config/pagination'
 import {
   AnalyticsService,
   DashboardSummaryResponse,
@@ -21,13 +22,13 @@ export class GeneralReportsController {
     @param.query.string('endDate') endDate: string,
     @param.query.string('type')
     type: 'purchases' | 'expenses' | 'both' = 'both',
-    @param.query.number('limit') limit: number = 10,
+    @param.query.number('limit') limit: number = paginationConfig.DEFAULT_LIMIT,
   ): Promise<DashboardSummaryResponse> {
     return this.analyticsService.getDashboardSummary(
       startDate,
       endDate,
       type,
-      limit,
+      normalizeLimit(limit),
     )
   }
 

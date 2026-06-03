@@ -1,3 +1,4 @@
+import { BindingScope, injectable } from '@loopback/core'
 import { repository } from '@loopback/repository'
 import { HttpErrors } from '@loopback/rest'
 import {
@@ -47,8 +48,6 @@ type ExpenseDetailWithRelations = ExpenseDetails & {
   expense?: Pick<Expense, 'date'>
   person?: Pick<Person, 'name'>
 }
-
-import { injectable, BindingScope } from '@loopback/core'
 
 @injectable({ scope: BindingScope.TRANSIENT })
 export class TransactionQueryService {
@@ -385,29 +384,37 @@ export class TransactionQueryService {
     productId: number,
     startDate: Date,
     endDate: Date,
-  ): Promise<Array<{date: string; weight_kg: number; type: 'Compra' | 'Gasto'}>> {
+  ): Promise<
+    Array<{ date: string; weight_kg: number; type: 'Compra' | 'Gasto' }>
+  > {
     const supplier = await this.personRepository.findOne({
-      where: {id: supplierId},
+      where: { id: supplierId },
       include: [
         {
           relation: 'purchases',
           scope: {
-            where: {date: {between: [startDate, endDate]}},
-            include: [{relation: 'purchase_details', scope: {where: {productId}}}],
+            where: { date: { between: [startDate, endDate] } },
+            include: [
+              { relation: 'purchase_details', scope: { where: { productId } } },
+            ],
           },
         },
         {
           relation: 'expenses',
           scope: {
-            where: {date: {between: [startDate, endDate]}},
-            include: [{relation: 'expense_details', scope: {where: {productId}}}],
+            where: { date: { between: [startDate, endDate] } },
+            include: [
+              { relation: 'expense_details', scope: { where: { productId } } },
+            ],
           },
         },
       ],
     })
 
     if (!supplier) {
-      throw new HttpErrors.NotFound(`Proveedor con ID ${supplierId} no encontrado`)
+      throw new HttpErrors.NotFound(
+        `Proveedor con ID ${supplierId} no encontrado`,
+      )
     }
 
     const purchaseRows =

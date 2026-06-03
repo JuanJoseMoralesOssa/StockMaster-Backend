@@ -19,6 +19,11 @@ import {
   requestBody,
   response,
 } from '@loopback/rest'
+import { Roles, requireRoles } from '../../../auth'
+import {
+  normalizePagination,
+  paginationConfig,
+} from '../../../config/pagination'
 import { Expense, ExpenseWithTotal, Pagination } from '../../../models'
 import {
   ExpenseRepository,
@@ -26,6 +31,8 @@ import {
 } from '../../../repositories'
 import { TransactionService } from '../../../services'
 
+// Gastos: lectura y mutaciones para Oficina y Admin.
+@requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class ExpenseController {
   constructor(
     @repository(ExpenseRepository)
@@ -36,7 +43,6 @@ export class ExpenseController {
     public transactionService: TransactionService,
   ) {}
 
-  // @requireAuthAndRoles('admin', 'manager')  // Solo admin y manager pueden crear
   @post('/expenses')
   @response(200, {
     description: 'Expense model instance',
@@ -144,7 +150,6 @@ export class ExpenseController {
     return this.expenseRepository.count(where)
   }
 
-  // @requireAuth() // Cualquier usuario autenticado puede leer
   @get('/expenses')
   @response(200, {
     description: 'Paginated list of Expense model instances',
@@ -172,27 +177,25 @@ export class ExpenseController {
   })
   async find(
     @param.filter(ExpenseWithTotal) filter?: Filter<ExpenseWithTotal>,
-    @param.query.number('page') page: number = 1,
-    @param.query.number('limit') limit: number = 10,
+    @param.query.number('page') page: number = paginationConfig.DEFAULT_PAGE,
+    @param.query.number('limit') limit: number = paginationConfig.DEFAULT_LIMIT,
   ): Promise<Pagination<ExpenseWithTotal>> {
+    const pagination = normalizePagination(page, limit)
     const expenses = await this.expenseWithTotalRepository.find({
       ...filter,
       include: filter?.include ?? ['expense_details'],
-      skip: (page - 1) * limit,
-      limit: limit,
+      skip: pagination.skip,
+      limit: pagination.limit,
     })
     const count = await this.expenseWithTotalRepository.count(filter?.where)
     return new Pagination<ExpenseWithTotal>({
       count: count.count,
       data: expenses,
-      page: page,
-      limit: limit,
+      page: pagination.page,
+      limit: pagination.limit,
     })
   }
 
-  // O usar por separado si prefieres
-  // @requireAuth()
-  // @requireRoles('admin')
   @patch('/expenses')
   @response(200, {
     description: 'Expense PATCH success count',
@@ -206,10 +209,12 @@ export class ExpenseController {
         },
       },
     })
-    expense: Expense,
-    @param.where(Expense) where?: Where<Expense>,
+    _expense: Expense,
+    @param.where(Expense) _where?: Where<Expense>,
   ): Promise<Count> {
-    return this.expenseRepository.updateAll(expense, where)
+    throw new HttpErrors.MethodNotAllowed(
+      'Bulk expense updates are disabled. Use PUT /expenses/with-details.',
+    )
   }
 
   @get('/expenses/{id}')
@@ -307,39 +312,30 @@ export class ExpenseController {
       }>
     },
   ): Promise<ExpenseWithTotal> {
-    try {
-      // Usar el TransactionService para manejar la lógica compleja
-      await this.transactionService.updateWithDetails<
-        Expense,
-        {
-          id?: number
-          weight_kg: number
-          productId: number
-          personId: number
-        }
-      >(
-        {
-          id: expenseData.id,
-          version: expenseData.version,
-          date: expenseData.date,
-          details: expenseData.expenseDetails,
-        },
-        this.expenseRepository,
-        'expense_details',
-        false,
-      )
-      return await this.expenseWithTotalRepository.findById(expenseData.id, {
-        include: ['expense_details'],
-      })
-    } catch (error) {
-      if (error && (error as { statusCode?: number }).statusCode) throw error
-      throw new HttpErrors.BadRequest(
-        `Error updating expense with details: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      )
-    }
+    await this.transactionService.updateWithDetails<
+      Expense,
+      {
+        id?: number
+        weight_kg: number
+        productId: number
+        personId: number
+      }
+    >(
+      {
+        id: expenseData.id,
+        version: expenseData.version,
+        date: expenseData.date,
+        details: expenseData.expenseDetails,
+      },
+      this.expenseRepository,
+      'expense_details',
+      false,
+    )
+    return this.expenseWithTotalRepository.findById(expenseData.id, {
+      include: ['expense_details'],
+    })
   }
 
-  // @requireAuthAndRoles('admin') // Solo admin puede eliminar
   @del('/expenses/{id}')
   @response(204, {
     description: 'Expense DELETE success',
@@ -380,9 +376,10 @@ export class ExpenseController {
     @param.query.string('endDate') endDate?: string,
     @param.query.number('personId') personId?: number,
     @param.query.number('productId') productId?: number,
-    @param.query.number('page') page: number = 1,
-    @param.query.number('limit') limit: number = 10,
+    @param.query.number('page') page: number = paginationConfig.DEFAULT_PAGE,
+    @param.query.number('limit') limit: number = paginationConfig.DEFAULT_LIMIT,
   ): Promise<Pagination<ExpenseWithTotal>> {
+    const pagination = normalizePagination(page, limit)
     // Validar fechas si se proporcionan
     if (startDate) {
       this.transactionService.validateDate(startDate)
@@ -397,15 +394,15 @@ export class ExpenseController {
         endDate,
         personId,
         productId,
-        page,
-        limit,
+        pagination.page,
+        pagination.limit,
       )
 
     return new Pagination<ExpenseWithTotal>({
       count,
       data,
-      page,
-      limit,
+      page: pagination.page,
+      limit: pagination.limit,
     })
   }
 }
