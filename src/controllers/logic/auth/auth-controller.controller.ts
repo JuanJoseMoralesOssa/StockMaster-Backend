@@ -9,7 +9,7 @@ import {
 } from '@loopback/rest'
 import { SecurityBindings, UserProfile } from '@loopback/security'
 import { requireAuth } from '../../../auth'
-import { Credentials, LoginResult, User, WhoAmIResponse } from '../../../models'
+import { Credentials, LoginResult, WhoAmIResponse } from '../../../models'
 import { SecurityService } from '../../../services'
 
 export class AuthControllerController {
@@ -21,15 +21,15 @@ export class AuthControllerController {
   /**
    * User sign-in with credentials (email and password)
    * @param credentials User credentials
-   * @returns User instance
+   * @returns Login result with user data and JWT token
    * @description This method allows a user to sign in using their email and password.
-   * It returns the user instance if the credentials are valid.
+   * It returns the user data and token if the credentials are valid.
    */
   @authenticate.skip()
   @post('/sign-in')
   @response(200, {
     description: 'User sign-in with credentials (email and password)',
-    content: { 'application/json': { schema: getModelSchemaRef(User) } },
+    content: { 'application/json': { schema: getModelSchemaRef(LoginResult) } },
   })
   async identifyUser(
     @requestBody({

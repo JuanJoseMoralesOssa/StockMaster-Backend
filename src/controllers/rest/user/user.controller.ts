@@ -216,7 +216,10 @@ export class UserController {
     @param.filter(User, { exclude: 'where' })
     filter?: FilterExcludingWhere<User>,
   ): Promise<User> {
-    return this.userRepository.findById(id, filter)
+    return this.userRepository.findById(id, {
+      ...filter,
+      fields: { ...(filter?.fields as object | undefined), password: false },
+    })
   }
 
   @requireRoles(Roles.ADMIN)

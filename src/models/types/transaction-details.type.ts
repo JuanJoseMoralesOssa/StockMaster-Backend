@@ -1,3 +1,10 @@
+export interface TransactionDetailRequestDTO {
+  id?: number
+  weight_kg: number
+  productId: number
+  personId: number
+}
+
 export interface TransactionDetailPersonProduct {
   date: string
   weight_kg: number
@@ -8,14 +15,14 @@ export interface TransactionDetailProduct {
   date: string
   weight_kg: number
   type: 'Compra' | 'Gasto'
-  personId: number // Opcional para incluir información del proveedor
-  personName?: string // Opcional para mostrar el nombre del proveedor
+  personId: number
+  personName?: string
 }
 
 export interface TransactionDetailPerson {
   date: string
   weight_kg: number
   type: 'Compra' | 'Gasto'
-  productId: number // Opcional para incluir información del proveedor
-  personName?: string // Opcional para mostrar el nombre del proveedor
+  productId: number
+  personName?: string
 }

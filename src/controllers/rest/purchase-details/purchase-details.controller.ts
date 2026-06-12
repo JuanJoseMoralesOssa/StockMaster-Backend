@@ -19,21 +19,23 @@ import {
   requestBody,
   response,
 } from '@loopback/rest'
+import { Roles, requireRoles } from '../../../auth'
 import { PurchaseDetails } from '../../../models'
 import {
   PurchaseDetailsRepository,
   PurchaseRepository,
 } from '../../../repositories'
-import { TransactionService } from '../../../services'
+import { DetailMutationService, TransactionKind } from '../../../services'
 
+@requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class PurchaseDetailsController {
   constructor(
     @repository(PurchaseDetailsRepository)
     public purchaseDetailsRepository: PurchaseDetailsRepository,
     @repository(PurchaseRepository)
     public purchaseRepository: PurchaseRepository,
-    @service(TransactionService)
-    public transactionService: TransactionService,
+    @service(DetailMutationService)
+    public detailMutationService: DetailMutationService,
   ) {}
 
   @post('/purchase-details')
@@ -55,17 +57,19 @@ export class PurchaseDetailsController {
       },
     })
     purchaseDetails: Omit<PurchaseDetails, 'id'>,
+    @param.query.number('parentVersion') parentVersion?: number,
   ): Promise<PurchaseDetails> {
     if (purchaseDetails.purchaseId == null) {
       throw new HttpErrors.BadRequest('purchaseId is required')
     }
 
-    return this.transactionService.createSingleDetail(
+    return this.detailMutationService.createSingleDetail(
       purchaseDetails.purchaseId,
       purchaseDetails,
-      this.purchaseRepository,
-      'purchase_details',
-      true,
+      id => this.purchaseRepository.purchase_details(id),
+      this.purchaseRepository.dataSource,
+      TransactionKind.PURCHASE,
+      parentVersion,
     )
   }
 
@@ -147,6 +151,7 @@ export class PurchaseDetailsController {
   })
   async updateById(
     @param.path.number('id') id: number,
+    @param.query.number('parentVersion') parentVersion: number | undefined,
     @requestBody({
       content: {
         'application/json': {
@@ -156,11 +161,12 @@ export class PurchaseDetailsController {
     })
     purchaseDetails: Partial<PurchaseDetails>,
   ): Promise<PurchaseDetails> {
-    return this.transactionService.updateSingleDetail(
+    return this.detailMutationService.updateSingleDetail(
       id,
       purchaseDetails,
       this.purchaseDetailsRepository,
-      true, // isPurchase = true
+      TransactionKind.PURCHASE,
+      parentVersion,
     )
   }
 
@@ -175,6 +181,7 @@ export class PurchaseDetailsController {
   })
   async replaceById(
     @param.path.number('id') id: number,
+    @param.query.number('parentVersion') parentVersion: number | undefined,
     @requestBody({
       content: {
         'application/json': {
@@ -187,11 +194,12 @@ export class PurchaseDetailsController {
     })
     purchaseDetails: Omit<PurchaseDetails, 'id'>,
   ): Promise<PurchaseDetails> {
-    return this.transactionService.updateSingleDetail(
+    return this.detailMutationService.updateSingleDetail(
       id,
       purchaseDetails,
       this.purchaseDetailsRepository,
-      true, // isPurchase = true
+      TransactionKind.PURCHASE,
+      parentVersion,
     )
   }
 
@@ -199,11 +207,15 @@ export class PurchaseDetailsController {
   @response(204, {
     description: 'PurchaseDetails DELETE success',
   })
-  async deleteById(@param.path.number('id') id: number): Promise<void> {
-    await this.transactionService.deleteSingleDetail(
+  async deleteById(
+    @param.path.number('id') id: number,
+    @param.query.number('parentVersion') parentVersion: number | undefined,
+  ): Promise<void> {
+    await this.detailMutationService.deleteSingleDetail(
       id,
       this.purchaseDetailsRepository,
-      true, // isPurchase = true
+      TransactionKind.PURCHASE,
+      parentVersion,
     )
   }
 }

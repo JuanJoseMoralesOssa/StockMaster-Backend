@@ -10,6 +10,7 @@ import {
   get,
   getModelSchemaRef,
   getWhereSchemaFor,
+  HttpErrors,
   param,
   patch,
   post,
@@ -19,7 +20,8 @@ import { Roles, requireRoles } from '../../../auth'
 import { Kardex, Product } from '../../../models'
 import { ProductRepository } from '../../../repositories'
 
-// Kardex vía producto: lectura Oficina+Admin; las mutaciones (abajo) solo Admin.
+// Kardex vía producto: solo lectura. Las mutaciones están bloqueadas; el
+// kardex lo genera el sistema a través de las operaciones de compra/gasto.
 @requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class ProductKardexController {
   constructor(
@@ -54,9 +56,8 @@ export class ProductKardexController {
       },
     },
   })
-  @requireRoles(Roles.ADMIN)
   async create(
-    @param.path.number('id') id: typeof Product.prototype.id,
+    @param.path.number('id') _id: typeof Product.prototype.id,
     @requestBody({
       content: {
         'application/json': {
@@ -68,9 +69,11 @@ export class ProductKardexController {
         },
       },
     })
-    kardex: Omit<Kardex, 'id'>,
+    _kardex: Omit<Kardex, 'id'>,
   ): Promise<Kardex> {
-    return this.productRepository.kardexes(id).create(kardex)
+    throw new HttpErrors.MethodNotAllowed(
+      'Creating kardex entries manually is disabled. Entries are system-generated.',
+    )
   }
 
   @patch('/products/{id}/kardexes', {
@@ -81,9 +84,8 @@ export class ProductKardexController {
       },
     },
   })
-  @requireRoles(Roles.ADMIN)
   async patch(
-    @param.path.number('id') id: number,
+    @param.path.number('id') _id: number,
     @requestBody({
       content: {
         'application/json': {
@@ -91,11 +93,13 @@ export class ProductKardexController {
         },
       },
     })
-    kardex: Partial<Kardex>,
+    _kardex: Partial<Kardex>,
     @param.query.object('where', getWhereSchemaFor(Kardex))
-    where?: Where<Kardex>,
+    _where?: Where<Kardex>,
   ): Promise<Count> {
-    return this.productRepository.kardexes(id).patch(kardex, where)
+    throw new HttpErrors.MethodNotAllowed(
+      'Updating kardex entries is disabled. Entries are append-only.',
+    )
   }
 
   @del('/products/{id}/kardexes', {
@@ -106,12 +110,13 @@ export class ProductKardexController {
       },
     },
   })
-  @requireRoles(Roles.ADMIN)
   async delete(
-    @param.path.number('id') id: number,
+    @param.path.number('id') _id: number,
     @param.query.object('where', getWhereSchemaFor(Kardex))
-    where?: Where<Kardex>,
+    _where?: Where<Kardex>,
   ): Promise<Count> {
-    return this.productRepository.kardexes(id).delete(where)
+    throw new HttpErrors.MethodNotAllowed(
+      'Deleting kardex entries is disabled. Entries are append-only.',
+    )
   }
 }

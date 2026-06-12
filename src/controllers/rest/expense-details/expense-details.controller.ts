@@ -19,21 +19,23 @@ import {
   requestBody,
   response,
 } from '@loopback/rest'
+import { Roles, requireRoles } from '../../../auth'
 import { ExpenseDetails } from '../../../models'
 import {
   ExpenseDetailsRepository,
   ExpenseRepository,
 } from '../../../repositories'
-import { TransactionService } from '../../../services'
+import { DetailMutationService, TransactionKind } from '../../../services'
 
+@requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class ExpenseDetailsController {
   constructor(
     @repository(ExpenseDetailsRepository)
     public expenseDetailsRepository: ExpenseDetailsRepository,
     @repository(ExpenseRepository)
     public expenseRepository: ExpenseRepository,
-    @service(TransactionService)
-    public transactionService: TransactionService,
+    @service(DetailMutationService)
+    public detailMutationService: DetailMutationService,
   ) {}
 
   @post('/expense-details')
@@ -55,17 +57,19 @@ export class ExpenseDetailsController {
       },
     })
     expenseDetails: Omit<ExpenseDetails, 'id'>,
+    @param.query.number('parentVersion') parentVersion?: number,
   ): Promise<ExpenseDetails> {
     if (expenseDetails.expenseId == null) {
       throw new HttpErrors.BadRequest('expenseId is required')
     }
 
-    return this.transactionService.createSingleDetail(
+    return this.detailMutationService.createSingleDetail(
       expenseDetails.expenseId,
       expenseDetails,
-      this.expenseRepository,
-      'expense_details',
-      false,
+      id => this.expenseRepository.expense_details(id),
+      this.expenseRepository.dataSource,
+      TransactionKind.EXPENSE,
+      parentVersion,
     )
   }
 
@@ -147,6 +151,7 @@ export class ExpenseDetailsController {
   })
   async updateById(
     @param.path.number('id') id: number,
+    @param.query.number('parentVersion') parentVersion: number | undefined,
     @requestBody({
       content: {
         'application/json': {
@@ -156,11 +161,12 @@ export class ExpenseDetailsController {
     })
     expenseDetails: Partial<ExpenseDetails>,
   ): Promise<ExpenseDetails> {
-    return this.transactionService.updateSingleDetail(
+    return this.detailMutationService.updateSingleDetail(
       id,
       expenseDetails,
       this.expenseDetailsRepository,
-      false, // isPurchase = false
+      TransactionKind.EXPENSE,
+      parentVersion,
     )
   }
 
@@ -175,6 +181,7 @@ export class ExpenseDetailsController {
   })
   async replaceById(
     @param.path.number('id') id: number,
+    @param.query.number('parentVersion') parentVersion: number | undefined,
     @requestBody({
       content: {
         'application/json': {
@@ -187,11 +194,12 @@ export class ExpenseDetailsController {
     })
     expenseDetails: Omit<ExpenseDetails, 'id'>,
   ): Promise<ExpenseDetails> {
-    return this.transactionService.updateSingleDetail(
+    return this.detailMutationService.updateSingleDetail(
       id,
       expenseDetails,
       this.expenseDetailsRepository,
-      false, // isPurchase = false
+      TransactionKind.EXPENSE,
+      parentVersion,
     )
   }
 
@@ -199,11 +207,15 @@ export class ExpenseDetailsController {
   @response(204, {
     description: 'ExpenseDetails DELETE success',
   })
-  async deleteById(@param.path.number('id') id: number): Promise<void> {
-    await this.transactionService.deleteSingleDetail(
+  async deleteById(
+    @param.path.number('id') id: number,
+    @param.query.number('parentVersion') parentVersion: number | undefined,
+  ): Promise<void> {
+    await this.detailMutationService.deleteSingleDetail(
       id,
       this.expenseDetailsRepository,
-      false, // isPurchase = false
+      TransactionKind.EXPENSE,
+      parentVersion,
     )
   }
 }

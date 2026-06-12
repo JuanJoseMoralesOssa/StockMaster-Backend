@@ -29,7 +29,8 @@ import {
   ExpenseRepository,
   ExpenseWithTotalRepository,
 } from '../../../repositories'
-import { TransactionService } from '../../../services'
+import { ExpenseTransactionService } from '../../../services'
+import { validateDate } from '../../../services/date-validation.utils'
 
 // Gastos: lectura y mutaciones para Oficina y Admin.
 @requireRoles(Roles.OFFICE, Roles.ADMIN)
@@ -39,8 +40,8 @@ export class ExpenseController {
     public expenseRepository: ExpenseRepository,
     @repository(ExpenseWithTotalRepository)
     public expenseWithTotalRepository: ExpenseWithTotalRepository,
-    @service(TransactionService)
-    public transactionService: TransactionService,
+    @service(ExpenseTransactionService)
+    public expenseTransactionService: ExpenseTransactionService,
   ) {}
 
   @post('/expenses')
@@ -63,16 +64,13 @@ export class ExpenseController {
     })
     expense: Omit<Expense, 'id'>,
   ): Promise<ExpenseWithTotal> {
-    this.transactionService.validateDate(expense.date)
+    validateDate(expense.date)
     const createdExpense = await this.expenseRepository.create(expense)
     return this.expenseWithTotalRepository.findById(createdExpense.id!, {
       include: ['expense_details'],
     })
   }
 
-  /**
-   * Crea un gasto con sus detalles en una transacción atómica
-   */
   @post('/expenses/with-details')
   @response(200, {
     description: 'Expense created with details',
@@ -117,25 +115,11 @@ export class ExpenseController {
       }>
     },
   ): Promise<ExpenseWithTotal> {
-    const details = expense.expenseDetails ?? []
-    const newExpense = {
-      date: expense.date,
-      details: details,
-    } as Partial<Expense> & {
-      details?: Array<{
-        weight_kg: number
-        productId: number
-        personId: number
-      }>
-    }
-    const createdExpense = await this.transactionService.createWithDetails<
-      Expense,
-      {
-        weight_kg: number
-        productId: number
-        personId: number
-      }
-    >(newExpense, this.expenseRepository, 'expense_details', false)
+    const createdExpense =
+      await this.expenseTransactionService.createWithDetails({
+        date: expense.date,
+        details: expense.expenseDetails,
+      })
     return this.expenseWithTotalRepository.findById(createdExpense.id!, {
       include: ['expense_details'],
     })
@@ -244,7 +228,7 @@ export class ExpenseController {
     },
   })
   async updateById(
-    @param.path.number('id') id: number,
+    @param.path.number('id') _id: number,
     @requestBody({
       content: {
         'application/json': {
@@ -252,17 +236,41 @@ export class ExpenseController {
         },
       },
     })
-    expense: Partial<Expense>,
+    _expense: Partial<Expense>,
   ): Promise<ExpenseWithTotal> {
-    await this.expenseRepository.updateById(id, expense)
-    return this.expenseWithTotalRepository.findById(id, {
-      include: ['expense_details'],
-    })
+    throw new HttpErrors.MethodNotAllowed(
+      'Direct expense updates are disabled (they bypass optimistic locking). Use PUT /expenses/with-details.',
+    )
   }
 
-  /**
-   * Actualiza un gasto con sus detalles (crear, actualizar, eliminar detalles) usando Server-Side Reconciliation
-   */
+  @put('/expenses/{id}')
+  @response(200, {
+    description: 'Expense PUT success',
+    content: {
+      'application/json': {
+        schema: getModelSchemaRef(ExpenseWithTotal, { includeRelations: true }),
+      },
+    },
+  })
+  async replaceById(
+    @param.path.number('id') _id: number,
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: getModelSchemaRef(Expense, {
+            title: 'ExpenseReplace',
+            exclude: ['id', 'version'],
+          }),
+        },
+      },
+    })
+    _expense: Omit<Expense, 'id'>,
+  ): Promise<ExpenseWithTotal> {
+    throw new HttpErrors.MethodNotAllowed(
+      'Replacing expenses is disabled. Use PUT /expenses/with-details.',
+    )
+  }
+
   @put('/expenses/with-details')
   @response(200, {
     description: 'Expense updated with details',
@@ -312,25 +320,12 @@ export class ExpenseController {
       }>
     },
   ): Promise<ExpenseWithTotal> {
-    await this.transactionService.updateWithDetails<
-      Expense,
-      {
-        id?: number
-        weight_kg: number
-        productId: number
-        personId: number
-      }
-    >(
-      {
-        id: expenseData.id,
-        version: expenseData.version,
-        date: expenseData.date,
-        details: expenseData.expenseDetails,
-      },
-      this.expenseRepository,
-      'expense_details',
-      false,
-    )
+    await this.expenseTransactionService.updateWithDetails({
+      id: expenseData.id,
+      version: expenseData.version,
+      date: expenseData.date,
+      details: expenseData.expenseDetails,
+    })
     return this.expenseWithTotalRepository.findById(expenseData.id, {
       include: ['expense_details'],
     })
@@ -341,12 +336,7 @@ export class ExpenseController {
     description: 'Expense DELETE success',
   })
   async deleteById(@param.path.number('id') id: number): Promise<void> {
-    await this.transactionService.deleteWithDetails(
-      id,
-      this.expenseRepository,
-      'expense_details',
-      false,
-    )
+    await this.expenseTransactionService.deleteWithDetails(id)
   }
 
   @get('/expenses/filtered')
@@ -380,13 +370,8 @@ export class ExpenseController {
     @param.query.number('limit') limit: number = paginationConfig.DEFAULT_LIMIT,
   ): Promise<Pagination<ExpenseWithTotal>> {
     const pagination = normalizePagination(page, limit)
-    // Validar fechas si se proporcionan
-    if (startDate) {
-      this.transactionService.validateDate(startDate)
-    }
-    if (endDate) {
-      this.transactionService.validateDate(endDate)
-    }
+    if (startDate) validateDate(startDate)
+    if (endDate) validateDate(endDate)
 
     const { data, count } =
       await this.expenseWithTotalRepository.findFilteredExpenses(

@@ -18,6 +18,7 @@ import {
   requestBody,
   response,
 } from '@loopback/rest'
+import { Roles, requireRoles } from '../../../auth'
 import {
   normalizePagination,
   paginationConfig,
@@ -30,6 +31,7 @@ import {
   PurchaseDetailsRepository,
 } from '../../../repositories'
 
+@requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class ProductController {
   constructor(
     @repository(ProductRepository)
@@ -142,7 +144,10 @@ export class ProductController {
     product: Product,
     @param.where(Product) where?: Where<Product>,
   ): Promise<Count> {
-    return this.productRepository.updateAll(product, where)
+    // stock is write-protected: only StockReconciliationService may change it.
+    const safeProduct: Partial<Product> = { ...product }
+    delete safeProduct.stock
+    return this.productRepository.updateAll(safeProduct, where)
   }
 
   @get('/products/{id}')
@@ -181,7 +186,10 @@ export class ProductController {
     })
     product: Partial<Product>,
   ): Promise<Product> {
-    await this.productRepository.updateById(id, product)
+    // stock is write-protected: only StockReconciliationService may change it.
+    const safeProduct: Partial<Product> = { ...product }
+    delete safeProduct.stock
+    await this.productRepository.updateById(id, safeProduct)
     return this.productRepository.findById(id, { include: [] })
   }
 
@@ -208,7 +216,13 @@ export class ProductController {
     })
     product: Omit<Product, 'id'>,
   ): Promise<Product> {
-    await this.productRepository.replaceById(id, product)
+    // stock is write-protected: only StockReconciliationService may change it.
+    const currentProduct = await this.productRepository.findById(id)
+    const safeProduct: Omit<Product, 'id'> = {
+      ...product,
+      stock: currentProduct.stock,
+    }
+    await this.productRepository.replaceById(id, safeProduct)
     return this.productRepository.findById(id, { include: [] })
   }
 

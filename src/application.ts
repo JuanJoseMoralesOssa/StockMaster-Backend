@@ -4,7 +4,7 @@ import {
   registerAuthenticationStrategy,
 } from '@loopback/authentication'
 import { BootMixin } from '@loopback/boot'
-import { ApplicationConfig } from '@loopback/core'
+import { ApplicationConfig, BindingScope } from '@loopback/core'
 import { RepositoryMixin } from '@loopback/repository'
 import { RestApplication } from '@loopback/rest'
 import {
@@ -16,6 +16,10 @@ import rateLimit from 'express-rate-limit'
 import path from 'path'
 import { JWTAuthStrategy } from './auth/jwt-strategy'
 import { MySequence } from './sequence'
+import {
+  createFormVisionProvider,
+  FORM_VISION_PROVIDER_BINDING,
+} from './services/form-extraction.provider'
 
 export { ApplicationConfig }
 
@@ -61,9 +65,11 @@ export class App extends BootMixin(
         limit: 20,
         standardHeaders: true,
         legacyHeaders: false,
-        skip: (req) => req.path !== '/sign-in',
+        skip: req => req.path !== '/sign-in',
         message: {
-          error: { message: 'Demasiados intentos. Inténtalo de nuevo más tarde.' },
+          error: {
+            message: 'Demasiados intentos. Inténtalo de nuevo más tarde.',
+          },
         },
       }),
     )
@@ -74,15 +80,21 @@ export class App extends BootMixin(
         limit: 60,
         standardHeaders: true,
         legacyHeaders: false,
-        skip: (req) => req.path !== '/purchases/extract',
+        skip: req => req.path !== '/purchases/extract',
         message: {
-          error: { message: 'Límite de escaneos alcanzado. Inténtalo más tarde.' },
+          error: {
+            message: 'Límite de escaneos alcanzado. Inténtalo más tarde.',
+          },
         },
       }),
     )
 
     registerAuthenticationStrategy(this, JWTAuthStrategy)
     this.component(AuthenticationComponent)
+
+    this.bind(FORM_VISION_PROVIDER_BINDING)
+      .toDynamicValue(() => createFormVisionProvider())
+      .inScope(BindingScope.SINGLETON)
 
     // Seguro por defecto: TODOS los endpoints exigen un JWT válido, salvo los
     // marcados con `@authenticate.skip()` (sign-in, health, ping). Las rutas con

@@ -29,6 +29,9 @@ export class ExpenseDetails extends Entity {
   @property({
     type: 'number',
     required: true,
+    jsonSchema: {
+      exclusiveMinimum: 0,
+    },
   })
   weight_kg: number
 

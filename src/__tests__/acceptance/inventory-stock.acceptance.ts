@@ -20,7 +20,7 @@ describe('InventoryStockFlow', function () {
   async function createPerson(tag: string): Promise<number> {
     const res = await client
       .post('/people')
-      .send({ name: `Person-${tag}`})
+      .send({ name: `Person-${tag}` })
       .expect(200)
     return res.body.id
   }
@@ -41,6 +41,7 @@ describe('InventoryStockFlow', function () {
   async function findLatestExpenseByDate(date: string): Promise<
     | {
         id?: number
+        version?: number
         expense_details?: Array<{ id?: number }>
       }
     | undefined
@@ -63,6 +64,7 @@ describe('InventoryStockFlow', function () {
   async function findLatestPurchaseByDate(date: string): Promise<
     | {
         id?: number
+        version?: number
         purchase_details?: Array<{ id?: number }>
       }
     | undefined
@@ -107,9 +109,7 @@ describe('InventoryStockFlow', function () {
       expect(expenseId).to.be.Number()
       expect(await getStock(productId)).to.equal(88)
 
-      await client
-        .delete(`/expenses/${expenseId}/expense-details`)
-        .expect(res => expect([200, 204]).to.containEql(res.status))
+      await client.delete(`/expenses/${expenseId}`).expect(204)
 
       expect(await getStock(productId)).to.equal(100)
       await client.get(`/expenses/${expenseId}`).expect(404)
@@ -144,6 +144,7 @@ describe('InventoryStockFlow', function () {
           : await findLatestExpenseByDate(date)
       expenseId = created?.id
       const detailId = created?.expense_details?.[0]?.id
+      let parentVersion = Number(created?.version ?? 1)
 
       expect(expenseId).to.be.Number()
       expect(detailId).to.be.Number()
@@ -151,19 +152,20 @@ describe('InventoryStockFlow', function () {
 
       await client
         .patch(`/expense-details/${detailId}`)
+        .query({ parentVersion })
         .send({ weight_kg: 15, productId, personId })
         .expect(res => expect([200, 204]).to.containEql(res.status))
+      parentVersion += 1
       expect(await getStock(productId)).to.equal(85)
 
       await client
         .patch(`/expense-details/${detailId}`)
+        .query({ parentVersion })
         .send({ weight_kg: 8, productId, personId })
         .expect(res => expect([200, 204]).to.containEql(res.status))
       expect(await getStock(productId)).to.equal(92)
 
-      await client
-        .delete(`/expenses/${expenseId}/expense-details`)
-        .expect(res => expect([200, 204]).to.containEql(res.status))
+      await client.delete(`/expenses/${expenseId}`).expect(204)
       expect(await getStock(productId)).to.equal(100)
     } finally {
       if (expenseId) {
@@ -199,9 +201,7 @@ describe('InventoryStockFlow', function () {
       expect(purchaseId).to.be.Number()
       expect(await getStock(productId)).to.equal(109)
 
-      await client
-        .delete(`/purchases/${purchaseId}/purchase-details`)
-        .expect(res => expect([200, 204]).to.containEql(res.status))
+      await client.delete(`/purchases/${purchaseId}`).expect(204)
 
       expect(await getStock(productId)).to.equal(100)
       await client.get(`/purchases/${purchaseId}`).expect(404)
@@ -236,6 +236,7 @@ describe('InventoryStockFlow', function () {
           : await findLatestPurchaseByDate(date)
       purchaseId = created?.id
       const detailId = created?.purchase_details?.[0]?.id
+      let parentVersion = Number(created?.version ?? 1)
 
       expect(purchaseId).to.be.Number()
       expect(detailId).to.be.Number()
@@ -243,19 +244,20 @@ describe('InventoryStockFlow', function () {
 
       await client
         .patch(`/purchase-details/${detailId}`)
+        .query({ parentVersion })
         .send({ weight_kg: 4, productId, personId })
         .expect(res => expect([200, 204]).to.containEql(res.status))
+      parentVersion += 1
       expect(await getStock(productId)).to.equal(104)
 
       await client
         .patch(`/purchase-details/${detailId}`)
+        .query({ parentVersion })
         .send({ weight_kg: 12, productId, personId })
         .expect(res => expect([200, 204]).to.containEql(res.status))
       expect(await getStock(productId)).to.equal(112)
 
-      await client
-        .delete(`/purchases/${purchaseId}/purchase-details`)
-        .expect(res => expect([200, 204]).to.containEql(res.status))
+      await client.delete(`/purchases/${purchaseId}`).expect(204)
       expect(await getStock(productId)).to.equal(100)
     } finally {
       if (purchaseId) {
@@ -283,6 +285,7 @@ describe('InventoryStockFlow', function () {
 
       await client
         .post('/expense-details')
+        .query({ parentVersion: Number(expenseRes.body?.version ?? 1) })
         .send({ weight_kg: 5, productId, personId, expenseId })
         .expect(res => expect([200, 204]).to.containEql(res.status))
 
@@ -313,6 +316,7 @@ describe('InventoryStockFlow', function () {
 
       await client
         .post('/purchase-details')
+        .query({ parentVersion: Number(purchaseRes.body?.version ?? 1) })
         .send({ weight_kg: 7, productId, personId, purchaseId })
         .expect(res => expect([200, 204]).to.containEql(res.status))
 
@@ -348,6 +352,14 @@ describe('InventoryStockFlow', function () {
       .expect(405)
   })
 
+  it('blocks nested bulk expense detail delete for stock consistency', async () => {
+    await client.delete('/expenses/999999/expense-details').expect(405)
+  })
+
+  it('blocks nested bulk purchase detail delete for stock consistency', async () => {
+    await client.delete('/purchases/999999/purchase-details').expect(405)
+  })
+
   it('returns 409 when deactivating product with transaction history', async () => {
     const tag = `product-refs-${Date.now()}`
     const date = '2026-02-16'
@@ -377,6 +389,22 @@ describe('InventoryStockFlow', function () {
       }
       await client.del(`/products/${productId}`).catch(() => undefined)
       await client.del(`/people/${personId}`).catch(() => undefined)
+    }
+  })
+
+  it('preserves stock when replacing product data', async () => {
+    const tag = `product-replace-${Date.now()}`
+    const productId = await createProduct(tag, 50)
+
+    try {
+      await client
+        .put(`/products/${productId}`)
+        .send({ name: `Product-${tag}-renamed` })
+        .expect(200)
+
+      expect(await getStock(productId)).to.equal(50)
+    } finally {
+      await client.del(`/products/${productId}`).catch(() => undefined)
     }
   })
 
@@ -412,12 +440,12 @@ describe('InventoryStockFlow', function () {
     }
   })
 
-
-  it('creates kardex movement on direct purchase detail creation', async () => {
+  it('records kardex rows for direct purchase detail create and update', async () => {
     const tag = `kardex-direct-${Date.now()}`
     const personId = await createPerson(tag)
     const productId = await createProduct(tag, 100)
     let purchaseId: number | undefined
+    let detailId: number | undefined
 
     try {
       const purchaseRes = await client
@@ -426,18 +454,42 @@ describe('InventoryStockFlow', function () {
         .expect(200)
       purchaseId = purchaseRes.body?.id
 
-      await client
+      const detailRes = await client
         .post('/purchase-details')
-        .send({ weight_kg: 4, productId, personId, purchaseId })
+        .query({ parentVersion: Number(purchaseRes.body?.version ?? 1) })
+        .send({ weight_kg: 10, productId, personId, purchaseId })
         .expect(res => expect([200, 204]).to.containEql(res.status))
+      detailId = detailRes.body?.id
 
-      const countRes = await client
-        .get(
-          `/kardexes/count?where=${encodeURIComponent(JSON.stringify({ productId }))}`,
-        )
+      await client
+        .patch(`/purchase-details/${detailId}`)
+        .query({ parentVersion: Number(purchaseRes.body?.version ?? 1) + 1 })
+        .send({ weight_kg: 4, productId, personId })
         .expect(200)
 
-      expect(Number(countRes.body.count ?? 0)).to.be.greaterThan(0)
+      const filter = encodeURIComponent(
+        JSON.stringify({ where: { productId }, order: ['id ASC'] }),
+      )
+      const kardexRes = await client
+        .get(`/kardexes?filter=${filter}&page=1&limit=10`)
+        .expect(200)
+
+      const rows = kardexRes.body.data
+      expect(rows.length).to.be.greaterThanOrEqual(2)
+      expect(rows[0]).to.containDeep({
+        input: 10,
+        output: 0,
+        balance: 110,
+        operation: 1,
+        productId,
+      })
+      expect(rows[1]).to.containDeep({
+        input: 0,
+        output: 6,
+        balance: 104,
+        operation: 2,
+        productId,
+      })
     } finally {
       if (purchaseId) {
         await client.del(`/purchases/${purchaseId}`).catch(() => undefined)
@@ -469,5 +521,4 @@ describe('InventoryStockFlow', function () {
   it('blocks manual kardex delete', async () => {
     await client.delete('/kardexes/1').expect(405)
   })
-
 }).timeout(30000)

@@ -1,6 +1,13 @@
 import { Entity, model, property, belongsTo } from '@loopback/repository'
 import { Product } from './product.model'
 
+export enum KardexOperation {
+  PurchaseApply = 1,
+  PurchaseUndo = 2,
+  ExpenseApply = 3,
+  ExpenseUndo = 4,
+}
+
 @model()
 export class Kardex extends Entity {
   @property({

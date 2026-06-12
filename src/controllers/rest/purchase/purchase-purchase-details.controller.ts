@@ -17,16 +17,18 @@ import {
   post,
   requestBody,
 } from '@loopback/rest'
+import { Roles, requireRoles } from '../../../auth'
 import { Purchase, PurchaseDetails } from '../../../models'
 import { PurchaseRepository } from '../../../repositories/purchase.repository'
-import { TransactionService } from '../../../services'
+import { DetailMutationService, TransactionKind } from '../../../services'
 
+@requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class PurchasePurchaseDetailsController {
   constructor(
     @repository(PurchaseRepository)
     protected purchaseRepository: PurchaseRepository,
-    @service(TransactionService)
-    public transactionService: TransactionService,
+    @service(DetailMutationService)
+    public detailMutationService: DetailMutationService,
   ) {}
 
   @get('/purchases/{id}/purchase-details', {
@@ -63,6 +65,7 @@ export class PurchasePurchaseDetailsController {
   })
   async create(
     @param.path.number('id') id: typeof Purchase.prototype.id,
+    @param.query.number('parentVersion') parentVersion: number | undefined,
     @requestBody({
       content: {
         'application/json': {
@@ -76,12 +79,13 @@ export class PurchasePurchaseDetailsController {
     })
     purchaseDetails: Omit<PurchaseDetails, 'id'>,
   ): Promise<PurchaseDetails> {
-    return this.transactionService.createSingleDetail(
+    return this.detailMutationService.createSingleDetail(
       id!,
       purchaseDetails,
-      this.purchaseRepository,
-      'purchase_details',
-      true, // isPurchase = true (it's a purchase)
+      purchaseId => this.purchaseRepository.purchase_details(purchaseId),
+      this.purchaseRepository.dataSource,
+      TransactionKind.PURCHASE,
+      parentVersion,
     )
   }
 
@@ -120,16 +124,12 @@ export class PurchasePurchaseDetailsController {
     },
   })
   async delete(
-    @param.path.number('id') id: number,
+    @param.path.number('id') _id: number,
     @param.query.object('where', getWhereSchemaFor(PurchaseDetails))
     _where?: Where<PurchaseDetails>,
   ): Promise<Count> {
-    await this.transactionService.deleteWithDetails(
-      id,
-      this.purchaseRepository,
-      'purchase_details',
-      true,
+    throw new HttpErrors.MethodNotAllowed(
+      'Nested detail deletion is disabled for stock consistency. Use DELETE /purchases/{id} to delete the whole purchase, or DELETE /purchase-details/{id} for one detail.',
     )
-    return { count: 1 }
   }
 }

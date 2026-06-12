@@ -1,0 +1,11 @@
+# Normalize line endings to LF in the repository; let the working tree use the
+# platform default on checkout. Prevents cross-platform CRLF/LF lint churn.
+* text=auto eol=lf
+
+# Binary assets must never be normalized.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary

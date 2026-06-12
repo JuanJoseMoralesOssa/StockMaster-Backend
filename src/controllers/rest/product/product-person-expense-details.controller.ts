@@ -10,14 +10,17 @@ import {
   get,
   getModelSchemaRef,
   getWhereSchemaFor,
+  HttpErrors,
   param,
   patch,
   post,
   requestBody,
 } from '@loopback/rest'
+import { Roles, requireRoles } from '../../../auth'
 import { Person, Product } from '../../../models'
 import { ProductRepository } from '../../../repositories'
 
+@requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class ProductPersonExpenseDetailsController {
   constructor(
     @repository(ProductRepository)
@@ -52,7 +55,7 @@ export class ProductPersonExpenseDetailsController {
     },
   })
   async create(
-    @param.path.number('id') id: typeof Product.prototype.id,
+    @param.path.number('id') _id: typeof Product.prototype.id,
     @requestBody({
       content: {
         'application/json': {
@@ -63,9 +66,11 @@ export class ProductPersonExpenseDetailsController {
         },
       },
     })
-    person: Omit<Person, 'id'>,
+    _person: Omit<Person, 'id'>,
   ): Promise<Person> {
-    return this.productRepository.people_expense_details(id).create(person)
+    throw new HttpErrors.MethodNotAllowed(
+      'Use POST /expenses/with-details to create expenses.',
+    )
   }
 
   @patch('/products/{id}/people-expense-details', {
@@ -77,7 +82,7 @@ export class ProductPersonExpenseDetailsController {
     },
   })
   async patch(
-    @param.path.number('id') id: number,
+    @param.path.number('id') _id: number,
     @requestBody({
       content: {
         'application/json': {
@@ -85,13 +90,13 @@ export class ProductPersonExpenseDetailsController {
         },
       },
     })
-    person: Partial<Person>,
+    _person: Partial<Person>,
     @param.query.object('where', getWhereSchemaFor(Person))
-    where?: Where<Person>,
+    _where?: Where<Person>,
   ): Promise<Count> {
-    return this.productRepository
-      .people_expense_details(id)
-      .patch(person, where)
+    throw new HttpErrors.MethodNotAllowed(
+      'Use PUT /expenses/with-details to update expenses.',
+    )
   }
 
   @del('/products/{id}/people-expense-details', {
@@ -103,10 +108,12 @@ export class ProductPersonExpenseDetailsController {
     },
   })
   async delete(
-    @param.path.number('id') id: number,
+    @param.path.number('id') _id: number,
     @param.query.object('where', getWhereSchemaFor(Person))
-    where?: Where<Person>,
+    _where?: Where<Person>,
   ): Promise<Count> {
-    return this.productRepository.people_expense_details(id).delete(where)
+    throw new HttpErrors.MethodNotAllowed(
+      'Use DELETE /expenses/{id} to delete expenses.',
+    )
   }
 }

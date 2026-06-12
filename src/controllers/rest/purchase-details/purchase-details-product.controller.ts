@@ -1,8 +1,10 @@
 import { repository } from '@loopback/repository'
 import { get, getModelSchemaRef, param } from '@loopback/rest'
+import { Roles, requireRoles } from '../../../auth'
 import { Product, PurchaseDetails } from '../../../models'
 import { PurchaseDetailsRepository } from '../../../repositories'
 
+@requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class PurchaseDetailsProductController {
   constructor(
     @repository(PurchaseDetailsRepository)

@@ -40,7 +40,6 @@ export class AuthorizeInterceptor implements Provider<Interceptor> {
   ) {
     // Verificar si el método requiere roles específicos
     const requiredRoles = this.getRequiredRoles(invocationCtx)
-
     if (requiredRoles && requiredRoles.length > 0) {
       // Obtener el usuario actual del contexto de seguridad
       const user = await invocationCtx.get(SecurityBindings.USER, {
@@ -83,10 +82,32 @@ export class AuthorizeInterceptor implements Provider<Interceptor> {
     )
     if (methodRoles) return methodRoles
 
-    // Fallback a metadata de clase (definida sobre el constructor)
-    const ctor = (invocationCtx.target as { constructor?: object })?.constructor
-    return ctor
-      ? Reflect.getMetadata(REQUIRED_ROLES_METADATA, ctor)
-      : undefined
+    // Fallback a metadata de clase. Depending on how LoopBack invokes a
+    // controller method, the target may be an instance, a prototype, or a
+    // constructor-like object, so check the likely class metadata homes.
+    const target = invocationCtx.target as object
+    const contextWithClass = invocationCtx as InvocationContext & {
+      targetClass?: object
+      targetType?: object
+    }
+    const ctor =
+      typeof target === 'function'
+        ? target
+        : (target as { constructor?: object }).constructor
+    const protoCtor = Object.getPrototypeOf(target)?.constructor
+    const candidates = [
+      target,
+      ctor,
+      protoCtor,
+      contextWithClass.targetClass,
+      contextWithClass.targetType,
+    ].filter((candidate): candidate is object => candidate != null)
+
+    for (const candidate of candidates) {
+      const roles = Reflect.getMetadata(REQUIRED_ROLES_METADATA, candidate)
+      if (roles) return roles
+    }
+
+    return undefined
   }
 }

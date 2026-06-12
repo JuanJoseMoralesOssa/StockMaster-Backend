@@ -10,14 +10,17 @@ import {
   get,
   getModelSchemaRef,
   getWhereSchemaFor,
+  HttpErrors,
   param,
   patch,
   post,
   requestBody,
 } from '@loopback/rest'
+import { Roles, requireRoles } from '../../../auth'
 import { Person, Purchase } from '../../../models'
 import { PurchaseRepository } from '../../../repositories/purchase.repository'
 
+@requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class PurchasePersonController {
   constructor(
     @repository(PurchaseRepository)
@@ -53,7 +56,7 @@ export class PurchasePersonController {
     },
   })
   async create(
-    @param.path.number('id') id: typeof Purchase.prototype.id,
+    @param.path.number('id') _id: typeof Purchase.prototype.id,
     @requestBody({
       content: {
         'application/json': {
@@ -64,9 +67,11 @@ export class PurchasePersonController {
         },
       },
     })
-    person: Omit<Person, 'id'>,
+    _person: Omit<Person, 'id'>,
   ): Promise<Person> {
-    return this.purchaseRepository.people(id).create(person)
+    throw new HttpErrors.MethodNotAllowed(
+      'Use POST /purchases/with-details to create purchases.',
+    )
   }
 
   @patch('/purchases/{id}/people', {
@@ -78,7 +83,7 @@ export class PurchasePersonController {
     },
   })
   async patch(
-    @param.path.number('id') id: number,
+    @param.path.number('id') _id: number,
     @requestBody({
       content: {
         'application/json': {
@@ -86,11 +91,13 @@ export class PurchasePersonController {
         },
       },
     })
-    person: Partial<Person>,
+    _person: Partial<Person>,
     @param.query.object('where', getWhereSchemaFor(Person))
-    where?: Where<Person>,
+    _where?: Where<Person>,
   ): Promise<Count> {
-    return this.purchaseRepository.people(id).patch(person, where)
+    throw new HttpErrors.MethodNotAllowed(
+      'Use PUT /purchases/with-details to update purchases.',
+    )
   }
 
   @del('/purchases/{id}/people', {
@@ -102,10 +109,12 @@ export class PurchasePersonController {
     },
   })
   async delete(
-    @param.path.number('id') id: number,
+    @param.path.number('id') _id: number,
     @param.query.object('where', getWhereSchemaFor(Person))
-    where?: Where<Person>,
+    _where?: Where<Person>,
   ): Promise<Count> {
-    return this.purchaseRepository.people(id).delete(where)
+    throw new HttpErrors.MethodNotAllowed(
+      'Use DELETE /purchases/{id} to delete purchases.',
+    )
   }
 }

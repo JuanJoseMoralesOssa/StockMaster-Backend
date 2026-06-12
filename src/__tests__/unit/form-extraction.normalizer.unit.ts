@@ -1,4 +1,4 @@
-import {expect} from '@loopback/testlab'
+import { expect } from '@loopback/testlab'
 import {
   LB_TO_KG,
   RawExtractionFields,
@@ -11,18 +11,20 @@ import {
 } from '../../services/form-extraction.normalizer'
 
 const PEOPLE = [
-  {id: 1, name: 'Juan Pérez'},
-  {id: 2, name: 'María Gómez'},
-  {id: 3, name: 'Carlos Rodríguez'},
+  { id: 1, name: 'Juan Pérez' },
+  { id: 2, name: 'María Gómez' },
+  { id: 3, name: 'Carlos Rodríguez' },
 ]
 
 const PRODUCTS = [
-  {id: 10, name: 'Piel'},
-  {id: 20, name: 'Sebo'},
-  {id: 30, name: 'Hueso'},
+  { id: 10, name: 'Piel' },
+  { id: 20, name: 'Sebo' },
+  { id: 30, name: 'Hueso' },
 ]
 
-function rawFields(overrides: Partial<RawExtractionFields> = {}): RawExtractionFields {
+function rawFields(
+  overrides: Partial<RawExtractionFields> = {},
+): RawExtractionFields {
   return {
     fecha: '14/12/2025',
     librasTotal: null,
@@ -108,17 +110,21 @@ describe('form-extraction normalizer', () => {
     })
 
     it('matches the Cebo alias to a Sebo product', () => {
-      expect(matchProduct('sebo', [{id: 99, name: 'Cebo'}])?.id).to.equal(99)
+      expect(matchProduct('sebo', [{ id: 99, name: 'Cebo' }])?.id).to.equal(99)
     })
 
     it('returns undefined when no product matches', () => {
-      expect(matchProduct('hueso', [{id: 1, name: 'Piel'}])).to.be.undefined()
+      expect(matchProduct('hueso', [{ id: 1, name: 'Piel' }])).to.be.undefined()
     })
   })
 
   describe('normalize', () => {
     it('builds one detail per present product and converts lb→kg', () => {
-      const raw = rawFields({pieles: 100, sebo: 10, recibiDelSr: 'Juan Pérez'})
+      const raw = rawFields({
+        pieles: 100,
+        sebo: 10,
+        recibiDelSr: 'Juan Pérez',
+      })
       const result = normalize(raw, PEOPLE, PRODUCTS)
 
       expect(result.details).to.have.length(2)
@@ -130,27 +136,39 @@ describe('form-extraction normalizer', () => {
     })
 
     it('skips blank product fields', () => {
-      const raw = rawFields({hueso: 5, recibiDelSr: 'Juan Pérez'})
+      const raw = rawFields({ hueso: 5, recibiDelSr: 'Juan Pérez' })
       const result = normalize(raw, PEOPLE, PRODUCTS)
       expect(result.details).to.have.length(1)
       expect(result.details[0].fieldName).to.equal('hueso')
     })
 
     it('passes the soft total check within tolerance', () => {
-      const raw = rawFields({pieles: 100, librasTotal: 100, recibiDelSr: 'Juan Pérez'})
+      const raw = rawFields({
+        pieles: 100,
+        librasTotal: 100,
+        recibiDelSr: 'Juan Pérez',
+      })
       const result = normalize(raw, PEOPLE, PRODUCTS)
       expect(result.totalWeightCheck.passed).to.be.true()
     })
 
     it('flags review when the form total disagrees with the sum', () => {
-      const raw = rawFields({pieles: 100, librasTotal: 250, recibiDelSr: 'Juan Pérez'})
+      const raw = rawFields({
+        pieles: 100,
+        librasTotal: 250,
+        recibiDelSr: 'Juan Pérez',
+      })
       const result = normalize(raw, PEOPLE, PRODUCTS)
       expect(result.totalWeightCheck.passed).to.be.false()
       expect(result.needsReview).to.be.true()
     })
 
     it('does not hard-fail when the total is absent', () => {
-      const raw = rawFields({pieles: 100, librasTotal: null, recibiDelSr: 'Juan Pérez'})
+      const raw = rawFields({
+        pieles: 100,
+        librasTotal: null,
+        recibiDelSr: 'Juan Pérez',
+      })
       const result = normalize(raw, PEOPLE, PRODUCTS)
       expect(result.totalWeightCheck.passed).to.be.true()
     })
@@ -174,10 +192,12 @@ describe('form-extraction normalizer', () => {
     })
 
     it('flags review when no products were detected', () => {
-      const raw = rawFields({recibiDelSr: 'Juan Pérez'})
+      const raw = rawFields({ recibiDelSr: 'Juan Pérez' })
       const result = normalize(raw, PEOPLE, PRODUCTS)
       expect(result.details).to.be.empty()
-      expect(result.reviewReasons).to.containEql('No se detectaron valores de productos')
+      expect(result.reviewReasons).to.containEql(
+        'No se detectaron valores de productos',
+      )
     })
   })
 })

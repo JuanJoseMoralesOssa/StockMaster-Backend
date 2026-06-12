@@ -33,15 +33,19 @@ export interface SupplierMatch {
   personId: number | undefined
   confidence: number
   needsReview: boolean
-  candidates: Array<{id: number; name: string; score: number}>
+  candidates: Array<{ id: number; name: string; score: number }>
 }
 
 export interface ExtractionResult {
-  date: {value: string | null; confidence: number; needsReview: boolean}
-  librasTotal: {value: number | null; confidence: number}
+  date: { value: string | null; confidence: number; needsReview: boolean }
+  librasTotal: { value: number | null; confidence: number }
   supplier: SupplierMatch
   details: ExtractedDetail[]
-  totalWeightCheck: {passed: boolean; formTotalLb: number | null; sumLb: number}
+  totalWeightCheck: {
+    passed: boolean
+    formTotalLb: number | null
+    sumLb: number
+  }
   needsReview: boolean
   reviewReasons: string[]
 }
@@ -99,20 +103,36 @@ export function supplierMatchScore(query: string, candidate: string): number {
 
 export function matchSupplier(
   rawName: string | null,
-  people: Array<{id: number; name: string}>,
+  people: Array<{ id: number; name: string }>,
 ): SupplierMatch {
   if (!rawName || rawName.trim() === '') {
-    return {rawName, personId: undefined, confidence: 0, needsReview: true, candidates: []}
+    return {
+      rawName,
+      personId: undefined,
+      confidence: 0,
+      needsReview: true,
+      candidates: [],
+    }
   }
 
   const scored = people
-    .map(p => ({id: p.id, name: p.name, score: supplierMatchScore(rawName, p.name)}))
+    .map(p => ({
+      id: p.id,
+      name: p.name,
+      score: supplierMatchScore(rawName, p.name),
+    }))
     .sort((a, b) => b.score - a.score)
     .slice(0, 3)
 
   const best = scored[0]
   if (!best) {
-    return {rawName, personId: undefined, confidence: 0, needsReview: true, candidates: []}
+    return {
+      rawName,
+      personId: undefined,
+      confidence: 0,
+      needsReview: true,
+      candidates: [],
+    }
   }
 
   return {
@@ -125,13 +145,15 @@ export function matchSupplier(
 }
 
 /** Parse a handwritten date (DD/MM/YYYY or DD/MM/YY, with /, - or . separators) to ISO. */
-export function parseDate(
-  raw: string | null,
-): {value: string | null; confidence: number; needsReview: boolean} {
-  if (!raw) return {value: null, confidence: 0, needsReview: true}
+export function parseDate(raw: string | null): {
+  value: string | null
+  confidence: number
+  needsReview: boolean
+} {
+  if (!raw) return { value: null, confidence: 0, needsReview: true }
 
   const match = raw.match(/(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/)
-  if (!match) return {value: null, confidence: 0.3, needsReview: true}
+  if (!match) return { value: null, confidence: 0.3, needsReview: true }
 
   const [, dayStr, monthStr, yearStr] = match
   const day = parseInt(dayStr, 10)
@@ -140,14 +162,15 @@ export function parseDate(
   if (year < 100) year += 2000
 
   if (day < 1 || day > 31 || month < 1 || month > 12) {
-    return {value: null, confidence: 0.2, needsReview: true}
+    return { value: null, confidence: 0.2, needsReview: true }
   }
 
   const iso = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
   const parsed = new Date(iso)
-  if (isNaN(parsed.getTime())) return {value: null, confidence: 0.2, needsReview: true}
+  if (isNaN(parsed.getTime()))
+    return { value: null, confidence: 0.2, needsReview: true }
 
-  return {value: iso, confidence: 0.95, needsReview: false}
+  return { value: iso, confidence: 0.95, needsReview: false }
 }
 
 export const PRODUCT_ALIASES: Record<'pieles' | 'sebo' | 'hueso', string[]> = {
@@ -158,22 +181,28 @@ export const PRODUCT_ALIASES: Record<'pieles' | 'sebo' | 'hueso', string[]> = {
 
 export function matchProduct(
   field: 'pieles' | 'sebo' | 'hueso',
-  products: Array<{id: number; name: string}>,
-): {id: number; name: string} | undefined {
+  products: Array<{ id: number; name: string }>,
+): { id: number; name: string } | undefined {
   const aliases = PRODUCT_ALIASES[field]
-  const normProducts = products.map(p => ({...p, norm: normalizeForMatch(p.name)}))
+  const normProducts = products.map(p => ({
+    ...p,
+    norm: normalizeForMatch(p.name),
+  }))
   for (const alias of aliases) {
-    const found = normProducts.find(p => p.norm.includes(alias) || alias.includes(p.norm))
-    if (found) return {id: found.id, name: found.name}
+    const found = normProducts.find(
+      p => p.norm.includes(alias) || alias.includes(p.norm),
+    )
+    if (found) return { id: found.id, name: found.name }
   }
   return undefined
 }
 
-const FIELD_MAP: Array<{field: 'pieles' | 'sebo' | 'hueso'; label: string}> = [
-  {field: 'pieles', label: 'Pieles'},
-  {field: 'sebo', label: 'Sebo'},
-  {field: 'hueso', label: 'Hueso'},
-]
+const FIELD_MAP: Array<{ field: 'pieles' | 'sebo' | 'hueso'; label: string }> =
+  [
+    { field: 'pieles', label: 'Pieles' },
+    { field: 'sebo', label: 'Sebo' },
+    { field: 'hueso', label: 'Hueso' },
+  ]
 
 /** Round to 3 decimals (kg precision). */
 function round3(n: number): number {
@@ -186,8 +215,8 @@ function round3(n: number): number {
  */
 export function normalize(
   raw: RawExtractionFields,
-  people: Array<{id: number; name: string}>,
-  products: Array<{id: number; name: string}>,
+  people: Array<{ id: number; name: string }>,
+  products: Array<{ id: number; name: string }>,
 ): ExtractionResult {
   const reviewReasons: string[] = []
 
@@ -195,10 +224,11 @@ export function normalize(
   if (date.needsReview) reviewReasons.push('Fecha no reconocida o ilegible')
 
   const supplier = matchSupplier(raw.recibiDelSr, people)
-  if (supplier.needsReview) reviewReasons.push('Proveedor no identificado con confianza')
+  if (supplier.needsReview)
+    reviewReasons.push('Proveedor no identificado con confianza')
 
   const details: ExtractedDetail[] = []
-  for (const {field, label} of FIELD_MAP) {
+  for (const { field, label } of FIELD_MAP) {
     const valueLb = raw[field]
     if (valueLb == null) continue
 
@@ -206,7 +236,8 @@ export function normalize(
     const needsReview = confidence < FIELD_CONFIDENCE_THRESHOLD
 
     const product = matchProduct(field, products)
-    if (!product) reviewReasons.push(`Producto ${label} no encontrado en el catálogo`)
+    if (!product)
+      reviewReasons.push(`Producto ${label} no encontrado en el catálogo`)
 
     details.push({
       fieldName: field,
@@ -224,7 +255,9 @@ export function normalize(
   const sumLb = details.reduce((acc, d) => acc + d.weightLb, 0)
   const formTotalLb = raw.librasTotal
   const totalWeightCheck = {
-    passed: formTotalLb == null || Math.abs(formTotalLb - sumLb) <= sumLb * TOTAL_TOLERANCE,
+    passed:
+      formTotalLb == null ||
+      Math.abs(formTotalLb - sumLb) <= sumLb * TOTAL_TOLERANCE,
     formTotalLb,
     sumLb: round3(sumLb),
   }
@@ -234,11 +267,15 @@ export function normalize(
     )
   }
 
-  if (details.length === 0) reviewReasons.push('No se detectaron valores de productos')
+  if (details.length === 0)
+    reviewReasons.push('No se detectaron valores de productos')
 
   return {
     date,
-    librasTotal: {value: formTotalLb, confidence: raw.fieldConfidences?.librasTotal ?? 0.5},
+    librasTotal: {
+      value: formTotalLb,
+      confidence: raw.fieldConfidences?.librasTotal ?? 0.5,
+    },
     supplier,
     details,
     totalWeightCheck,

@@ -16,6 +16,9 @@ import {
   PurchaseDetailsRepository,
   PurchaseRepository,
 } from '../repositories'
+import { validateDateRange } from './date-validation.utils'
+import { TransactionKind } from './transaction-kind.enum'
+import { TRANSACTION_TYPE_LABEL } from './transaction-type.const'
 
 interface TransactionDetailPersonProduct {
   date: string
@@ -72,16 +75,7 @@ export class TransactionQueryService {
     startDate: string,
     endDate: string,
   ): Promise<TransactionDetailPersonProduct[]> {
-    // Validación de fechas
-    if (!startDate || !endDate) {
-      throw new HttpErrors.BadRequest('Both startDate and endDate are required')
-    }
-
-    // Validar formato de fechas
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/
-    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
-      throw new HttpErrors.BadRequest('Invalid date format. Use YYYY-MM-DD')
-    }
+    validateDateRange(startDate, endDate)
 
     // Construir filtro de fechas
     const dateFilter = {
@@ -145,7 +139,7 @@ export class TransactionQueryService {
             .map((detail: PurchaseDetails) => ({
               date: purchase.date,
               weight_kg: detail.weight_kg,
-              type: 'Compra' as const,
+              type: TRANSACTION_TYPE_LABEL[TransactionKind.PURCHASE],
             })) ?? [],
       ) || []
 
@@ -158,7 +152,7 @@ export class TransactionQueryService {
             .map((detail: ExpenseDetails) => ({
               date: expense.date,
               weight_kg: detail.weight_kg,
-              type: 'Gasto' as const,
+              type: TRANSACTION_TYPE_LABEL[TransactionKind.EXPENSE],
             })) || [],
       ) || []
 
@@ -173,101 +167,60 @@ export class TransactionQueryService {
     startDate: string,
     endDate: string,
   ): Promise<TransactionDetailProduct[]> {
-    // Validación de fechas
-    if (!startDate || !endDate) {
-      throw new HttpErrors.BadRequest('Both startDate and endDate are required')
-    }
-    // Validar formato de fechas
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/
-    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
-      throw new HttpErrors.BadRequest('Invalid date format. Use YYYY-MM-DD')
-    }
+    validateDateRange(startDate, endDate)
 
-    // Verificar que el producto existe
-    const product = await this.productRepository.findById(productId)
-    if (!product) {
-      throw new HttpErrors.NotFound(
-        `Producto con ID ${productId} no encontrado`,
-      )
-    }
+    await this.ensureProductExists(productId)
 
-    // Construir filtro de fechas
-    const dateFilter = {
-      between: [startDate, endDate],
-    }
+    const [purchaseIds, expenseIds] = await Promise.all([
+      this.getPurchaseIdsInRange(startDate, endDate),
+      this.getExpenseIdsInRange(startDate, endDate),
+    ])
 
-    // Obtener todos los detalles de compra para este producto
-    const purchaseDetails = await this.purchaseDetailsRepository.find({
-      where: { productId },
-      include: [
-        {
-          relation: 'purchase',
-          scope: {
-            where: {
-              date: dateFilter,
-            },
-          },
-        },
-        {
-          relation: 'person',
-        },
-      ],
-    })
+    const [purchaseDetails, expenseDetails] = await Promise.all([
+      purchaseIds.length > 0
+        ? this.purchaseDetailsRepository.find({
+            where: { productId, purchaseId: { inq: purchaseIds } },
+            include: [{ relation: 'purchase' }, { relation: 'person' }],
+          })
+        : Promise.resolve([]),
+      expenseIds.length > 0
+        ? this.expenseDetailsRepository.find({
+            where: { productId, expenseId: { inq: expenseIds } },
+            include: [{ relation: 'expense' }, { relation: 'person' }],
+          })
+        : Promise.resolve([]),
+    ])
 
-    // Obtener todos los detalles de gasto para este producto
-    const expenseDetails = await this.expenseDetailsRepository.find({
-      where: { productId },
-      include: [
-        {
-          relation: 'expense',
-          scope: {
-            where: {
-              date: dateFilter,
-            },
-          },
-        },
-        {
-          relation: 'person',
-        },
-      ],
-    })
-
-    // Procesar los resultados
     const transactions: TransactionDetailProduct[] = []
     const purchaseDetailsWithRelations =
       purchaseDetails as PurchaseDetailWithRelations[]
     const expenseDetailsWithRelations =
       expenseDetails as ExpenseDetailWithRelations[]
 
-    // Procesar detalles de compra - USANDO LAS RELACIONES INCLUIDAS
     for (const detail of purchaseDetailsWithRelations) {
-      // Solo procesar si la relación purchase existe (ya filtrada por fecha)
       if (detail.purchase && detail.weight_kg) {
         transactions.push({
           date: detail.purchase.date,
           weight_kg: detail.weight_kg,
-          type: 'Compra',
+          type: TRANSACTION_TYPE_LABEL[TransactionKind.PURCHASE],
           personId: detail.personId,
           personName: detail.person?.name,
         })
       }
     }
 
-    // Procesar detalles de gasto - USANDO LAS RELACIONES INCLUIDAS
     for (const detail of expenseDetailsWithRelations) {
-      // Solo procesar si la relación expense existe (ya filtrada por fecha)
       if (detail.expense && detail.weight_kg) {
         transactions.push({
           date: detail.expense.date,
           weight_kg: detail.weight_kg,
-          type: 'Gasto',
+          type: TRANSACTION_TYPE_LABEL[TransactionKind.EXPENSE],
           personId: detail.personId,
           personName: detail.person?.name,
         })
       }
     }
 
-    // Ordenar por fecha
     return transactions.sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
     )
@@ -278,97 +231,58 @@ export class TransactionQueryService {
     startDate: string,
     endDate: string,
   ): Promise<TransactionDetailPerson[]> {
-    // Validación de fechas
-    if (!startDate || !endDate) {
-      throw new HttpErrors.BadRequest('Both startDate and endDate are required')
-    }
-    // Validar formato de fechas
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/
-    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
-      throw new HttpErrors.BadRequest('Invalid date format. Use YYYY-MM-DD')
-    }
+    validateDateRange(startDate, endDate)
 
-    // Verificar que la persona existe
-    const person = await this.personRepository.findById(personId)
-    if (!person) {
-      throw new HttpErrors.NotFound(`Persona con ID ${personId} no encontrada`)
-    }
+    await this.ensurePersonExists(personId)
 
-    // Construir filtro de fechas
-    const dateFilter = {
-      between: [startDate, endDate],
-    }
+    const [purchaseIds, expenseIds] = await Promise.all([
+      this.getPurchaseIdsInRange(startDate, endDate),
+      this.getExpenseIdsInRange(startDate, endDate),
+    ])
 
-    // Obtener todos los detalles de compra para esta persona con filtro de fecha
-    const purchaseDetails = await this.purchaseDetailsRepository.find({
-      where: { personId },
-      include: [
-        {
-          relation: 'purchase',
-          scope: {
-            where: {
-              date: dateFilter,
-            },
-          },
-        },
-        {
-          relation: 'product',
-        },
-      ],
-    })
+    const [purchaseDetails, expenseDetails] = await Promise.all([
+      purchaseIds.length > 0
+        ? this.purchaseDetailsRepository.find({
+            where: { personId, purchaseId: { inq: purchaseIds } },
+            include: [{ relation: 'purchase' }, { relation: 'product' }],
+          })
+        : Promise.resolve([]),
+      expenseIds.length > 0
+        ? this.expenseDetailsRepository.find({
+            where: { personId, expenseId: { inq: expenseIds } },
+            include: [{ relation: 'expense' }, { relation: 'product' }],
+          })
+        : Promise.resolve([]),
+    ])
 
-    // Obtener todos los detalles de gasto para esta persona con filtro de fecha
-    const expenseDetails = await this.expenseDetailsRepository.find({
-      where: { personId },
-      include: [
-        {
-          relation: 'expense',
-          scope: {
-            where: {
-              date: dateFilter,
-            },
-          },
-        },
-        {
-          relation: 'product',
-        },
-      ],
-    })
-
-    // Procesar los resultados
     const transactions: TransactionDetailPerson[] = []
     const purchaseDetailsWithRelations =
       purchaseDetails as PurchaseDetailWithRelations[]
     const expenseDetailsWithRelations =
       expenseDetails as ExpenseDetailWithRelations[]
 
-    // Procesar detalles de compra - USANDO LAS RELACIONES INCLUIDAS
     for (const detail of purchaseDetailsWithRelations) {
-      // Solo procesar si la relación purchase existe (ya filtrada por fecha)
       if (detail.purchase && detail.weight_kg) {
         transactions.push({
           date: detail.purchase.date,
           weight_kg: detail.weight_kg,
-          type: 'Compra',
+          type: TRANSACTION_TYPE_LABEL[TransactionKind.PURCHASE],
           productId: detail.productId,
         })
       }
     }
 
-    // Procesar detalles de gasto - USANDO LAS RELACIONES INCLUIDAS
     for (const detail of expenseDetailsWithRelations) {
-      // Solo procesar si la relación expense existe (ya filtrada por fecha)
       if (detail.expense && detail.weight_kg) {
         transactions.push({
           date: detail.expense.date,
           weight_kg: detail.weight_kg,
-          type: 'Gasto',
+          type: TRANSACTION_TYPE_LABEL[TransactionKind.EXPENSE],
           productId: detail.productId,
         })
       }
     }
 
-    // Ordenar por fecha
     return transactions.sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
     )
@@ -382,63 +296,60 @@ export class TransactionQueryService {
   public async getSupplierProductDetails(
     supplierId: number,
     productId: number,
-    startDate: Date,
-    endDate: Date,
+    startDate: string,
+    endDate: string,
   ): Promise<
     Array<{ date: string; weight_kg: number; type: 'Compra' | 'Gasto' }>
   > {
-    const supplier = await this.personRepository.findOne({
-      where: { id: supplierId },
-      include: [
-        {
-          relation: 'purchases',
-          scope: {
-            where: { date: { between: [startDate, endDate] } },
-            include: [
-              { relation: 'purchase_details', scope: { where: { productId } } },
-            ],
-          },
-        },
-        {
-          relation: 'expenses',
-          scope: {
-            where: { date: { between: [startDate, endDate] } },
-            include: [
-              { relation: 'expense_details', scope: { where: { productId } } },
-            ],
-          },
-        },
-      ],
-    })
+    return this.getPersonProductTransactions(
+      supplierId,
+      productId,
+      startDate,
+      endDate,
+    )
+  }
 
-    if (!supplier) {
+  private async ensurePersonExists(personId: number): Promise<void> {
+    const person = await this.personRepository.findById(personId)
+    if (!person) {
+      throw new HttpErrors.NotFound(`Persona con ID ${personId} no encontrada`)
+    }
+  }
+
+  private async ensureProductExists(productId: number): Promise<void> {
+    const product = await this.productRepository.findById(productId)
+    if (!product) {
       throw new HttpErrors.NotFound(
-        `Proveedor con ID ${supplierId} no encontrado`,
+        `Producto con ID ${productId} no encontrado`,
       )
     }
+  }
 
-    const purchaseRows =
-      supplier.purchases?.flatMap(
-        (p: Purchase) =>
-          p.purchase_details?.map((d: PurchaseDetails) => ({
-            date: p.date,
-            weight_kg: d.weight_kg ?? 0,
-            type: 'Compra' as const,
-          })) ?? [],
-      ) ?? []
+  private async getPurchaseIdsInRange(
+    startDate: string,
+    endDate: string,
+  ): Promise<number[]> {
+    const purchases = await this.purchaseRepository.find({
+      where: { date: this.createDateFilter(startDate, endDate) },
+      fields: ['id'],
+    })
+    return purchases.map(p => p.id).filter((id): id is number => id != null)
+  }
 
-    const expenseRows =
-      supplier.expenses?.flatMap(
-        (e: Expense) =>
-          e.expense_details?.map((d: ExpenseDetails) => ({
-            date: e.date,
-            weight_kg: d.weight_kg ?? 0,
-            type: 'Gasto' as const,
-          })) ?? [],
-      ) ?? []
+  private async getExpenseIdsInRange(
+    startDate: string,
+    endDate: string,
+  ): Promise<number[]> {
+    const expenses = await this.expenseRepository.find({
+      where: { date: this.createDateFilter(startDate, endDate) },
+      fields: ['id'],
+    })
+    return expenses.map(e => e.id).filter((id): id is number => id != null)
+  }
 
-    return [...purchaseRows, ...expenseRows].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-    )
+  private createDateFilter(startDate: string, endDate: string) {
+    return {
+      between: [startDate, endDate] as [string, string],
+    }
   }
 }

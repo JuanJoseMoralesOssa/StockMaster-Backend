@@ -17,16 +17,18 @@ import {
   post,
   requestBody,
 } from '@loopback/rest'
+import { Roles, requireRoles } from '../../../auth'
 import { Expense, ExpenseDetails } from '../../../models'
 import { ExpenseRepository } from '../../../repositories'
-import { TransactionService } from '../../../services'
+import { DetailMutationService, TransactionKind } from '../../../services'
 
+@requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class ExpenseExpenseDetailsController {
   constructor(
     @repository(ExpenseRepository)
     protected expenseRepository: ExpenseRepository,
-    @service(TransactionService)
-    public transactionService: TransactionService,
+    @service(DetailMutationService)
+    public detailMutationService: DetailMutationService,
   ) {}
 
   @get('/expenses/{id}/expense-details', {
@@ -60,6 +62,7 @@ export class ExpenseExpenseDetailsController {
   })
   async create(
     @param.path.number('id') id: typeof Expense.prototype.id,
+    @param.query.number('parentVersion') parentVersion: number | undefined,
     @requestBody({
       content: {
         'application/json': {
@@ -73,12 +76,13 @@ export class ExpenseExpenseDetailsController {
     })
     expenseDetails: Omit<ExpenseDetails, 'id'>,
   ): Promise<ExpenseDetails> {
-    return this.transactionService.createSingleDetail(
+    return this.detailMutationService.createSingleDetail(
       id!,
       expenseDetails,
-      this.expenseRepository,
-      'expense_details',
-      false, // isPurchase = false (it's an expense)
+      expenseId => this.expenseRepository.expense_details(expenseId),
+      this.expenseRepository.dataSource,
+      TransactionKind.EXPENSE,
+      parentVersion,
     )
   }
 
@@ -117,16 +121,12 @@ export class ExpenseExpenseDetailsController {
     },
   })
   async delete(
-    @param.path.number('id') id: number,
+    @param.path.number('id') _id: number,
     @param.query.object('where', getWhereSchemaFor(ExpenseDetails))
     _where?: Where<ExpenseDetails>,
   ): Promise<Count> {
-    await this.transactionService.deleteWithDetails(
-      id,
-      this.expenseRepository,
-      'expense_details',
-      false,
+    throw new HttpErrors.MethodNotAllowed(
+      'Nested detail deletion is disabled for stock consistency. Use DELETE /expenses/{id} to delete the whole expense, or DELETE /expense-details/{id} for one detail.',
     )
-    return { count: 1 }
   }
 }

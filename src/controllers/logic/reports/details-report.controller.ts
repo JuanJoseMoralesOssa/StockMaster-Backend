@@ -64,12 +64,14 @@ export class DetailsReportsController {
     @param.path.number('productId') productId: number,
     @param.query.string('startDate') startDate: string,
     @param.query.string('endDate') endDate: string,
-  ): Promise<Array<{date: string; weight_kg: number; type: 'Compra' | 'Gasto'}>> {
+  ): Promise<
+    Array<{ date: string; weight_kg: number; type: 'Compra' | 'Gasto' }>
+  > {
     return this.transactionQueryService.getSupplierProductDetails(
       supplierId,
       productId,
-      new Date(startDate),
-      new Date(endDate),
+      startDate,
+      endDate,
     )
   }
 }

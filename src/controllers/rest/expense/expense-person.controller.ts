@@ -10,15 +10,17 @@ import {
   get,
   getModelSchemaRef,
   getWhereSchemaFor,
+  HttpErrors,
   param,
   patch,
   post,
   requestBody,
 } from '@loopback/rest'
-
+import { Roles, requireRoles } from '../../../auth'
 import { Expense, Person } from '../../../models'
 import { ExpenseRepository } from '../../../repositories'
 
+@requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class ExpensePersonController {
   constructor(
     @repository(ExpenseRepository)
@@ -53,7 +55,7 @@ export class ExpensePersonController {
     },
   })
   async create(
-    @param.path.number('id') id: typeof Expense.prototype.id,
+    @param.path.number('id') _id: typeof Expense.prototype.id,
     @requestBody({
       content: {
         'application/json': {
@@ -64,9 +66,11 @@ export class ExpensePersonController {
         },
       },
     })
-    person: Omit<Person, 'id'>,
+    _person: Omit<Person, 'id'>,
   ): Promise<Person> {
-    return this.expenseRepository.people(id).create(person)
+    throw new HttpErrors.MethodNotAllowed(
+      'Use POST /expenses/with-details to create expenses.',
+    )
   }
 
   @patch('/expenses/{id}/people', {
@@ -78,7 +82,7 @@ export class ExpensePersonController {
     },
   })
   async patch(
-    @param.path.number('id') id: number,
+    @param.path.number('id') _id: number,
     @requestBody({
       content: {
         'application/json': {
@@ -86,11 +90,13 @@ export class ExpensePersonController {
         },
       },
     })
-    person: Partial<Person>,
+    _person: Partial<Person>,
     @param.query.object('where', getWhereSchemaFor(Person))
-    where?: Where<Person>,
+    _where?: Where<Person>,
   ): Promise<Count> {
-    return this.expenseRepository.people(id).patch(person, where)
+    throw new HttpErrors.MethodNotAllowed(
+      'Use PUT /expenses/with-details to update expenses.',
+    )
   }
 
   @del('/expenses/{id}/people', {
@@ -102,10 +108,12 @@ export class ExpensePersonController {
     },
   })
   async delete(
-    @param.path.number('id') id: number,
+    @param.path.number('id') _id: number,
     @param.query.object('where', getWhereSchemaFor(Person))
-    where?: Where<Person>,
+    _where?: Where<Person>,
   ): Promise<Count> {
-    return this.expenseRepository.people(id).delete(where)
+    throw new HttpErrors.MethodNotAllowed(
+      'Use DELETE /expenses/{id} to delete expenses.',
+    )
   }
 }

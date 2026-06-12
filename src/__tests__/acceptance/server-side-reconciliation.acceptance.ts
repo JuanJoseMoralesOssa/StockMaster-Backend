@@ -28,7 +28,7 @@ describe('ServerSideReconciliation Flow', function () {
   async function createProduct(tag: string, stock: number): Promise<number> {
     const res = await client
       .post('/products')
-      .send({ name: `Product-${tag}`, stock})
+      .send({ name: `Product-${tag}`, stock })
       .expect(200)
     return res.body.id
   }
@@ -36,6 +36,18 @@ describe('ServerSideReconciliation Flow', function () {
   async function getStock(productId: number): Promise<number> {
     const res = await client.get(`/products/${productId}`).expect(200)
     return Number(res.body.stock ?? 0)
+  }
+
+  async function countPurchasesByDate(date: string): Promise<number> {
+    const where = encodeURIComponent(JSON.stringify({ date }))
+    const res = await client.get(`/purchases/count?where=${where}`).expect(200)
+    return Number(res.body.count ?? 0)
+  }
+
+  async function countKardexByProduct(productId: number): Promise<number> {
+    const where = encodeURIComponent(JSON.stringify({ productId }))
+    const res = await client.get(`/kardexes/count?where=${where}`).expect(200)
+    return Number(res.body.count ?? 0)
   }
 
   it('rejects update when version is missing (400) or mismatched (409)', async () => {
@@ -123,6 +135,72 @@ describe('ServerSideReconciliation Flow', function () {
     expect(await getStock(productId)).to.equal(95)
   })
 
+  it('rejects stale aggregate update after a single-detail patch', async () => {
+    const tag = `detail-version-${Date.now()}`
+    const personId = await createPerson(tag)
+    const productId = await createProduct(tag, 100)
+
+    const createRes = await client
+      .post('/purchases/with-details')
+      .send({
+        date: '2026-03-06',
+        purchaseDetails: [{ weight_kg: 10, productId, personId }],
+      })
+      .expect(200)
+
+    const aggregate = createRes.body
+    expect(aggregate.version).to.equal(1)
+    const detailId = aggregate.purchase_details[0].id
+
+    await client
+      .patch(`/purchase-details/${detailId}`)
+      .query({ parentVersion: 1 })
+      .send({ weight_kg: 15, productId, personId })
+      .expect(200)
+
+    await client
+      .patch(`/purchase-details/${detailId}`)
+      .query({ parentVersion: 1 })
+      .send({ weight_kg: 20, productId, personId })
+      .expect(409)
+
+    await client
+      .put('/purchases/with-details')
+      .send({
+        id: aggregate.id,
+        version: 1,
+        date: '2026-03-06',
+        purchaseDetails: [{ id: detailId, weight_kg: 10, productId, personId }],
+      })
+      .expect(409)
+
+    expect(await getStock(productId)).to.equal(115)
+  })
+
+  it('rejects negative single-detail weights without changing stock', async () => {
+    const tag = `negative-weight-${Date.now()}`
+    const personId = await createPerson(tag)
+    const productId = await createProduct(tag, 100)
+
+    const createRes = await client
+      .post('/purchases/with-details')
+      .send({
+        date: '2026-03-07',
+        purchaseDetails: [{ weight_kg: 10, productId, personId }],
+      })
+      .expect(200)
+
+    const detailId = createRes.body.purchase_details[0].id
+
+    await client
+      .patch(`/purchase-details/${detailId}`)
+      .query({ parentVersion: 1 })
+      .send({ weight_kg: -5, productId, personId })
+      .expect(422)
+
+    expect(await getStock(productId)).to.equal(110)
+  })
+
   it('rejects foreign detail.id with 403 Forbidden', async () => {
     const tag = `foreign-${Date.now()}`
     const personId = await createPerson(tag)
@@ -148,6 +226,70 @@ describe('ServerSideReconciliation Flow', function () {
         purchaseDetails: [{ id: 999999, weight_kg: 10, productId, personId }],
       })
       .expect(403)
+  })
+
+  it('allows exactly one concurrent aggregate update for the same version', async () => {
+    const tag = `race-${Date.now()}`
+    const personId = await createPerson(tag)
+    const productId = await createProduct(tag, 100)
+
+    const createRes = await client
+      .post('/purchases/with-details')
+      .send({
+        date: '2026-03-08',
+        purchaseDetails: [{ weight_kg: 10, productId, personId }],
+      })
+      .expect(200)
+
+    const aggregate = createRes.body
+    const detailId = aggregate.purchase_details[0].id
+
+    const responses = await Promise.all([
+      client.put('/purchases/with-details').send({
+        id: aggregate.id,
+        version: 1,
+        date: '2026-03-08',
+        purchaseDetails: [{ id: detailId, weight_kg: 15, productId, personId }],
+      }),
+      client.put('/purchases/with-details').send({
+        id: aggregate.id,
+        version: 1,
+        date: '2026-03-08',
+        purchaseDetails: [{ id: detailId, weight_kg: 20, productId, personId }],
+      }),
+    ])
+
+    const statuses = responses.map(res => res.status).sort()
+    expect(statuses).to.eql([200, 409])
+
+    const success = responses.find(res => res.status === 200)
+    const finalWeight = Number(success?.body.purchase_details[0].weight_kg)
+    expect([15, 20]).to.containEql(finalWeight)
+    expect(await getStock(productId)).to.equal(100 + finalWeight)
+  })
+
+  it('rolls back purchase creation when a later detail cannot reconcile stock', async () => {
+    const tag = `rollback-${Date.now()}`
+    const date = '2026-03-09'
+    const personId = await createPerson(tag)
+    const productId = await createProduct(tag, 100)
+    const beforePurchaseCount = await countPurchasesByDate(date)
+    const beforeKardexCount = await countKardexByProduct(productId)
+
+    await client
+      .post('/purchases/with-details')
+      .send({
+        date,
+        purchaseDetails: [
+          { weight_kg: 10, productId, personId },
+          { weight_kg: 3, productId: 999999999, personId },
+        ],
+      })
+      .expect(404)
+
+    expect(await countPurchasesByDate(date)).to.equal(beforePurchaseCount)
+    expect(await countKardexByProduct(productId)).to.equal(beforeKardexCount)
+    expect(await getStock(productId)).to.equal(100)
   })
 
   it('rejects empty details array with 400 Bad Request', async () => {
@@ -221,8 +363,9 @@ describe('ServerSideReconciliation Flow', function () {
     expect(await getStock(p2)).to.equal(120) // +20 new
 
     // Map new details
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const d2 = agg2.purchase_details.find((d: any) => d.productId === p2).id
+    const d2 = agg2.purchase_details.find(
+      (d: { id?: number; productId: number }) => d.productId === p2,
+    )?.id
 
     // Update 2: Delete p1 (omit it), change p2 to 5kg
     const updateRes2 = await client
@@ -242,5 +385,40 @@ describe('ServerSideReconciliation Flow', function () {
     // Verify deleted/updated stock
     expect(await getStock(p1)).to.equal(100) // Restored back to base
     expect(await getStock(p2)).to.equal(105) // Down from 120 to 105
+  })
+
+  it('restores old product stock and applies new product stock when a detail changes product', async () => {
+    const tag = `switch-product-${Date.now()}`
+    const personId = await createPerson(tag)
+    const p1 = await createProduct(tag + '1', 100)
+    const p2 = await createProduct(tag + '2', 100)
+
+    const createRes = await client
+      .post('/purchases/with-details')
+      .send({
+        date: '2026-03-10',
+        purchaseDetails: [{ weight_kg: 10, productId: p1, personId }],
+      })
+      .expect(200)
+
+    const aggregate = createRes.body
+    const detailId = aggregate.purchase_details[0].id
+    expect(await getStock(p1)).to.equal(110)
+    expect(await getStock(p2)).to.equal(100)
+
+    await client
+      .put('/purchases/with-details')
+      .send({
+        id: aggregate.id,
+        version: 1,
+        date: '2026-03-10',
+        purchaseDetails: [
+          { id: detailId, weight_kg: 10, productId: p2, personId },
+        ],
+      })
+      .expect(200)
+
+    expect(await getStock(p1)).to.equal(100)
+    expect(await getStock(p2)).to.equal(110)
   })
 })

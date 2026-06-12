@@ -1,6 +1,10 @@
 import { BindingScope, injectable } from '@loopback/core'
 import { repository } from '@loopback/repository'
+import { HttpErrors } from '@loopback/rest'
+import { KardexOperation } from '../models'
 import { KardexRepository } from '../repositories'
+import { TransactionKind } from './transaction-kind.enum'
+import { TRANSACTION_CONFIG } from './transaction-type.const'
 
 export type TransactionContext = unknown
 
@@ -25,30 +29,29 @@ export class StockReconciliationService {
     dataSource: DataSourceWithTransactions,
     productId: number,
     weightKg: number,
-    isPurchase: boolean,
+    transactionKind: TransactionKind,
     mode: StockMutationMode,
     tx: TransactionContext,
   ): Promise<void> {
-    const operator = this.getStockOperator(isPurchase, mode)
+    const operator = this.getStockOperator(transactionKind, mode)
     await this.executeStockUpdate(
       dataSource,
       productId,
       weightKg,
       operator,
-      isPurchase,
+      transactionKind,
       mode,
       tx,
     )
   }
 
   private getStockOperator(
-    isPurchase: boolean,
+    transactionKind: TransactionKind,
     mode: StockMutationMode,
   ): '+' | '-' {
-    if (mode === 'apply') {
-      return isPurchase ? '+' : '-'
-    }
-    return isPurchase ? '-' : '+'
+    const direction = TRANSACTION_CONFIG[transactionKind].stockDirection
+    const signedDirection = mode === 'apply' ? direction : -direction
+    return signedDirection > 0 ? '+' : '-'
   }
 
   private async executeStockUpdate(
@@ -56,7 +59,7 @@ export class StockReconciliationService {
     productId: number,
     weightKg: number,
     operator: '+' | '-',
-    isPurchase: boolean,
+    transactionKind: TransactionKind,
     mode: StockMutationMode,
     tx: TransactionContext,
   ): Promise<void> {
@@ -69,7 +72,14 @@ export class StockReconciliationService {
       { transaction: tx },
     )
 
-    const balance = this.extractProductStock(updateResult)
+    const rows = this.extractRows(updateResult)
+    if (rows.length === 0) {
+      throw new HttpErrors.NotFound(
+        `Cannot reconcile stock: product ${productId} does not exist.`,
+      )
+    }
+
+    const balance = this.extractProductStock(rows, productId)
     const input = operator === '+' ? weightKg : 0
     const output = operator === '-' ? weightKg : 0
 
@@ -80,30 +90,47 @@ export class StockReconciliationService {
         output,
         balance,
         balance_record: true,
-        operation: this.getKardexOperation(isPurchase, mode),
+        operation: this.getKardexOperation(transactionKind, mode),
         productId,
       },
       { transaction: tx } as object,
     )
   }
 
-  private extractProductStock(stockResult: unknown): number {
-    if (!Array.isArray(stockResult) || stockResult.length === 0) {
-      return 0
+  private extractProductStock(rows: unknown[], productId: number): number {
+    if (rows.length === 0) {
+      throw new HttpErrors.NotFound(
+        `Cannot reconcile stock: product ${productId} does not exist.`,
+      )
     }
 
-    const firstRow = stockResult[0] as { stock?: unknown }
+    const firstRow = rows[0] as { stock?: unknown }
     const stock = Number(firstRow.stock ?? 0)
     return Number.isFinite(stock) ? stock : 0
   }
 
+  private extractRows(result: unknown): unknown[] {
+    if (Array.isArray(result)) {
+      return result
+    }
+
+    const rows = (result as { rows?: unknown })?.rows
+    return Array.isArray(rows) ? rows : []
+  }
+
   private getKardexOperation(
-    isPurchase: boolean,
+    transactionKind: TransactionKind,
     mode: StockMutationMode,
-  ): number {
-    if (isPurchase && mode === 'apply') return 1
-    if (isPurchase && mode === 'undo') return 2
-    if (!isPurchase && mode === 'apply') return 3
-    return 4
+  ): KardexOperation {
+    if (transactionKind === TransactionKind.PURCHASE && mode === 'apply') {
+      return KardexOperation.PurchaseApply
+    }
+    if (transactionKind === TransactionKind.PURCHASE && mode === 'undo') {
+      return KardexOperation.PurchaseUndo
+    }
+    if (transactionKind === TransactionKind.EXPENSE && mode === 'apply') {
+      return KardexOperation.ExpenseApply
+    }
+    return KardexOperation.ExpenseUndo
   }
 }

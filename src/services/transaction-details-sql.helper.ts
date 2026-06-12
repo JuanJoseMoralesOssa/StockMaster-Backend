@@ -3,25 +3,8 @@ import {
   DataSourceWithTransactions,
   TransactionOptions,
 } from './transaction.types'
-
-type DetailRelationConfig = {
-  tableName: string
-  parentIdField: string
-  parentTableName: string
-}
-
-const DETAIL_RELATION_CONFIG: Record<string, DetailRelationConfig> = {
-  expense_details: {
-    tableName: 'expensedetails',
-    parentIdField: 'expenseId',
-    parentTableName: 'expense',
-  },
-  purchase_details: {
-    tableName: 'purchasedetails',
-    parentIdField: 'purchaseId',
-    parentTableName: 'purchase',
-  },
-}
+import { TransactionKind } from './transaction-kind.enum'
+import { TRANSACTION_CONFIG } from './transaction-type.const'
 
 /** Wraps the raw-SQL batch operations for a specific detail table. */
 export class TransactionDetailsSqlHelper {
@@ -30,16 +13,16 @@ export class TransactionDetailsSqlHelper {
 
   constructor(
     private readonly dataSource: DataSourceWithTransactions,
-    detailsRelationName: string,
+    transactionKind: TransactionKind,
   ) {
-    const config = DETAIL_RELATION_CONFIG[detailsRelationName]
+    const config = TRANSACTION_CONFIG[transactionKind]
     if (!config) {
       throw new HttpErrors.BadRequest(
-        `Unsupported details relation: ${detailsRelationName}`,
+        `Unsupported transaction kind: ${transactionKind}`,
       )
     }
-    this.tableName = config.tableName
-    this.parentTableName = config.parentTableName
+    this.tableName = config.detailTable
+    this.parentTableName = config.parentTable
   }
 
   /**
@@ -60,7 +43,7 @@ export class TransactionDetailsSqlHelper {
       [id],
       options,
     )
-    const rows = result as { id: number; version: number }[]
+    const rows = this.extractRows(result) as { id: number; version: number }[]
     if (!Array.isArray(rows) || rows.length === 0) {
       throw new HttpErrors.NotFound(
         `${this.parentTableName} with id ${id} not found`,
@@ -71,6 +54,54 @@ export class TransactionDetailsSqlHelper {
         'Este registro fue modificado por otro usuario. Por favor recarga y vuelve a intentarlo.',
       )
     }
+  }
+
+  async bumpParentVersion(
+    id: number,
+    expectedVersion: number,
+    options?: TransactionOptions,
+  ): Promise<void> {
+    const result = await this.dataSource.execute(
+      `UPDATE ${this.parentTableName} SET version = version + 1 WHERE id = $1 AND version = $2 RETURNING id`,
+      [id, expectedVersion],
+      options,
+    )
+    await this.assertMatchedParentVersion(result, id, options)
+  }
+
+  async updateParentWithVersionCheck(
+    id: number,
+    expectedVersion: number,
+    data: Record<string, unknown>,
+    nextVersion: number,
+    options?: TransactionOptions,
+  ): Promise<void> {
+    const entries = Object.entries(data).filter(
+      ([, value]) => value !== undefined,
+    )
+    for (const [key] of entries) {
+      if (key !== 'date') {
+        throw new HttpErrors.BadRequest(
+          `Unsupported parent transaction field: ${key}`,
+        )
+      }
+    }
+
+    const assignments = entries.map(([key], index) => `${key} = $${index + 1}`)
+    assignments.push(`version = $${entries.length + 1}`)
+
+    const params = [
+      ...entries.map(([, value]) => value),
+      nextVersion,
+      id,
+      expectedVersion,
+    ]
+    const result = await this.dataSource.execute(
+      `UPDATE ${this.parentTableName} SET ${assignments.join(', ')} WHERE id = $${entries.length + 2} AND version = $${entries.length + 3} RETURNING id`,
+      params,
+      options,
+    )
+    await this.assertMatchedParentVersion(result, id, options)
   }
 
   async batchDeleteByIds(
@@ -98,5 +129,39 @@ export class TransactionDetailsSqlHelper {
       [weight_kg, productId, personId, id],
       options,
     )
+  }
+
+  private async assertMatchedParentVersion(
+    result: unknown,
+    id: number,
+    options?: TransactionOptions,
+  ): Promise<void> {
+    const rows = this.extractRows(result)
+    if (rows.length > 0) return
+
+    const existsResult = await this.dataSource.execute(
+      `SELECT id FROM ${this.parentTableName} WHERE id = $1`,
+      [id],
+      options,
+    )
+    const existsRows = this.extractRows(existsResult)
+    if (existsRows.length === 0) {
+      throw new HttpErrors.NotFound(
+        `${this.parentTableName} with id ${id} not found`,
+      )
+    }
+
+    throw new HttpErrors.Conflict(
+      'Este registro fue modificado por otro usuario. Por favor recarga y vuelve a intentarlo.',
+    )
+  }
+
+  private extractRows(result: unknown): unknown[] {
+    if (Array.isArray(result)) {
+      return result
+    }
+
+    const rows = (result as { rows?: unknown })?.rows
+    return Array.isArray(rows) ? rows : []
   }
 }

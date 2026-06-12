@@ -1,11 +1,17 @@
-export type TransactionContext = unknown
+export type TransactionContext = {
+  commit(): Promise<void> | void
+  rollback(): Promise<void> | void
+}
 
 export type TransactionOptions = {
   transaction: TransactionContext
 }
 
 export type DataSourceWithTransactions = {
-  transaction?<T>(work: (tx: TransactionContext) => Promise<T>): Promise<T>
+  beginTransaction?(options?: {
+    isolationLevel?: string
+  }): Promise<TransactionContext>
+  transaction?<T>(work: (tx: unknown) => Promise<T>): Promise<T>
   execute(
     sql: string,
     params?: unknown[],
@@ -17,7 +23,7 @@ export type DetailBase = {
   id?: number
   weight_kg: number
   productId: number
-  personId?: number
+  personId: number
 }
 
 export type RelationAccessor<TDetail extends DetailBase = DetailBase> = {

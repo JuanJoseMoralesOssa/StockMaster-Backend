@@ -6,7 +6,7 @@
 // Claude is the default; Gemini is stubbed as the alternative implementation.
 
 import Anthropic from '@anthropic-ai/sdk'
-import {RawExtractionFields} from './form-extraction.normalizer'
+import { RawExtractionFields } from './form-extraction.normalizer'
 
 export interface FormVisionProvider {
   /** Human-readable provider id, for logging/telemetry. */
@@ -15,7 +15,14 @@ export interface FormVisionProvider {
   readForm(imageBuffer: Buffer, mimeType: string): Promise<RawExtractionFields>
 }
 
-const SUPPORTED_MIME = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const
+export const FORM_VISION_PROVIDER_BINDING = 'services.FormVisionProvider'
+
+const SUPPORTED_MIME = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+] as const
 type SupportedMime = (typeof SUPPORTED_MIME)[number]
 
 function toSupportedMime(mimeType: string): SupportedMime {
@@ -90,17 +97,32 @@ const FIELD_EXTRACTION_TOOL: Anthropic.Tool = {
         type: 'object',
         description: 'Confidence score 0-1 for each extracted field.',
         properties: {
-          fecha: {type: 'number'},
-          librasTotal: {type: 'number'},
-          pieles: {type: 'number'},
-          sebo: {type: 'number'},
-          hueso: {type: 'number'},
-          recibiDelSr: {type: 'number'},
+          fecha: { type: 'number' },
+          librasTotal: { type: 'number' },
+          pieles: { type: 'number' },
+          sebo: { type: 'number' },
+          hueso: { type: 'number' },
+          recibiDelSr: { type: 'number' },
         },
-        required: ['fecha', 'librasTotal', 'pieles', 'sebo', 'hueso', 'recibiDelSr'],
+        required: [
+          'fecha',
+          'librasTotal',
+          'pieles',
+          'sebo',
+          'hueso',
+          'recibiDelSr',
+        ],
       },
     },
-    required: ['fecha', 'librasTotal', 'pieles', 'sebo', 'hueso', 'recibiDelSr', 'fieldConfidences'],
+    required: [
+      'fecha',
+      'librasTotal',
+      'pieles',
+      'sebo',
+      'hueso',
+      'recibiDelSr',
+      'fieldConfidences',
+    ],
   },
 }
 
@@ -112,19 +134,23 @@ export class ClaudeFormVisionProvider implements FormVisionProvider {
   private get client(): Anthropic {
     if (!this.clientInstance) {
       const apiKey = process.env.ANTHROPIC_API_KEY
-      if (!apiKey) throw new Error('ANTHROPIC_API_KEY environment variable is not set')
-      this.clientInstance = new Anthropic({apiKey})
+      if (!apiKey)
+        throw new Error('ANTHROPIC_API_KEY environment variable is not set')
+      this.clientInstance = new Anthropic({ apiKey })
     }
     return this.clientInstance
   }
 
-  async readForm(imageBuffer: Buffer, mimeType: string): Promise<RawExtractionFields> {
+  async readForm(
+    imageBuffer: Buffer,
+    mimeType: string,
+  ): Promise<RawExtractionFields> {
     const message = await this.client.messages.create({
       model: process.env.ANTHROPIC_VISION_MODEL ?? 'claude-haiku-4-5-20251001',
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
       tools: [FIELD_EXTRACTION_TOOL],
-      tool_choice: {type: 'tool', name: 'extract_jaag_form'},
+      tool_choice: { type: 'tool', name: 'extract_jaag_form' },
       messages: [
         {
           role: 'user',

@@ -18,6 +18,30 @@ jobs:
       matrix:
         node-version: [22]
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      BD_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      BD_HOST: localhost
+      BD_PORT: 5432
+      BD_USER: postgres
+      BD_PASSWORD: postgres
+      BD_DATABASE: postgres
+      JWT_SECRET: ci_test_secret
+
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v6
@@ -37,6 +61,9 @@ jobs:
       - name: 🔨 Build project
         run: npm run build
 
+      - name: 🗄️ Run database migrations
+        run: npm run migrate
+
       - name: 🧪 Run tests
         run: npm test
 
@@ -46,7 +73,7 @@ jobs:
 
       - name: 📤 Upload coverage to Codecov
         uses: codecov/codecov-action@v5
-        if: matrix.node-version == 20
+        if: matrix.node-version == 22
         continue-on-error: true
 
   docker-test:
@@ -110,6 +137,30 @@ jobs:
     name: 📈 Code Quality
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      BD_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      BD_HOST: localhost
+      BD_PORT: 5432
+      BD_USER: postgres
+      BD_PASSWORD: postgres
+      BD_DATABASE: postgres
+      JWT_SECRET: ci_test_secret
+
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v6
@@ -127,6 +178,9 @@ jobs:
 
       - name: 🔨 Build project
         run: npm run build
+
+      - name: 🗄️ Run database migrations
+        run: npm run migrate
 
       - name: 🧪 Run tests with coverage
         run: npm test -- --coverage

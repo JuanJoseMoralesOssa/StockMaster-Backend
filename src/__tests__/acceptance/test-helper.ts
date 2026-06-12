@@ -7,7 +7,15 @@ import {
 import { SecurityService } from '../../services'
 import { User } from '../../models'
 
-const HTTP_VERBS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'] as const
+const HTTP_VERBS = [
+  'get',
+  'post',
+  'put',
+  'patch',
+  'delete',
+  'head',
+  'options',
+] as const
 
 /**
  * Wrap a test Client so every request automatically carries an admin JWT.
@@ -23,7 +31,11 @@ function withAuth(client: Client, token: string): Client {
         typeof original === 'function'
       ) {
         return (...args: unknown[]) =>
-          (original as (...a: unknown[]) => { set: (k: string, v: string) => unknown })
+          (
+            original as (...a: unknown[]) => {
+              set: (k: string, v: string) => unknown
+            }
+          )
             .apply(target, args)
             .set('Authorization', `Bearer ${token}`)
       }
@@ -49,7 +61,9 @@ export async function setupApplication(): Promise<AppWithClient> {
   const rawClient = createRestAppClient(app)
 
   // Synthetic admin token (JWT verification is signature-only; no DB user needed).
-  const securityService = await app.get<SecurityService>('services.SecurityService')
+  const securityService = await app.get<SecurityService>(
+    'services.SecurityService',
+  )
   const token = securityService.generateToken({
     id: 1,
     name: 'test-admin',
@@ -57,11 +71,27 @@ export async function setupApplication(): Promise<AppWithClient> {
     role: 'admin',
   } as User)
 
-  return { app, client: withAuth(rawClient, token), token }
+  const makeToken = (role: string) =>
+    securityService.generateToken({
+      id: 1,
+      name: `test-${role}`,
+      email: `test-${role}@local`,
+      role,
+    } as User)
+
+  return {
+    app,
+    client: withAuth(rawClient, token),
+    token,
+    rawClient,
+    makeToken,
+  }
 }
 
 export interface AppWithClient {
   app: App
   client: Client
   token: string
+  rawClient: Client
+  makeToken: (role: string) => string
 }
