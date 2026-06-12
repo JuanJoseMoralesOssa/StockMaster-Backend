@@ -1,4 +1,4 @@
-import { HttpErrors } from '@loopback/rest'
+import { ForeignDetailError } from '../errors'
 
 export type DetailDiff<
   D extends {
@@ -17,7 +17,9 @@ export type DetailDiff<
  * Computes which details to create, update, or delete by comparing
  * the existing DB state against the incoming payload.
  *
- * Throws Forbidden if an incoming id does not belong to the parent.
+ * Pure function: throws the domain-level ForeignDetailError (not an
+ * HttpError) if an incoming id does not belong to the parent. The service
+ * layer translates it to a 403.
  */
 export function computeDetailsDiff<
   D extends {
@@ -37,9 +39,7 @@ export function computeDetailsDiff<
       toCreate.push(det)
     } else {
       if (!existingMap.has(det.id)) {
-        throw new HttpErrors.Forbidden(
-          `El detalle con ID ${det.id} no pertenece a esta transacción.`,
-        )
+        throw new ForeignDetailError(det.id)
       }
       incomingIds.add(det.id)
       const existing = existingMap.get(det.id)!

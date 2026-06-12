@@ -67,13 +67,11 @@ export class PurchaseController {
         },
       },
     })
-    purchase: Omit<Purchase, 'id'>,
+    _purchase: Omit<Purchase, 'id'>,
   ): Promise<PurchaseWithTotal> {
-    validateDate(purchase.date)
-    const createdPurchase = await this.purchaseRepository.create(purchase)
-    return this.purchaseWithTotalRepository.findById(createdPurchase.id!, {
-      include: ['purchase_details'],
-    })
+    throw new HttpErrors.MethodNotAllowed(
+      'Creating purchases without details is disabled. Use POST /purchases/with-details.',
+    )
   }
 
   @get('/purchases/count')
@@ -232,8 +230,13 @@ export class PurchaseController {
   @response(204, {
     description: 'Purchase DELETE success',
   })
-  async deleteById(@param.path.number('id') id: number): Promise<void> {
-    await this.purchaseTransactionService.deleteWithDetails(id)
+  async deleteById(
+    @param.path.number('id') id: number,
+    // Obligatorio: el borrado es la mutación más destructiva y recibe la misma
+    // protección de bloqueo optimista que las actualizaciones.
+    @param.query.number('version', { required: true }) version: number,
+  ): Promise<void> {
+    await this.purchaseTransactionService.deleteWithDetails(id, version)
   }
 
   /**
@@ -282,12 +285,11 @@ export class PurchaseController {
       purchaseDetails?: TransactionDetailRequestDTO[]
     },
   ): Promise<PurchaseWithTotal> {
-    const createdPurchase =
-      await this.purchaseTransactionService.createWithDetails({
-        date: purchase.date,
-        details: purchase.purchaseDetails,
-      })
-    return this.purchaseWithTotalRepository.findById(createdPurchase.id!, {
+    const createdId = await this.purchaseTransactionService.createWithDetails({
+      date: purchase.date,
+      details: purchase.purchaseDetails,
+    })
+    return this.purchaseWithTotalRepository.findById(createdId, {
       include: ['purchase_details'],
     })
   }

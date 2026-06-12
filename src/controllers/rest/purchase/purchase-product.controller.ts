@@ -10,14 +10,17 @@ import {
   get,
   getModelSchemaRef,
   getWhereSchemaFor,
+  HttpErrors,
   param,
   patch,
   post,
   requestBody,
 } from '@loopback/rest'
+import { Roles, requireRoles } from '../../../auth'
 import { Product, Purchase } from '../../../models'
 import { PurchaseRepository } from '../../../repositories/purchase.repository'
 
+@requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class PurchaseProductController {
   constructor(
     @repository(PurchaseRepository)
@@ -53,7 +56,7 @@ export class PurchaseProductController {
     },
   })
   async create(
-    @param.path.number('id') id: typeof Purchase.prototype.id,
+    @param.path.number('id') _id: typeof Purchase.prototype.id,
     @requestBody({
       content: {
         'application/json': {
@@ -64,9 +67,11 @@ export class PurchaseProductController {
         },
       },
     })
-    product: Omit<Product, 'id'>,
+    _product: Omit<Product, 'id'>,
   ): Promise<Product> {
-    return this.purchaseRepository.products(id).create(product)
+    throw new HttpErrors.MethodNotAllowed(
+      'Creating products through purchases is disabled for stock consistency. Use POST /purchase-details with parentVersion.',
+    )
   }
 
   @patch('/purchases/{id}/products', {
@@ -78,7 +83,7 @@ export class PurchaseProductController {
     },
   })
   async patch(
-    @param.path.number('id') id: number,
+    @param.path.number('id') _id: number,
     @requestBody({
       content: {
         'application/json': {
@@ -86,11 +91,13 @@ export class PurchaseProductController {
         },
       },
     })
-    product: Partial<Product>,
+    _product: Partial<Product>,
     @param.query.object('where', getWhereSchemaFor(Product))
-    where?: Where<Product>,
+    _where?: Where<Product>,
   ): Promise<Count> {
-    return this.purchaseRepository.products(id).patch(product, where)
+    throw new HttpErrors.MethodNotAllowed(
+      'Updating products through purchases is disabled for stock consistency. Use PATCH /products/{id}; stock is managed by transaction details.',
+    )
   }
 
   @del('/purchases/{id}/products', {
@@ -102,10 +109,12 @@ export class PurchaseProductController {
     },
   })
   async delete(
-    @param.path.number('id') id: number,
+    @param.path.number('id') _id: number,
     @param.query.object('where', getWhereSchemaFor(Product))
-    where?: Where<Product>,
+    _where?: Where<Product>,
   ): Promise<Count> {
-    return this.purchaseRepository.products(id).delete(where)
+    throw new HttpErrors.MethodNotAllowed(
+      'Deleting products through purchases is disabled for stock consistency. Use DELETE /products/{id}.',
+    )
   }
 }

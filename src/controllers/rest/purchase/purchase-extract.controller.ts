@@ -9,7 +9,7 @@ import {
   response,
 } from '@loopback/rest'
 import multer from 'multer'
-import { requireAuth } from '../../../auth'
+import { Roles, requireRoles } from '../../../auth'
 import { PersonRepository, ProductRepository } from '../../../repositories'
 import { ExtractionResult, FormExtractionService } from '../../../services'
 
@@ -107,7 +107,7 @@ export class PurchaseExtractController {
     private productRepository: ProductRepository,
   ) {}
 
-  @requireAuth()
+  @requireRoles(Roles.OFFICE, Roles.ADMIN)
   @post('/purchases/extract')
   @response(200, {
     description:

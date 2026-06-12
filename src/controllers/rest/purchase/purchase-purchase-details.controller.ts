@@ -20,15 +20,15 @@ import {
 import { Roles, requireRoles } from '../../../auth'
 import { Purchase, PurchaseDetails } from '../../../models'
 import { PurchaseRepository } from '../../../repositories/purchase.repository'
-import { DetailMutationService, TransactionKind } from '../../../services'
+import { PurchaseTransactionService } from '../../../services'
 
 @requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class PurchasePurchaseDetailsController {
   constructor(
     @repository(PurchaseRepository)
     protected purchaseRepository: PurchaseRepository,
-    @service(DetailMutationService)
-    public detailMutationService: DetailMutationService,
+    @service(PurchaseTransactionService)
+    public purchaseTransactionService: PurchaseTransactionService,
   ) {}
 
   @get('/purchases/{id}/purchase-details', {
@@ -79,12 +79,9 @@ export class PurchasePurchaseDetailsController {
     })
     purchaseDetails: Omit<PurchaseDetails, 'id'>,
   ): Promise<PurchaseDetails> {
-    return this.detailMutationService.createSingleDetail(
+    return this.purchaseTransactionService.createDetail(
       id!,
       purchaseDetails,
-      purchaseId => this.purchaseRepository.purchase_details(purchaseId),
-      this.purchaseRepository.dataSource,
-      TransactionKind.PURCHASE,
       parentVersion,
     )
   }

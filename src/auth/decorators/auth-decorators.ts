@@ -1,7 +1,51 @@
 import { authenticate } from '@loopback/authentication'
+import {
+  ClassDecoratorFactory,
+  MetadataAccessor,
+  MethodDecoratorFactory,
+} from '@loopback/core'
 
-// Clave constante para metadatos de roles para evitar typos
-const REQUIRED_ROLES_METADATA = 'required-roles'
+/**
+ * Metadatos de autorización por roles. Se almacenan vía las factorías de
+ * decoradores de LoopBack (no Reflect crudo) para que el interceptor pueda
+ * leerlos de forma determinista con MetadataInspector.
+ */
+export interface RolesMetadata {
+  /** Roles permitidos. Ignorado si `anyAuthenticated` es true. */
+  allowedRoles: string[]
+  /** Permite a cualquier usuario autenticado, sin importar su rol. */
+  anyAuthenticated?: boolean
+}
+
+export const ROLES_METHOD_KEY = MetadataAccessor.create<
+  RolesMetadata,
+  MethodDecorator
+>('authorization:method-roles')
+
+export const ROLES_CLASS_KEY = MetadataAccessor.create<
+  RolesMetadata,
+  ClassDecorator
+>('authorization:class-roles')
+
+function defineRolesMetadata(metadata: RolesMetadata) {
+  return (
+    target: Object,
+    propertyKey?: string | symbol,
+    descriptor?: PropertyDescriptor,
+  ): void => {
+    if (propertyKey === undefined) {
+      // Decorador de clase
+      ClassDecoratorFactory.createDecorator(ROLES_CLASS_KEY, metadata, {
+        decoratorName: '@requireRoles',
+      })(target as Function)
+    } else {
+      // Decorador de método
+      MethodDecoratorFactory.createDecorator(ROLES_METHOD_KEY, metadata, {
+        decoratorName: '@requireRoles',
+      })(target, propertyKey as string, descriptor as PropertyDescriptor)
+    }
+  }
+}
 
 /**
  * Decorador para requerir autenticación JWT
@@ -9,50 +53,19 @@ const REQUIRED_ROLES_METADATA = 'required-roles'
 export const requireAuth = () => authenticate('jwt')
 
 /**
- * Decorador para requerir roles específicos. Funciona a nivel de MÉTODO o de CLASE.
- * Si se aplica a la clase, todos los métodos heredan los roles; un decorador a nivel
- * de método sobrescribe el de la clase (ver AuthorizeInterceptor).
- * @param roles - Array de roles permitidos
+ * Decorador para requerir roles específicos. Funciona a nivel de MÉTODO o de
+ * CLASE; un decorador a nivel de método sobrescribe el de la clase.
+ *
+ * El AuthorizeInterceptor aplica negación por defecto: un método de
+ * controlador sin `@requireRoles(...)`, sin `@allowAuthenticated()` y sin
+ * `@authenticate.skip()` se rechaza con 403.
  */
-export const requireRoles = (...roles: string[]) => {
-  return (
-    target: Object,
-    propertyKey?: string | symbol,
-    _descriptor?: PropertyDescriptor,
-  ): void => {
-    if (propertyKey === undefined) {
-      // Decorador de clase: target es el constructor
-      Reflect.defineMetadata(REQUIRED_ROLES_METADATA, roles, target)
-    } else {
-      // Decorador de método
-      Reflect.defineMetadata(
-        REQUIRED_ROLES_METADATA,
-        roles,
-        target,
-        propertyKey,
-      )
-    }
-  }
-}
+export const requireRoles = (...roles: string[]) =>
+  defineRolesMetadata({ allowedRoles: roles })
 
 /**
- * Decorador combinado para autenticación y autorización
- * @param roles - Array de roles permitidos
+ * Permite el acceso a cualquier usuario autenticado sin exigir un rol
+ * concreto (p.ej. /whoami). Sigue exigiendo un JWT válido.
  */
-export const requireAuthAndRoles = (...roles: string[]) => {
-  return (
-    target: Object,
-    propertyKey: string | symbol,
-    descriptor: PropertyDescriptor,
-  ) => {
-    // Aplicar autenticación JWT
-    const key = typeof propertyKey === 'symbol' ? undefined : propertyKey
-    authenticate('jwt')(target, key, descriptor)
-    // Agregar metadata de roles usando constante
-    Reflect.defineMetadata(REQUIRED_ROLES_METADATA, roles, target, propertyKey)
-    return descriptor
-  }
-}
-
-// Exportar la constante para uso en el interceptor
-export { REQUIRED_ROLES_METADATA }
+export const allowAuthenticated = () =>
+  defineRolesMetadata({ allowedRoles: [], anyAuthenticated: true })

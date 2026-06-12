@@ -7,6 +7,9 @@ import {
   Person,
   Purchase,
   PurchaseDetails,
+  TransactionDetailPerson,
+  TransactionDetailPersonProduct,
+  TransactionDetailProduct,
 } from '../models'
 import {
   ExpenseDetailsRepository,
@@ -18,29 +21,8 @@ import {
 } from '../repositories'
 import { validateDateRange } from './date-validation.utils'
 import { TransactionKind } from './transaction-kind.enum'
+import { findParentIdsInRange } from './transaction-range.utils'
 import { TRANSACTION_TYPE_LABEL } from './transaction-type.const'
-
-interface TransactionDetailPersonProduct {
-  date: string
-  weight_kg: number
-  type: 'Compra' | 'Gasto'
-}
-
-interface TransactionDetailProduct {
-  date: string
-  weight_kg: number
-  type: 'Compra' | 'Gasto'
-  personId: number // Opcional para incluir información del proveedor
-  personName?: string // Opcional para mostrar el nombre del proveedor
-}
-
-interface TransactionDetailPerson {
-  date: string
-  weight_kg: number
-  type: 'Compra' | 'Gasto'
-  productId: number // Opcional para incluir información del proveedor
-  personName?: string // Opcional para mostrar el nombre del proveedor
-}
 
 type PurchaseDetailWithRelations = PurchaseDetails & {
   purchase?: Pick<Purchase, 'date'>
@@ -288,27 +270,6 @@ export class TransactionQueryService {
     )
   }
 
-  /**
-   * Drill-down: todas las transacciones de un proveedor para un producto dado
-   * dentro de un rango de fechas. Devuelve compras y gastos entrelazados,
-   * ordenados cronológicamente. Usado en la vista de detalle del dashboard.
-   */
-  public async getSupplierProductDetails(
-    supplierId: number,
-    productId: number,
-    startDate: string,
-    endDate: string,
-  ): Promise<
-    Array<{ date: string; weight_kg: number; type: 'Compra' | 'Gasto' }>
-  > {
-    return this.getPersonProductTransactions(
-      supplierId,
-      productId,
-      startDate,
-      endDate,
-    )
-  }
-
   private async ensurePersonExists(personId: number): Promise<void> {
     const person = await this.personRepository.findById(personId)
     if (!person) {
@@ -325,31 +286,17 @@ export class TransactionQueryService {
     }
   }
 
-  private async getPurchaseIdsInRange(
+  private getPurchaseIdsInRange(
     startDate: string,
     endDate: string,
   ): Promise<number[]> {
-    const purchases = await this.purchaseRepository.find({
-      where: { date: this.createDateFilter(startDate, endDate) },
-      fields: ['id'],
-    })
-    return purchases.map(p => p.id).filter((id): id is number => id != null)
+    return findParentIdsInRange(this.purchaseRepository, startDate, endDate)
   }
 
-  private async getExpenseIdsInRange(
+  private getExpenseIdsInRange(
     startDate: string,
     endDate: string,
   ): Promise<number[]> {
-    const expenses = await this.expenseRepository.find({
-      where: { date: this.createDateFilter(startDate, endDate) },
-      fields: ['id'],
-    })
-    return expenses.map(e => e.id).filter((id): id is number => id != null)
-  }
-
-  private createDateFilter(startDate: string, endDate: string) {
-    return {
-      between: [startDate, endDate] as [string, string],
-    }
+    return findParentIdsInRange(this.expenseRepository, startDate, endDate)
   }
 }

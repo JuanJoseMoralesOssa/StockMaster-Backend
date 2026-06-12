@@ -217,12 +217,9 @@ export class ProductController {
     product: Omit<Product, 'id'>,
   ): Promise<Product> {
     // stock is write-protected: only StockReconciliationService may change it.
-    const currentProduct = await this.productRepository.findById(id)
-    const safeProduct: Omit<Product, 'id'> = {
-      ...product,
-      stock: currentProduct.stock,
-    }
-    await this.productRepository.replaceById(id, safeProduct)
+    const safeProduct: Partial<Product> = { ...product }
+    delete safeProduct.stock
+    await this.productRepository.updateById(id, safeProduct)
     return this.productRepository.findById(id, { include: [] })
   }
 

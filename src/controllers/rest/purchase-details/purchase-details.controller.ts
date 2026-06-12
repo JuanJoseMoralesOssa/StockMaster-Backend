@@ -20,22 +20,19 @@ import {
   response,
 } from '@loopback/rest'
 import { Roles, requireRoles } from '../../../auth'
+import { normalizeLimit, paginationConfig } from '../../../config/pagination'
+import { fieldRequiredMessage } from '../../../errors'
 import { PurchaseDetails } from '../../../models'
-import {
-  PurchaseDetailsRepository,
-  PurchaseRepository,
-} from '../../../repositories'
-import { DetailMutationService, TransactionKind } from '../../../services'
+import { PurchaseDetailsRepository } from '../../../repositories'
+import { PurchaseTransactionService } from '../../../services'
 
 @requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class PurchaseDetailsController {
   constructor(
     @repository(PurchaseDetailsRepository)
     public purchaseDetailsRepository: PurchaseDetailsRepository,
-    @repository(PurchaseRepository)
-    public purchaseRepository: PurchaseRepository,
-    @service(DetailMutationService)
-    public detailMutationService: DetailMutationService,
+    @service(PurchaseTransactionService)
+    public purchaseTransactionService: PurchaseTransactionService,
   ) {}
 
   @post('/purchase-details')
@@ -60,15 +57,12 @@ export class PurchaseDetailsController {
     @param.query.number('parentVersion') parentVersion?: number,
   ): Promise<PurchaseDetails> {
     if (purchaseDetails.purchaseId == null) {
-      throw new HttpErrors.BadRequest('purchaseId is required')
+      throw new HttpErrors.BadRequest(fieldRequiredMessage('purchaseId'))
     }
 
-    return this.detailMutationService.createSingleDetail(
+    return this.purchaseTransactionService.createDetail(
       purchaseDetails.purchaseId,
       purchaseDetails,
-      id => this.purchaseRepository.purchase_details(id),
-      this.purchaseRepository.dataSource,
-      TransactionKind.PURCHASE,
       parentVersion,
     )
   }
@@ -86,7 +80,7 @@ export class PurchaseDetailsController {
 
   @get('/purchase-details')
   @response(200, {
-    description: 'Array of PurchaseDetails model instances',
+    description: `Array of PurchaseDetails model instances (capped at ${paginationConfig.MAX_LIMIT} rows; use filter.skip/filter.limit to page)`,
     content: {
       'application/json': {
         schema: {
@@ -99,7 +93,10 @@ export class PurchaseDetailsController {
   async find(
     @param.filter(PurchaseDetails) filter?: Filter<PurchaseDetails>,
   ): Promise<PurchaseDetails[]> {
-    return this.purchaseDetailsRepository.find(filter)
+    return this.purchaseDetailsRepository.find({
+      ...filter,
+      limit: normalizeLimit(filter?.limit ?? paginationConfig.MAX_LIMIT),
+    })
   }
 
   @patch('/purchase-details')
@@ -161,11 +158,9 @@ export class PurchaseDetailsController {
     })
     purchaseDetails: Partial<PurchaseDetails>,
   ): Promise<PurchaseDetails> {
-    return this.detailMutationService.updateSingleDetail(
+    return this.purchaseTransactionService.updateDetail(
       id,
       purchaseDetails,
-      this.purchaseDetailsRepository,
-      TransactionKind.PURCHASE,
       parentVersion,
     )
   }
@@ -194,11 +189,9 @@ export class PurchaseDetailsController {
     })
     purchaseDetails: Omit<PurchaseDetails, 'id'>,
   ): Promise<PurchaseDetails> {
-    return this.detailMutationService.updateSingleDetail(
+    return this.purchaseTransactionService.updateDetail(
       id,
       purchaseDetails,
-      this.purchaseDetailsRepository,
-      TransactionKind.PURCHASE,
       parentVersion,
     )
   }
@@ -211,11 +204,6 @@ export class PurchaseDetailsController {
     @param.path.number('id') id: number,
     @param.query.number('parentVersion') parentVersion: number | undefined,
   ): Promise<void> {
-    await this.detailMutationService.deleteSingleDetail(
-      id,
-      this.purchaseDetailsRepository,
-      TransactionKind.PURCHASE,
-      parentVersion,
-    )
+    await this.purchaseTransactionService.deleteDetail(id, parentVersion)
   }
 }

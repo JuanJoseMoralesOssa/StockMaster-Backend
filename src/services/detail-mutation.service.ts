@@ -1,5 +1,6 @@
 import { BindingScope, injectable, service } from '@loopback/core'
 import { HttpErrors } from '@loopback/rest'
+import { USER_MESSAGES } from '../errors'
 import {
   DataSourceWithTransactions,
   DetailBase,
@@ -7,6 +8,8 @@ import {
   RelationFactory,
   TransactionOptions,
 } from './transaction.types'
+import { requireVersion } from './optimistic-lock.utils'
+import { runInTransaction } from './transaction-execution.utils'
 import { StockReconciliationService } from './stock-reconciliation.service'
 import { TransactionDetailsSqlHelper } from './transaction-details-sql.helper'
 import { TransactionKind } from './transaction-kind.enum'
@@ -29,13 +32,13 @@ export class DetailMutationService {
     expectedParentVersion?: number,
   ): Promise<TDetail> {
     this.validateDetail(newDetail)
-    const parentVersion = this.requireParentVersion(expectedParentVersion)
+    const parentVersion = requireVersion(expectedParentVersion, 'parentVersion')
 
     if (newDetail.weight_kg != null) {
       newDetail.weight_kg = roundWeightKg(newDetail.weight_kg)
     }
 
-    return this.runInTransaction(dataSource, async (tx: TransactionOptions) => {
+    return runInTransaction(dataSource, async (tx: TransactionOptions) => {
       await this.bumpParentVersion(
         dataSource,
         transactionKind,
@@ -45,15 +48,24 @@ export class DetailMutationService {
       )
 
       const detailsRelation = detailsRelationFactory(parentId)
-      await this.stockReconciliationService.adjustStock(
+      // Stock first: adjustStock 404s when the product does not exist, which
+      // must win over the detail INSERT's FK violation (409). The Kardex row
+      // therefore predates the detail row; its id is backfilled after.
+      const kardexId = await this.stockReconciliationService.adjustStock(
         dataSource,
         newDetail.productId!,
         newDetail.weight_kg!,
         transactionKind,
         'apply',
         tx.transaction,
+        { sourceId: parentId },
       )
       const detail = await detailsRelation.create(newDetail, tx)
+      await this.stockReconciliationService.attachDetailToKardex(
+        kardexId,
+        detail.id,
+        tx.transaction,
+      )
 
       return detail
     })
@@ -66,18 +78,16 @@ export class DetailMutationService {
     transactionKind: TransactionKind,
     expectedParentVersion?: number,
   ): Promise<TDetail> {
-    const parentVersion = this.requireParentVersion(expectedParentVersion)
+    const parentVersion = requireVersion(expectedParentVersion, 'parentVersion')
 
     if (updatedDetail.weight_kg != null) {
       if (updatedDetail.weight_kg <= 0) {
-        throw new HttpErrors.BadRequest(
-          'Weight must be a positive number for detail operations',
-        )
+        throw new HttpErrors.BadRequest(USER_MESSAGES.WEIGHT_POSITIVE)
       }
       updatedDetail.weight_kg = roundWeightKg(updatedDetail.weight_kg)
     }
 
-    return this.runInTransaction(
+    return runInTransaction(
       detailsRepository.dataSource,
       async (tx: TransactionOptions) => {
         const oldDetail = await detailsRepository.findById(id, {}, tx)
@@ -96,38 +106,14 @@ export class DetailMutationService {
         const newProductId = updatedDetail.productId ?? oldDetail.productId
         const oldProductId = oldDetail.productId
 
-        if (newWeight !== oldWeight || newProductId !== oldProductId) {
-          if (newProductId === oldProductId) {
-            const diff = roundWeightKg(newWeight - oldWeight)
-            if (diff !== 0) {
-              await this.stockReconciliationService.adjustStock(
-                detailsRepository.dataSource,
-                newProductId,
-                Math.abs(diff),
-                transactionKind,
-                diff > 0 ? 'apply' : 'undo',
-                tx.transaction,
-              )
-            }
-          } else {
-            await this.stockReconciliationService.adjustStock(
-              detailsRepository.dataSource,
-              oldProductId,
-              oldWeight,
-              transactionKind,
-              'undo',
-              tx.transaction,
-            )
-            await this.stockReconciliationService.adjustStock(
-              detailsRepository.dataSource,
-              newProductId,
-              newWeight,
-              transactionKind,
-              'apply',
-              tx.transaction,
-            )
-          }
-        }
+        await this.stockReconciliationService.applyDetailStockDelta(
+          detailsRepository.dataSource,
+          { productId: oldProductId, weight_kg: oldWeight },
+          { productId: newProductId, weight_kg: newWeight },
+          transactionKind,
+          tx.transaction,
+          { sourceId: parentId, sourceDetailId: id },
+        )
 
         await detailsRepository.updateById(id, updatedDetail, tx)
 
@@ -142,9 +128,9 @@ export class DetailMutationService {
     transactionKind: TransactionKind,
     expectedParentVersion?: number,
   ): Promise<void> {
-    const parentVersion = this.requireParentVersion(expectedParentVersion)
+    const parentVersion = requireVersion(expectedParentVersion, 'parentVersion')
 
-    await this.runInTransaction(
+    await runInTransaction(
       detailsRepository.dataSource,
       async (tx: TransactionOptions) => {
         const detail = await detailsRepository.findById(id, {}, tx)
@@ -164,6 +150,7 @@ export class DetailMutationService {
           transactionKind,
           'undo',
           tx.transaction,
+          { sourceId: parentId, sourceDetailId: id },
         )
 
         await detailsRepository.deleteById(id, tx)
@@ -173,14 +160,10 @@ export class DetailMutationService {
 
   private validateDetail(detail: Partial<DetailBase>): void {
     if (detail.productId == null || detail.personId == null) {
-      throw new HttpErrors.BadRequest(
-        'Product ID and Person ID are required for detail operations',
-      )
+      throw new HttpErrors.BadRequest(USER_MESSAGES.DETAIL_FIELDS_REQUIRED)
     }
     if (detail.weight_kg == null || detail.weight_kg <= 0) {
-      throw new HttpErrors.BadRequest(
-        'Weight must be a positive number for detail operations',
-      )
+      throw new HttpErrors.BadRequest(USER_MESSAGES.WEIGHT_POSITIVE)
     }
   }
 
@@ -210,23 +193,8 @@ export class DetailMutationService {
 
     const oldParentId = this.resolveParentId(oldDetail, transactionKind)
     if (updated[config.parentFk] !== oldParentId) {
-      throw new HttpErrors.BadRequest(
-        'Moving a detail to another transaction is not allowed.',
-      )
+      throw new HttpErrors.BadRequest(USER_MESSAGES.DETAIL_MOVE_FORBIDDEN)
     }
-  }
-
-  private requireParentVersion(expectedParentVersion?: number): number {
-    if (
-      expectedParentVersion == null ||
-      !Number.isFinite(expectedParentVersion) ||
-      expectedParentVersion < 1
-    ) {
-      throw new HttpErrors.BadRequest(
-        'parentVersion query parameter is required for detail mutations.',
-      )
-    }
-    return expectedParentVersion
   }
 
   private async bumpParentVersion(
@@ -238,28 +206,5 @@ export class DetailMutationService {
   ): Promise<void> {
     const sql = new TransactionDetailsSqlHelper(dataSource, transactionKind)
     await sql.bumpParentVersion(parentId, expectedParentVersion, options)
-  }
-
-  private async runInTransaction<T>(
-    dataSource: DataSourceWithTransactions,
-    work: (tx: TransactionOptions) => Promise<T>,
-  ): Promise<T> {
-    if (typeof dataSource.beginTransaction !== 'function') {
-      throw new HttpErrors.InternalServerError(
-        'DataSource does not support transactions',
-      )
-    }
-
-    const transaction = await dataSource.beginTransaction({
-      isolationLevel: 'READ COMMITTED',
-    })
-    try {
-      const result = await work({ transaction })
-      await transaction.commit()
-      return result
-    } catch (error) {
-      await transaction.rollback()
-      throw error
-    }
   }
 }

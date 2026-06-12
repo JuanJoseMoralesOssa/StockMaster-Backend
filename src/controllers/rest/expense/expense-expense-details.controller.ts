@@ -20,15 +20,15 @@ import {
 import { Roles, requireRoles } from '../../../auth'
 import { Expense, ExpenseDetails } from '../../../models'
 import { ExpenseRepository } from '../../../repositories'
-import { DetailMutationService, TransactionKind } from '../../../services'
+import { ExpenseTransactionService } from '../../../services'
 
 @requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class ExpenseExpenseDetailsController {
   constructor(
     @repository(ExpenseRepository)
     protected expenseRepository: ExpenseRepository,
-    @service(DetailMutationService)
-    public detailMutationService: DetailMutationService,
+    @service(ExpenseTransactionService)
+    public expenseTransactionService: ExpenseTransactionService,
   ) {}
 
   @get('/expenses/{id}/expense-details', {
@@ -76,12 +76,9 @@ export class ExpenseExpenseDetailsController {
     })
     expenseDetails: Omit<ExpenseDetails, 'id'>,
   ): Promise<ExpenseDetails> {
-    return this.detailMutationService.createSingleDetail(
+    return this.expenseTransactionService.createDetail(
       id!,
       expenseDetails,
-      expenseId => this.expenseRepository.expense_details(expenseId),
-      this.expenseRepository.dataSource,
-      TransactionKind.EXPENSE,
       parentVersion,
     )
   }

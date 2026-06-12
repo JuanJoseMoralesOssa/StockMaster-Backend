@@ -62,13 +62,11 @@ export class ExpenseController {
         },
       },
     })
-    expense: Omit<Expense, 'id'>,
+    _expense: Omit<Expense, 'id'>,
   ): Promise<ExpenseWithTotal> {
-    validateDate(expense.date)
-    const createdExpense = await this.expenseRepository.create(expense)
-    return this.expenseWithTotalRepository.findById(createdExpense.id!, {
-      include: ['expense_details'],
-    })
+    throw new HttpErrors.MethodNotAllowed(
+      'Creating expenses without details is disabled. Use POST /expenses/with-details.',
+    )
   }
 
   @post('/expenses/with-details')
@@ -115,12 +113,11 @@ export class ExpenseController {
       }>
     },
   ): Promise<ExpenseWithTotal> {
-    const createdExpense =
-      await this.expenseTransactionService.createWithDetails({
-        date: expense.date,
-        details: expense.expenseDetails,
-      })
-    return this.expenseWithTotalRepository.findById(createdExpense.id!, {
+    const createdId = await this.expenseTransactionService.createWithDetails({
+      date: expense.date,
+      details: expense.expenseDetails,
+    })
+    return this.expenseWithTotalRepository.findById(createdId, {
       include: ['expense_details'],
     })
   }
@@ -335,8 +332,13 @@ export class ExpenseController {
   @response(204, {
     description: 'Expense DELETE success',
   })
-  async deleteById(@param.path.number('id') id: number): Promise<void> {
-    await this.expenseTransactionService.deleteWithDetails(id)
+  async deleteById(
+    @param.path.number('id') id: number,
+    // Obligatorio: el borrado es la mutación más destructiva y recibe la misma
+    // protección de bloqueo optimista que las actualizaciones.
+    @param.query.number('version', { required: true }) version: number,
+  ): Promise<void> {
+    await this.expenseTransactionService.deleteWithDetails(id, version)
   }
 
   @get('/expenses/filtered')

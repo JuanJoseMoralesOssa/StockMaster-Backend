@@ -1,3 +1,6 @@
+// Guarantee .env is loaded before reading env vars (see config/database.ts).
+import 'dotenv/config'
+
 const NODE_ENV = process.env.NODE_ENV ?? 'development'
 const rawJwtSecret = process.env.JWT_SECRET
 const rawJwtExpiration = process.env.JWT_EXPIRATION

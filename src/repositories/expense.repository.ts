@@ -1,42 +1,20 @@
 import { Getter, inject } from '@loopback/core'
-import {
-  DefaultCrudRepository,
-  HasManyRepositoryFactory,
-  HasManyThroughRepositoryFactory,
-  repository,
-} from '@loopback/repository'
+import { HasManyRepositoryFactory, repository } from '@loopback/repository'
 import { PostgresDataSource } from '../datasources'
-import {
-  Expense,
-  ExpenseDetails,
-  ExpenseRelations,
-  Person,
-  Product,
-} from '../models'
+import { Expense, ExpenseDetails, ExpenseRelations } from '../models'
+import { DocumentRepositoryBase } from './document-repository.base'
 import { ExpenseDetailsRepository } from './expense-details.repository'
 import { PersonRepository } from './person.repository'
 import { ProductRepository } from './product.repository'
 
-export class ExpenseRepository extends DefaultCrudRepository<
+export class ExpenseRepository extends DocumentRepositoryBase<
   Expense,
   typeof Expense.prototype.id,
-  ExpenseRelations
+  ExpenseRelations,
+  ExpenseDetails,
+  typeof ExpenseDetails.prototype.id
 > {
   public readonly expense_details: HasManyRepositoryFactory<
-    ExpenseDetails,
-    typeof Expense.prototype.id
-  >
-
-  public readonly people: HasManyThroughRepositoryFactory<
-    Person,
-    typeof Person.prototype.id,
-    ExpenseDetails,
-    typeof Expense.prototype.id
-  >
-
-  public readonly products: HasManyThroughRepositoryFactory<
-    Product,
-    typeof Product.prototype.id,
     ExpenseDetails,
     typeof Expense.prototype.id
   >
@@ -50,26 +28,14 @@ export class ExpenseRepository extends DefaultCrudRepository<
     @repository.getter('ProductRepository')
     protected productRepositoryGetter: Getter<ProductRepository>,
   ) {
-    super(Expense, dataSource)
-    this.products = this.createHasManyThroughRepositoryFactoryFor(
-      'products',
-      productRepositoryGetter,
+    super(
+      Expense,
+      dataSource,
+      'expense_details',
       expenseDetailsRepositoryGetter,
-    )
-    this.registerInclusionResolver('products', this.products.inclusionResolver)
-    this.people = this.createHasManyThroughRepositoryFactoryFor(
-      'people',
       personRepositoryGetter,
-      expenseDetailsRepositoryGetter,
+      productRepositoryGetter,
     )
-    this.registerInclusionResolver('people', this.people.inclusionResolver)
-    this.expense_details = this.createHasManyRepositoryFactoryFor(
-      'expense_details',
-      expenseDetailsRepositoryGetter,
-    )
-    this.registerInclusionResolver(
-      'expense_details',
-      this.expense_details.inclusionResolver,
-    )
+    this.expense_details = this.detailsFactory
   }
 }

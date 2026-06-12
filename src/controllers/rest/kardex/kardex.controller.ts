@@ -150,7 +150,6 @@ export class KardexController {
     @param.query.string('endDate') endDate?: string,
     @param.query.number('productId') productId?: number,
     @param.query.number('operation') operation?: number,
-    @param.query.string('balanceRecord') balanceRecord?: 'yes' | 'no',
     @param.query.number('page') page: number = paginationConfig.DEFAULT_PAGE,
     @param.query.number('limit') limit: number = paginationConfig.DEFAULT_LIMIT,
   ): Promise<Pagination<Kardex>> {
@@ -171,12 +170,6 @@ export class KardexController {
 
     if (operation !== undefined) {
       where.operation = operation
-    }
-
-    if (balanceRecord === 'yes') {
-      where.balance_record = true
-    } else if (balanceRecord === 'no') {
-      where.balance_record = false
     }
 
     const [data, countResult] = await Promise.all([

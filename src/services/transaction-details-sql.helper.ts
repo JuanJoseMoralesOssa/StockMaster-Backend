@@ -1,10 +1,13 @@
 import { HttpErrors } from '@loopback/rest'
+import { notFoundMessage, USER_MESSAGES } from '../errors'
 import {
   DataSourceWithTransactions,
   TransactionOptions,
 } from './transaction.types'
+import { extractRows } from './transaction-execution.utils'
+import { requireVersion } from './optimistic-lock.utils'
 import { TransactionKind } from './transaction-kind.enum'
-import { TRANSACTION_CONFIG } from './transaction-type.const'
+import { DETAIL_COLUMNS, TRANSACTION_CONFIG } from './transaction-type.const'
 
 /** Wraps the raw-SQL batch operations for a specific detail table. */
 export class TransactionDetailsSqlHelper {
@@ -31,28 +34,28 @@ export class TransactionDetailsSqlHelper {
    * this transaction commits, preventing the lost-update the version field
    * is designed to guard against.
    *
-   * Throws 404 if the row does not exist, 409 if the version has changed.
+   * The expected version is mandatory — every caller must carry the
+   * optimistic-lock token. Throws 400 if it is missing/invalid, 404 if the
+   * row does not exist, 409 if the version has changed.
    */
   async lockParentRow(
     id: number,
     expectedVersion: number,
     options?: TransactionOptions,
   ): Promise<void> {
+    requireVersion(expectedVersion, 'version')
+
     const result = await this.dataSource.execute(
       `SELECT id, version FROM ${this.parentTableName} WHERE id = $1 FOR UPDATE`,
       [id],
       options,
     )
-    const rows = this.extractRows(result) as { id: number; version: number }[]
+    const rows = extractRows(result) as { id: number; version: number }[]
     if (!Array.isArray(rows) || rows.length === 0) {
-      throw new HttpErrors.NotFound(
-        `${this.parentTableName} with id ${id} not found`,
-      )
+      throw new HttpErrors.NotFound(notFoundMessage(this.parentTableName, id))
     }
     if (Number(rows[0].version) !== expectedVersion) {
-      throw new HttpErrors.Conflict(
-        'Este registro fue modificado por otro usuario. Por favor recarga y vuelve a intentarlo.',
-      )
+      throw new HttpErrors.Conflict(USER_MESSAGES.CONFLICT_MODIFIED)
     }
   }
 
@@ -125,7 +128,7 @@ export class TransactionDetailsSqlHelper {
     options?: TransactionOptions,
   ): Promise<void> {
     await this.dataSource.execute(
-      `UPDATE ${this.tableName} SET weight_kg = $1, productId = $2, personId = $3 WHERE id = $4`,
+      `UPDATE ${this.tableName} SET ${DETAIL_COLUMNS.weight} = $1, ${DETAIL_COLUMNS.product} = $2, ${DETAIL_COLUMNS.person} = $3 WHERE id = $4`,
       [weight_kg, productId, personId, id],
       options,
     )
@@ -136,7 +139,7 @@ export class TransactionDetailsSqlHelper {
     id: number,
     options?: TransactionOptions,
   ): Promise<void> {
-    const rows = this.extractRows(result)
+    const rows = extractRows(result)
     if (rows.length > 0) return
 
     const existsResult = await this.dataSource.execute(
@@ -144,24 +147,11 @@ export class TransactionDetailsSqlHelper {
       [id],
       options,
     )
-    const existsRows = this.extractRows(existsResult)
+    const existsRows = extractRows(existsResult)
     if (existsRows.length === 0) {
-      throw new HttpErrors.NotFound(
-        `${this.parentTableName} with id ${id} not found`,
-      )
+      throw new HttpErrors.NotFound(notFoundMessage(this.parentTableName, id))
     }
 
-    throw new HttpErrors.Conflict(
-      'Este registro fue modificado por otro usuario. Por favor recarga y vuelve a intentarlo.',
-    )
-  }
-
-  private extractRows(result: unknown): unknown[] {
-    if (Array.isArray(result)) {
-      return result
-    }
-
-    const rows = (result as { rows?: unknown })?.rows
-    return Array.isArray(rows) ? rows : []
+    throw new HttpErrors.Conflict(USER_MESSAGES.CONFLICT_MODIFIED)
   }
 }

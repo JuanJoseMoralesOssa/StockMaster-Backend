@@ -1,43 +1,25 @@
 import { Getter, inject } from '@loopback/core'
-import {
-  DefaultCrudRepository,
-  HasManyRepositoryFactory,
-  HasManyThroughRepositoryFactory,
-  repository,
-} from '@loopback/repository'
+import { HasManyRepositoryFactory, repository } from '@loopback/repository'
 import { PostgresDataSource } from '../datasources'
 import {
-  Person,
-  Product,
   PurchaseDetails,
   PurchaseWithTotal,
   PurchaseWithTotalRelations,
 } from '../models'
+import { DocumentRepositoryBase } from './document-repository.base'
 import { findFilteredDocuments } from './document-filter.utils'
 import { PersonRepository } from './person.repository'
 import { ProductRepository } from './product.repository'
 import { PurchaseDetailsRepository } from './purchase-details.repository'
 
-export class PurchaseWithTotalRepository extends DefaultCrudRepository<
+export class PurchaseWithTotalRepository extends DocumentRepositoryBase<
   PurchaseWithTotal,
   typeof PurchaseWithTotal.prototype.id,
-  PurchaseWithTotalRelations
+  PurchaseWithTotalRelations,
+  PurchaseDetails,
+  typeof PurchaseDetails.prototype.id
 > {
   public readonly purchase_details: HasManyRepositoryFactory<
-    PurchaseDetails,
-    typeof PurchaseWithTotal.prototype.id
-  >
-
-  public readonly people: HasManyThroughRepositoryFactory<
-    Person,
-    typeof Person.prototype.id,
-    PurchaseDetails,
-    typeof PurchaseWithTotal.prototype.id
-  >
-
-  public readonly products: HasManyThroughRepositoryFactory<
-    Product,
-    typeof Product.prototype.id,
     PurchaseDetails,
     typeof PurchaseWithTotal.prototype.id
   >
@@ -51,27 +33,15 @@ export class PurchaseWithTotalRepository extends DefaultCrudRepository<
     @repository.getter('ProductRepository')
     protected productRepositoryGetter: Getter<ProductRepository>,
   ) {
-    super(PurchaseWithTotal, dataSource)
-    this.products = this.createHasManyThroughRepositoryFactoryFor(
-      'products',
-      productRepositoryGetter,
+    super(
+      PurchaseWithTotal,
+      dataSource,
+      'purchase_details',
       purchaseDetailsRepositoryGetter,
-    )
-    this.registerInclusionResolver('products', this.products.inclusionResolver)
-    this.people = this.createHasManyThroughRepositoryFactoryFor(
-      'people',
       personRepositoryGetter,
-      purchaseDetailsRepositoryGetter,
+      productRepositoryGetter,
     )
-    this.registerInclusionResolver('people', this.people.inclusionResolver)
-    this.purchase_details = this.createHasManyRepositoryFactoryFor(
-      'purchase_details',
-      purchaseDetailsRepositoryGetter,
-    )
-    this.registerInclusionResolver(
-      'purchase_details',
-      this.purchase_details.inclusionResolver,
-    )
+    this.purchase_details = this.detailsFactory
   }
 
   async findFilteredPurchases(

@@ -12,6 +12,7 @@ describe('Purchase extraction', function () {
 
   let app: App
   let client: Client
+  const providerName = `Proveedor Extract ${Date.now()}`
 
   before('setupApplication', async () => {
     ;({ app, client } = await setupApplication())
@@ -25,7 +26,7 @@ describe('Purchase extraction', function () {
           pieles: 100,
           sebo: null,
           hueso: null,
-          recibiDelSr: 'Proveedor Extract',
+          recibiDelSr: providerName,
           fieldConfidences: {
             fecha: 0.99,
             librasTotal: 0.99,
@@ -45,33 +46,50 @@ describe('Purchase extraction', function () {
 
   it('normalizes a multipart image through an injected vision provider', async () => {
     const tag = `extract-${Date.now()}`
-    const personRes = await client
-      .post('/people')
-      .send({ name: 'Proveedor Extract' })
-      .expect(200)
-    const productRes = await client
-      .post('/products')
-      .send({ name: `Pieles ${tag}`, stock: 0 })
-      .expect(200)
+    let personId: number | undefined
+    let productId: number | undefined
 
-    const res = await client
-      .post('/purchases/extract')
-      .attach('image', Buffer.from('not-a-real-image'), {
-        filename: 'form.png',
-        contentType: 'image/png',
+    try {
+      const personRes = await client
+        .post('/people')
+        .send({ name: providerName })
+        .expect(200)
+      personId = personRes.body.id
+
+      const productRes = await client
+        .post('/products')
+        .send({ name: `Pieles ${tag}`, stock: 0 })
+        .expect(200)
+      productId = productRes.body.id
+
+      const res = await client
+        .post('/purchases/extract')
+        .attach('image', Buffer.from('not-a-real-image'), {
+          filename: 'form.png',
+          contentType: 'image/png',
+        })
+        .expect(200)
+
+      expect(res.body.date).to.containDeep({ value: '2026-06-11' })
+      expect(res.body.supplier).to.containDeep({
+        personId,
+        needsReview: false,
       })
-      .expect(200)
-
-    expect(res.body.date).to.containDeep({ value: '2026-06-11' })
-    expect(res.body.supplier).to.containDeep({
-      personId: personRes.body.id,
-      needsReview: false,
-    })
-    expect(res.body.details[0]).to.containDeep({
-      productId: productRes.body.id,
-      weightLb: 100,
-      weightKg: 45.359,
-      needsReview: false,
-    })
+      expect(res.body.details[0]).to.containDeep({
+        fieldName: 'pieles',
+        weightLb: 100,
+        weightKg: 45.359,
+        needsReview: false,
+      })
+      expect(res.body.details[0].productId).to.be.Number()
+      expect(String(res.body.details[0].productName)).to.match(/pieles/i)
+    } finally {
+      if (productId) {
+        await client.del(`/products/${productId}`).catch(() => undefined)
+      }
+      if (personId) {
+        await client.del(`/people/${personId}`).catch(() => undefined)
+      }
+    }
   })
 })

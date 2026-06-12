@@ -1,7 +1,8 @@
 import { BindingScope, injectable, service } from '@loopback/core'
 import { repository } from '@loopback/repository'
 import { Purchase, PurchaseDetails } from '../models'
-import { PurchaseRepository } from '../repositories'
+import { PurchaseDetailsRepository, PurchaseRepository } from '../repositories'
+import { DetailMutationService } from './detail-mutation.service'
 import { TransactionKind } from './transaction-kind.enum'
 import { TransactionWithDetailsService } from './transaction-with-details.service'
 
@@ -26,18 +27,28 @@ export interface UpdatePurchaseWithDetailsInput {
   }>
 }
 
+/**
+ * Per-kind facade: binds the generic transaction/detail engines to the
+ * purchase repositories once, so controllers never wire infrastructure
+ * (dataSource, relation factories, TransactionKind) themselves.
+ */
 @injectable({ scope: BindingScope.TRANSIENT })
 export class PurchaseTransactionService {
   constructor(
     @service(TransactionWithDetailsService)
     private readonly transactionWithDetailsService: TransactionWithDetailsService,
+    @service(DetailMutationService)
+    private readonly detailMutationService: DetailMutationService,
     @repository(PurchaseRepository)
     private readonly purchaseRepository: PurchaseRepository,
+    @repository(PurchaseDetailsRepository)
+    private readonly purchaseDetailsRepository: PurchaseDetailsRepository,
   ) {}
 
+  /** Creates the purchase + details atomically and returns the new id. */
   async createWithDetails(
     input: CreatePurchaseWithDetailsInput,
-  ): Promise<Purchase> {
+  ): Promise<number> {
     return this.transactionWithDetailsService.createWithDetails<
       Purchase,
       PurchaseDetails
@@ -54,8 +65,8 @@ export class PurchaseTransactionService {
 
   async updateWithDetails(
     input: UpdatePurchaseWithDetailsInput,
-  ): Promise<Purchase> {
-    return this.transactionWithDetailsService.updateWithDetails<
+  ): Promise<void> {
+    await this.transactionWithDetailsService.updateWithDetails<
       Purchase,
       PurchaseDetails
     >(
@@ -71,15 +82,54 @@ export class PurchaseTransactionService {
     )
   }
 
-  async deleteWithDetails(id: number): Promise<void> {
+  async deleteWithDetails(id: number, version?: number): Promise<void> {
     await this.transactionWithDetailsService.deleteWithDetails<
       Purchase,
       PurchaseDetails
     >(
       id,
+      version,
       this.purchaseRepository,
       purchaseId => this.purchaseRepository.purchase_details(purchaseId),
       TransactionKind.PURCHASE,
+    )
+  }
+
+  async createDetail(
+    purchaseId: number,
+    detail: Partial<PurchaseDetails>,
+    parentVersion?: number,
+  ): Promise<PurchaseDetails> {
+    return this.detailMutationService.createSingleDetail(
+      purchaseId,
+      detail,
+      id => this.purchaseRepository.purchase_details(id),
+      this.purchaseRepository.dataSource,
+      TransactionKind.PURCHASE,
+      parentVersion,
+    )
+  }
+
+  async updateDetail(
+    id: number,
+    detail: Partial<PurchaseDetails>,
+    parentVersion?: number,
+  ): Promise<PurchaseDetails> {
+    return this.detailMutationService.updateSingleDetail(
+      id,
+      detail,
+      this.purchaseDetailsRepository,
+      TransactionKind.PURCHASE,
+      parentVersion,
+    )
+  }
+
+  async deleteDetail(id: number, parentVersion?: number): Promise<void> {
+    await this.detailMutationService.deleteSingleDetail(
+      id,
+      this.purchaseDetailsRepository,
+      TransactionKind.PURCHASE,
+      parentVersion,
     )
   }
 }

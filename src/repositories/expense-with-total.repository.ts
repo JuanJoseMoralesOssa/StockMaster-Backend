@@ -1,43 +1,25 @@
 import { Getter, inject } from '@loopback/core'
-import {
-  DefaultCrudRepository,
-  HasManyRepositoryFactory,
-  HasManyThroughRepositoryFactory,
-  repository,
-} from '@loopback/repository'
+import { HasManyRepositoryFactory, repository } from '@loopback/repository'
 import { PostgresDataSource } from '../datasources'
 import {
   ExpenseDetails,
   ExpenseWithTotal,
   ExpenseWithTotalRelations,
-  Person,
-  Product,
 } from '../models'
+import { DocumentRepositoryBase } from './document-repository.base'
 import { findFilteredDocuments } from './document-filter.utils'
 import { ExpenseDetailsRepository } from './expense-details.repository'
 import { PersonRepository } from './person.repository'
 import { ProductRepository } from './product.repository'
 
-export class ExpenseWithTotalRepository extends DefaultCrudRepository<
+export class ExpenseWithTotalRepository extends DocumentRepositoryBase<
   ExpenseWithTotal,
   typeof ExpenseWithTotal.prototype.id,
-  ExpenseWithTotalRelations
+  ExpenseWithTotalRelations,
+  ExpenseDetails,
+  typeof ExpenseDetails.prototype.id
 > {
   public readonly expense_details: HasManyRepositoryFactory<
-    ExpenseDetails,
-    typeof ExpenseWithTotal.prototype.id
-  >
-
-  public readonly people: HasManyThroughRepositoryFactory<
-    Person,
-    typeof Person.prototype.id,
-    ExpenseDetails,
-    typeof ExpenseWithTotal.prototype.id
-  >
-
-  public readonly products: HasManyThroughRepositoryFactory<
-    Product,
-    typeof Product.prototype.id,
     ExpenseDetails,
     typeof ExpenseWithTotal.prototype.id
   >
@@ -51,27 +33,15 @@ export class ExpenseWithTotalRepository extends DefaultCrudRepository<
     @repository.getter('ProductRepository')
     protected productRepositoryGetter: Getter<ProductRepository>,
   ) {
-    super(ExpenseWithTotal, dataSource)
-    this.products = this.createHasManyThroughRepositoryFactoryFor(
-      'products',
-      productRepositoryGetter,
+    super(
+      ExpenseWithTotal,
+      dataSource,
+      'expense_details',
       expenseDetailsRepositoryGetter,
-    )
-    this.registerInclusionResolver('products', this.products.inclusionResolver)
-    this.people = this.createHasManyThroughRepositoryFactoryFor(
-      'people',
       personRepositoryGetter,
-      expenseDetailsRepositoryGetter,
+      productRepositoryGetter,
     )
-    this.registerInclusionResolver('people', this.people.inclusionResolver)
-    this.expense_details = this.createHasManyRepositoryFactoryFor(
-      'expense_details',
-      expenseDetailsRepositoryGetter,
-    )
-    this.registerInclusionResolver(
-      'expense_details',
-      this.expense_details.inclusionResolver,
-    )
+    this.expense_details = this.detailsFactory
   }
 
   async findFilteredExpenses(

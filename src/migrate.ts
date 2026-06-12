@@ -1,6 +1,7 @@
 require('dotenv').config()
 
 import { App } from './application'
+import { DB_CONSTRAINTS } from './errors'
 
 async function ensureInventoryForeignKeys(app: App): Promise<void> {
   const dataSource = (await app.get('datasources.postgres')) as {
@@ -120,10 +121,10 @@ async function ensureProductConstraints(app: App): Promise<void> {
 DO $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'chk_product_stock_min'
+    SELECT 1 FROM pg_constraint WHERE conname = '${DB_CONSTRAINTS.PRODUCT_STOCK_MIN}'
   ) THEN
     ALTER TABLE product
-      ADD CONSTRAINT chk_product_stock_min
+      ADD CONSTRAINT ${DB_CONSTRAINTS.PRODUCT_STOCK_MIN}
       CHECK (stock >= 0);
   END IF;
 END $$;
@@ -143,6 +144,20 @@ BEGIN
     WHERE table_name = 'person' AND column_name = 'active'
   ) THEN
     ALTER TABLE person DROP COLUMN active;
+  END IF;
+END $$;
+  `)
+
+  // balance_record was hard-coded to true on every row — a flag with zero
+  // information. Replaced by the provenance columns (sourcekind/sourceid/...).
+  await ds.execute(`
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'kardex' AND column_name = 'balance_record'
+  ) THEN
+    ALTER TABLE kardex DROP COLUMN balance_record;
   END IF;
 END $$;
   `)

@@ -42,12 +42,6 @@ export class Kardex extends Entity {
   balance: number
 
   @property({
-    type: 'boolean',
-    required: true,
-  })
-  balance_record: boolean
-
-  @property({
     type: 'number',
     required: true,
   })
@@ -55,6 +49,34 @@ export class Kardex extends Entity {
 
   @belongsTo(() => Product)
   productId: number
+
+  // --- Provenance: which document/line caused the movement, and who did it.
+  // Nullable because historical rows predate these columns.
+
+  /** 'purchase' | 'expense' — kind of the source document. */
+  @property({
+    type: 'string',
+    jsonSchema: { enum: ['purchase', 'expense'] },
+  })
+  sourceKind?: string
+
+  /** Id of the source purchase/expense document. */
+  @property({
+    type: 'number',
+  })
+  sourceId?: number
+
+  /** Id of the detail line that produced the movement, when known. */
+  @property({
+    type: 'number',
+  })
+  sourceDetailId?: number
+
+  /** Id of the authenticated user who performed the operation. */
+  @property({
+    type: 'number',
+  })
+  userId?: number
 
   constructor(data?: Partial<Kardex>) {
     super(data)

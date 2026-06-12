@@ -7,6 +7,7 @@ import {
   ValueOrPromise,
 } from '@loopback/core'
 import { HttpErrors } from '@loopback/rest'
+import { DB_CONSTRAINTS, PG_ERROR_CODES, USER_MESSAGES } from '../errors'
 
 type ErrorWithStatusCode = {
   statusCode: number
@@ -14,6 +15,10 @@ type ErrorWithStatusCode = {
 
 type ErrorWithCode = {
   code: string
+}
+
+type ErrorWithConstraint = {
+  constraint?: string
 }
 
 function hasStatusCode(error: unknown): error is ErrorWithStatusCode {
@@ -32,6 +37,11 @@ function hasCode(error: unknown, code: string): error is ErrorWithCode {
     'code' in error &&
     (error as { code?: unknown }).code === code
   )
+}
+
+function getConstraint(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null) return undefined
+  return (error as ErrorWithConstraint).constraint
 }
 
 /**
@@ -63,6 +73,32 @@ export class ErrorHandlerInterceptor implements Provider<Interceptor> {
         )
       }
 
+      if (hasCode(error, PG_ERROR_CODES.CHECK_VIOLATION)) {
+        if (getConstraint(error) === DB_CONSTRAINTS.PRODUCT_STOCK_MIN) {
+          throw new HttpErrors.Conflict(USER_MESSAGES.INSUFFICIENT_STOCK)
+        }
+        throw new HttpErrors.UnprocessableEntity(USER_MESSAGES.DATA_CONSTRAINT)
+      }
+
+      if (hasCode(error, PG_ERROR_CODES.FOREIGN_KEY_VIOLATION)) {
+        throw new HttpErrors.Conflict(USER_MESSAGES.RELATED_RECORDS)
+      }
+
+      if (hasCode(error, PG_ERROR_CODES.UNIQUE_VIOLATION)) {
+        throw new HttpErrors.Conflict(USER_MESSAGES.DUPLICATE_RECORD)
+      }
+
+      // Fallos transitorios de PostgreSQL (deadlock entre transacciones que
+      // ajustan stock de productos en orden opuesto, o fallo de
+      // serialización): son reintetables — 409 con mensaje de reintento, no
+      // un 500 opaco de "contacta a soporte".
+      if (
+        hasCode(error, PG_ERROR_CODES.DEADLOCK_DETECTED) ||
+        hasCode(error, PG_ERROR_CODES.SERIALIZATION_FAILURE)
+      ) {
+        throw new HttpErrors.Conflict(USER_MESSAGES.RETRYABLE_CONFLICT)
+      }
+
       // 2. Loggear errores graves que no controlamos para la trazabilidad interna
       console.error(
         `[Unhandled Error] en ${invocationCtx.targetName}: `,
@@ -73,9 +109,7 @@ export class ErrorHandlerInterceptor implements Provider<Interceptor> {
       }
 
       // 3. Empaquetarlo en un 500 para el cliente evitando fugar stack traces sensibles
-      throw new HttpErrors.InternalServerError(
-        'An unexpected error occurred. Please contact support.',
-      )
+      throw new HttpErrors.InternalServerError(USER_MESSAGES.UNEXPECTED)
     }
   }
 }

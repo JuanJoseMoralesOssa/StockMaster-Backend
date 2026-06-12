@@ -7,12 +7,16 @@ import {
 import { SecurityService } from '../../services'
 import { User } from '../../models'
 
+// 'del' is supertest's alias for 'delete' — it must be wrapped too, or
+// cleanup calls written as client.del(...) go out WITHOUT the auth header
+// and silently 401, leaking rows between test runs.
 const HTTP_VERBS = [
   'get',
   'post',
   'put',
   'patch',
   'delete',
+  'del',
   'head',
   'options',
 ] as const
@@ -94,4 +98,25 @@ export interface AppWithClient {
   token: string
   rawClient: Client
   makeToken: (role: string) => string
+}
+
+/**
+ * Best-effort cleanup for purchases/expenses. DELETE requires the current
+ * optimistic-lock version, so this fetches the row first and skips silently
+ * if it is already gone.
+ */
+export async function cleanupTransaction(
+  client: Client,
+  basePath: '/purchases' | '/expenses',
+  id: number | undefined,
+): Promise<void> {
+  if (id == null) return
+  try {
+    const res = await client.get(`${basePath}/${id}`)
+    if (res.status !== 200) return
+    const version = Number(res.body?.version ?? 1)
+    await client.delete(`${basePath}/${id}`).query({ version })
+  } catch {
+    // best-effort: never fail a test from its cleanup block
+  }
 }

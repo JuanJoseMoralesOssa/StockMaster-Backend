@@ -9,7 +9,10 @@ import {
   PurchaseDetailsRepository,
   PurchaseRepository,
 } from '../repositories'
-import { validateDateRange as validateAnalyticsDateRange } from './date-validation.utils'
+import { validateDateRange } from './date-validation.utils'
+import { TransactionKind } from './transaction-kind.enum'
+import { TRANSACTION_CONFIG } from './transaction-type.const'
+import { findParentIdsInRange, ParentRepoLike } from './transaction-range.utils'
 
 export interface SupplierAnalytics {
   personId: number
@@ -36,6 +39,19 @@ type AggregatableTransaction = {
   product?: RelatedEntity
   purchase?: RelatedEntity
   expense?: RelatedEntity
+}
+
+type TransactionTypeFilter = 'purchases' | 'expenses' | 'both'
+
+type EntityAggregate = {
+  id: number
+  name: string
+  totalWeight: number
+  transactionCount: number
+}
+
+type DetailRepoLike = {
+  find(filter?: object): Promise<AggregatableTransaction[]>
 }
 
 export interface AnalyticsSummary {
@@ -105,10 +121,10 @@ export class AnalyticsService {
     startDate: string,
     endDate: string,
 
-    type: 'purchases' | 'expenses' | 'both' = 'both',
+    type: TransactionTypeFilter = 'both',
     limit: number = 10,
   ): Promise<DashboardSummaryResponse> {
-    this.validateDateRange(startDate, endDate)
+    validateDateRange(startDate, endDate)
     const normalizedLimit = normalizeLimit(limit)
 
     const [supplierAnalytics, productAnalytics, weightTotals] =
@@ -209,166 +225,164 @@ export class AnalyticsService {
     }
   }
 
-  private async getSupplierAnalytics(
+  private kindsFor(type: TransactionTypeFilter): TransactionKind[] {
+    if (type === 'purchases') return [TransactionKind.PURCHASE]
+    if (type === 'expenses') return [TransactionKind.EXPENSE]
+    return [TransactionKind.PURCHASE, TransactionKind.EXPENSE]
+  }
+
+  private reposFor(kind: TransactionKind): {
+    parentRepo: ParentRepoLike
+    detailRepo: DetailRepoLike
+    parentFk: 'purchaseId' | 'expenseId'
+    parentRelation: 'purchase' | 'expense'
+  } {
+    const config = TRANSACTION_CONFIG[kind]
+    if (kind === TransactionKind.PURCHASE) {
+      return {
+        parentRepo: this.purchaseRepository,
+        detailRepo: this.purchaseDetailsRepository,
+        parentFk: config.parentFk,
+        parentRelation: config.parentTable,
+      }
+    }
+    return {
+      parentRepo: this.expenseRepository,
+      detailRepo: this.expenseDetailsRepository,
+      parentFk: config.parentFk,
+      parentRelation: config.parentTable,
+    }
+  }
+
+  /**
+   * The single home for the "prefetch parent ids in range, then load their
+   * details" two-step (previously copy-pasted six times across this service).
+   * Returns the parent document count alongside the detail rows.
+   */
+  private async fetchDetailsInRange(
+    kind: TransactionKind,
     startDate: string,
     endDate: string,
-    type: 'purchases' | 'expenses' | 'both',
+    options: { include?: Array<'person' | 'product'>; weightsOnly?: boolean },
+  ): Promise<{ parentCount: number; details: AggregatableTransaction[] }> {
+    const { parentRepo, detailRepo, parentFk, parentRelation } =
+      this.reposFor(kind)
+
+    const parentIds = await findParentIdsInRange(parentRepo, startDate, endDate)
+    if (parentIds.length === 0) {
+      return { parentCount: 0, details: [] }
+    }
+
+    const filter: Record<string, unknown> = {
+      where: { [parentFk]: { inq: parentIds } },
+    }
+    if (options.weightsOnly) {
+      filter.fields = ['weight_kg']
+    } else {
+      filter.include = [
+        { relation: parentRelation },
+        ...(options.include ?? []).map(relation => ({ relation })),
+      ]
+    }
+
+    const details = await detailRepo.find(filter)
+    return { parentCount: parentIds.length, details }
+  }
+
+  private getSupplierAnalytics(
+    startDate: string,
+    endDate: string,
+    type: TransactionTypeFilter,
   ): Promise<SupplierAnalytics[]> {
-    const supplierMap = new Map<number, SupplierAnalytics>()
-    const dateFilter = this.createDateFilter(startDate, endDate)
-
-    if (type === 'purchases' || type === 'both') {
-      // Step 1: Pre-fetch purchase IDs in the date range to prevent loading all details
-      const purchasesInRange = await this.purchaseRepository.find({
-        where: { date: dateFilter },
-        fields: ['id'],
-      })
-      const purchaseIds = purchasesInRange
-        .map(p => p.id)
-        .filter((id): id is number => id != null)
-
-      if (purchaseIds.length > 0) {
-        const purchases = await this.purchaseDetailsRepository.find({
-          where: { purchaseId: { inq: purchaseIds } },
-          include: [{ relation: 'purchase' }, { relation: 'person' }],
-        })
-        this.aggregateSupplierData(purchases, supplierMap)
-      }
-    }
-
-    if (type === 'expenses' || type === 'both') {
-      // Step 1: Pre-fetch expense IDs in the date range to prevent loading all details
-      const expensesInRange = await this.expenseRepository.find({
-        where: { date: dateFilter },
-        fields: ['id'],
-      })
-      const expenseIds = expensesInRange
-        .map(e => e.id)
-        .filter((id): id is number => id != null)
-
-      if (expenseIds.length > 0) {
-        const expenses = await this.expenseDetailsRepository.find({
-          where: { expenseId: { inq: expenseIds } },
-          include: [{ relation: 'expense' }, { relation: 'person' }],
-        })
-        this.aggregateSupplierData(expenses, supplierMap)
-      }
-    }
-
-    return Array.from(supplierMap.values())
+    return this.aggregateDetailsBy(
+      'person',
+      startDate,
+      endDate,
+      type,
+      'Proveedor',
+    ).then(rows =>
+      rows.map(row => ({
+        personId: row.id,
+        personName: row.name,
+        totalWeight: row.totalWeight,
+        transactionCount: row.transactionCount,
+      })),
+    )
   }
 
-  private async getProductAnalytics(
+  private getProductAnalytics(
     startDate: string,
     endDate: string,
-    type: 'purchases' | 'expenses' | 'both',
+    type: TransactionTypeFilter,
   ): Promise<ProductAnalytics[]> {
-    const productMap = new Map<number, ProductAnalytics>()
-    const dateFilter = this.createDateFilter(startDate, endDate)
-
-    if (type === 'purchases' || type === 'both') {
-      const purchasesInRange = await this.purchaseRepository.find({
-        where: { date: dateFilter },
-        fields: ['id'],
-      })
-      const purchaseIds = purchasesInRange
-        .map(p => p.id)
-        .filter((id): id is number => id != null)
-
-      if (purchaseIds.length > 0) {
-        const purchases = await this.purchaseDetailsRepository.find({
-          where: { purchaseId: { inq: purchaseIds } },
-          include: [{ relation: 'purchase' }, { relation: 'product' }],
-        })
-        this.aggregateProductData(purchases, productMap)
-      }
-    }
-
-    if (type === 'expenses' || type === 'both') {
-      const expensesInRange = await this.expenseRepository.find({
-        where: { date: dateFilter },
-        fields: ['id'],
-      })
-      const expenseIds = expensesInRange
-        .map(e => e.id)
-        .filter((id): id is number => id != null)
-
-      if (expenseIds.length > 0) {
-        const expenses = await this.expenseDetailsRepository.find({
-          where: { expenseId: { inq: expenseIds } },
-          include: [{ relation: 'expense' }, { relation: 'product' }],
-        })
-        this.aggregateProductData(expenses, productMap)
-      }
-    }
-
-    return Array.from(productMap.values())
+    return this.aggregateDetailsBy(
+      'product',
+      startDate,
+      endDate,
+      type,
+      'Producto',
+    ).then(rows =>
+      rows.map(row => ({
+        productId: row.id,
+        productName: row.name,
+        totalWeight: row.totalWeight,
+        transactionCount: row.transactionCount,
+      })),
+    )
   }
 
-  private aggregateSupplierData(
-    transactions: AggregatableTransaction[],
-    supplierMap: Map<number, SupplierAnalytics>,
-  ): void {
-    for (const transaction of transactions) {
-      // Skip transactions without required data or without valid date relation
-      if (
-        !transaction.person ||
-        !transaction.weight_kg ||
-        transaction.weight_kg <= 0 ||
-        (!transaction.purchase && !transaction.expense)
-      ) {
-        continue
-      }
+  /**
+   * Sums weight and counts detail lines grouped by the related person or
+   * product. Skips rows without the relation, without a positive weight, or
+   * whose parent document failed to resolve.
+   */
+  private async aggregateDetailsBy(
+    entity: 'person' | 'product',
+    startDate: string,
+    endDate: string,
+    type: TransactionTypeFilter,
+    fallbackLabel: string,
+  ): Promise<EntityAggregate[]> {
+    const aggregates = new Map<number, EntityAggregate>()
 
-      const personId = transaction.person.id
-      if (personId == null) continue
-      const existing = supplierMap.get(personId)
+    for (const kind of this.kindsFor(type)) {
+      const { details } = await this.fetchDetailsInRange(
+        kind,
+        startDate,
+        endDate,
+        { include: [entity] },
+      )
 
-      if (existing) {
-        existing.totalWeight += transaction.weight_kg
-        existing.transactionCount += 1
-      } else {
-        supplierMap.set(personId, {
-          personId,
-          personName: transaction.person.name ?? `Proveedor ${personId}`,
-          totalWeight: transaction.weight_kg,
-          transactionCount: 1,
-        })
-      }
-    }
-  }
+      for (const transaction of details) {
+        const related = transaction[entity]
+        if (
+          !related ||
+          !transaction.weight_kg ||
+          transaction.weight_kg <= 0 ||
+          (!transaction.purchase && !transaction.expense)
+        ) {
+          continue
+        }
 
-  private aggregateProductData(
-    transactions: AggregatableTransaction[],
-    productMap: Map<number, ProductAnalytics>,
-  ): void {
-    for (const transaction of transactions) {
-      // Skip transactions without required data or without valid date relation
-      if (
-        !transaction.product ||
-        !transaction.weight_kg ||
-        transaction.weight_kg <= 0 ||
-        (!transaction.purchase && !transaction.expense)
-      ) {
-        continue
-      }
+        const id = related.id
+        if (id == null) continue
 
-      const productId = transaction.product.id
-      if (productId == null) continue
-      const existing = productMap.get(productId)
-
-      if (existing) {
-        existing.totalWeight += transaction.weight_kg
-        existing.transactionCount += 1
-      } else {
-        productMap.set(productId, {
-          productId,
-          productName: transaction.product.name ?? `Producto ${productId}`,
-          totalWeight: transaction.weight_kg,
-          transactionCount: 1,
-        })
+        const existing = aggregates.get(id)
+        if (existing) {
+          existing.totalWeight += transaction.weight_kg
+          existing.transactionCount += 1
+        } else {
+          aggregates.set(id, {
+            id,
+            name: related.name ?? `${fallbackLabel} ${id}`,
+            totalWeight: transaction.weight_kg,
+            transactionCount: 1,
+          })
+        }
       }
     }
+
+    return Array.from(aggregates.values())
   }
 
   private calculateSummary(
@@ -408,62 +422,43 @@ export class AnalyticsService {
   private async getWeightTotalsByType(
     startDate: string,
     endDate: string,
-    type: 'purchases' | 'expenses' | 'both',
+    type: TransactionTypeFilter,
   ): Promise<{
     purchaseWeight: number
     expenseWeight: number
     purchaseCount: number
     expenseCount: number
   }> {
-    const dateFilter = this.createDateFilter(startDate, endDate)
     const sumWeights = (rows: { weight_kg?: number }[]) =>
       rows.reduce(
         (sum, r) => sum + (r.weight_kg && r.weight_kg > 0 ? r.weight_kg : 0),
         0,
       )
 
-    let purchaseWeight = 0
-    let expenseWeight = 0
-    let purchaseCount = 0
-    let expenseCount = 0
+    const totals = {
+      purchaseWeight: 0,
+      expenseWeight: 0,
+      purchaseCount: 0,
+      expenseCount: 0,
+    }
 
-    if (type === 'purchases' || type === 'both') {
-      const purchasesInRange = await this.purchaseRepository.find({
-        where: { date: dateFilter },
-        fields: ['id'],
-      })
-      const purchaseIds = purchasesInRange
-        .map(p => p.id)
-        .filter((id): id is number => id != null)
-      purchaseCount = purchaseIds.length
-      if (purchaseIds.length > 0) {
-        const details = await this.purchaseDetailsRepository.find({
-          where: { purchaseId: { inq: purchaseIds } },
-          fields: ['weight_kg'],
-        })
-        purchaseWeight = sumWeights(details)
+    for (const kind of this.kindsFor(type)) {
+      const { parentCount, details } = await this.fetchDetailsInRange(
+        kind,
+        startDate,
+        endDate,
+        { weightsOnly: true },
+      )
+      if (kind === TransactionKind.PURCHASE) {
+        totals.purchaseCount = parentCount
+        totals.purchaseWeight = sumWeights(details)
+      } else {
+        totals.expenseCount = parentCount
+        totals.expenseWeight = sumWeights(details)
       }
     }
 
-    if (type === 'expenses' || type === 'both') {
-      const expensesInRange = await this.expenseRepository.find({
-        where: { date: dateFilter },
-        fields: ['id'],
-      })
-      const expenseIds = expensesInRange
-        .map(e => e.id)
-        .filter((id): id is number => id != null)
-      expenseCount = expenseIds.length
-      if (expenseIds.length > 0) {
-        const details = await this.expenseDetailsRepository.find({
-          where: { expenseId: { inq: expenseIds } },
-          fields: ['weight_kg'],
-        })
-        expenseWeight = sumWeights(details)
-      }
-    }
-
-    return { purchaseWeight, expenseWeight, purchaseCount, expenseCount }
+    return totals
   }
 
   private getTopResults<T extends { totalWeight: number }>(
@@ -501,18 +496,5 @@ export class AnalyticsService {
     )
 
     return sortedData.slice(0, limit)
-  }
-
-  private validateDateRange(startDate: string, endDate: string): void {
-    validateAnalyticsDateRange(startDate, endDate)
-  }
-
-  /**
-   * Creates date filter object for database queries
-   */
-  private createDateFilter(startDate: string, endDate: string) {
-    return {
-      between: [startDate, endDate] as [string, string],
-    }
   }
 }

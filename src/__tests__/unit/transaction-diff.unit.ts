@@ -1,4 +1,5 @@
 import { expect } from '@loopback/testlab'
+import { ForeignDetailError } from '../../errors'
 import { computeDetailsDiff } from '../../services/transaction-diff.utils'
 
 type Detail = {
@@ -111,7 +112,7 @@ describe('computeDetailsDiff()', () => {
     expect(toDelete).have.length(2)
   })
 
-  it('throws Forbidden when an incoming id does not belong to the parent', () => {
+  it('throws ForeignDetailError when an incoming id does not belong to the parent', () => {
     const existing: Detail[] = [
       { id: 1, weight_kg: 5, productId: 1, personId: 1 },
     ]
@@ -123,9 +124,11 @@ describe('computeDetailsDiff()', () => {
       computeDetailsDiff(existing, incoming)
     } catch (err: unknown) {
       threw = true
-      const e = err as { statusCode?: number; message?: string }
-      expect(e.statusCode).equal(403)
-      expect(e.message).match(/99/)
+      // Domain error, not an HttpError: the pure util stays HTTP-agnostic
+      // and DetailReconciliationService translates it to a 403.
+      expect(err).to.be.instanceOf(ForeignDetailError)
+      expect((err as ForeignDetailError).detailId).equal(99)
+      expect((err as Error).message).match(/99/)
     }
     expect(threw).true()
   })

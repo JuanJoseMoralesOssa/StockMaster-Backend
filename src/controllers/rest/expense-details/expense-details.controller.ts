@@ -20,22 +20,19 @@ import {
   response,
 } from '@loopback/rest'
 import { Roles, requireRoles } from '../../../auth'
+import { normalizeLimit, paginationConfig } from '../../../config/pagination'
+import { fieldRequiredMessage } from '../../../errors'
 import { ExpenseDetails } from '../../../models'
-import {
-  ExpenseDetailsRepository,
-  ExpenseRepository,
-} from '../../../repositories'
-import { DetailMutationService, TransactionKind } from '../../../services'
+import { ExpenseDetailsRepository } from '../../../repositories'
+import { ExpenseTransactionService } from '../../../services'
 
 @requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class ExpenseDetailsController {
   constructor(
     @repository(ExpenseDetailsRepository)
     public expenseDetailsRepository: ExpenseDetailsRepository,
-    @repository(ExpenseRepository)
-    public expenseRepository: ExpenseRepository,
-    @service(DetailMutationService)
-    public detailMutationService: DetailMutationService,
+    @service(ExpenseTransactionService)
+    public expenseTransactionService: ExpenseTransactionService,
   ) {}
 
   @post('/expense-details')
@@ -60,15 +57,12 @@ export class ExpenseDetailsController {
     @param.query.number('parentVersion') parentVersion?: number,
   ): Promise<ExpenseDetails> {
     if (expenseDetails.expenseId == null) {
-      throw new HttpErrors.BadRequest('expenseId is required')
+      throw new HttpErrors.BadRequest(fieldRequiredMessage('expenseId'))
     }
 
-    return this.detailMutationService.createSingleDetail(
+    return this.expenseTransactionService.createDetail(
       expenseDetails.expenseId,
       expenseDetails,
-      id => this.expenseRepository.expense_details(id),
-      this.expenseRepository.dataSource,
-      TransactionKind.EXPENSE,
       parentVersion,
     )
   }
@@ -86,7 +80,7 @@ export class ExpenseDetailsController {
 
   @get('/expense-details')
   @response(200, {
-    description: 'Array of ExpenseDetails model instances',
+    description: `Array of ExpenseDetails model instances (capped at ${paginationConfig.MAX_LIMIT} rows; use filter.skip/filter.limit to page)`,
     content: {
       'application/json': {
         schema: {
@@ -99,7 +93,10 @@ export class ExpenseDetailsController {
   async find(
     @param.filter(ExpenseDetails) filter?: Filter<ExpenseDetails>,
   ): Promise<ExpenseDetails[]> {
-    return this.expenseDetailsRepository.find(filter)
+    return this.expenseDetailsRepository.find({
+      ...filter,
+      limit: normalizeLimit(filter?.limit ?? paginationConfig.MAX_LIMIT),
+    })
   }
 
   @patch('/expense-details')
@@ -161,11 +158,9 @@ export class ExpenseDetailsController {
     })
     expenseDetails: Partial<ExpenseDetails>,
   ): Promise<ExpenseDetails> {
-    return this.detailMutationService.updateSingleDetail(
+    return this.expenseTransactionService.updateDetail(
       id,
       expenseDetails,
-      this.expenseDetailsRepository,
-      TransactionKind.EXPENSE,
       parentVersion,
     )
   }
@@ -194,11 +189,9 @@ export class ExpenseDetailsController {
     })
     expenseDetails: Omit<ExpenseDetails, 'id'>,
   ): Promise<ExpenseDetails> {
-    return this.detailMutationService.updateSingleDetail(
+    return this.expenseTransactionService.updateDetail(
       id,
       expenseDetails,
-      this.expenseDetailsRepository,
-      TransactionKind.EXPENSE,
       parentVersion,
     )
   }
@@ -211,11 +204,6 @@ export class ExpenseDetailsController {
     @param.path.number('id') id: number,
     @param.query.number('parentVersion') parentVersion: number | undefined,
   ): Promise<void> {
-    await this.detailMutationService.deleteSingleDetail(
-      id,
-      this.expenseDetailsRepository,
-      TransactionKind.EXPENSE,
-      parentVersion,
-    )
+    await this.expenseTransactionService.deleteDetail(id, parentVersion)
   }
 }

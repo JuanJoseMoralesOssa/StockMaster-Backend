@@ -1,6 +1,6 @@
 import { Client, expect } from '@loopback/testlab'
 import { App } from '../..'
-import { setupApplication } from './test-helper'
+import { cleanupTransaction, setupApplication } from './test-helper'
 
 describe('ServerSideReconciliation Flow', function () {
   // eslint-disable-next-line @typescript-eslint/no-invalid-this
@@ -268,6 +268,56 @@ describe('ServerSideReconciliation Flow', function () {
     expect(await getStock(productId)).to.equal(100 + finalWeight)
   })
 
+  it('rejects stale delete versions without changing stock', async () => {
+    const tag = `delete-version-${Date.now()}`
+    const personId = await createPerson(tag)
+    const productId = await createProduct(tag, 100)
+    let purchaseId: number | undefined
+
+    try {
+      const createRes = await client
+        .post('/purchases/with-details')
+        .send({
+          date: '2026-03-11',
+          purchaseDetails: [{ weight_kg: 10, productId, personId }],
+        })
+        .expect(200)
+
+      purchaseId = createRes.body.id
+      const detailId = createRes.body.purchase_details[0].id
+      expect(createRes.body.version).to.equal(1)
+      expect(await getStock(productId)).to.equal(110)
+
+      await client
+        .patch(`/purchase-details/${detailId}`)
+        .query({ parentVersion: 1 })
+        .send({ weight_kg: 15, productId, personId })
+        .expect(200)
+
+      await client
+        .delete(`/purchases/${purchaseId}`)
+        .query({ version: 1 })
+        .expect(409)
+
+      expect(await getStock(productId)).to.equal(115)
+      await client.get(`/purchases/${purchaseId}`).expect(200)
+
+      await client
+        .delete(`/purchases/${purchaseId}`)
+        .query({ version: 2 })
+        .expect(204)
+
+      purchaseId = undefined
+      expect(await getStock(productId)).to.equal(100)
+    } finally {
+      if (purchaseId) {
+        await client.del(`/purchases/${purchaseId}`).catch(() => undefined)
+      }
+      await client.del(`/products/${productId}`).catch(() => undefined)
+      await client.del(`/people/${personId}`).catch(() => undefined)
+    }
+  })
+
   it('rolls back purchase creation when a later detail cannot reconcile stock', async () => {
     const tag = `rollback-${Date.now()}`
     const date = '2026-03-09'
@@ -385,6 +435,232 @@ describe('ServerSideReconciliation Flow', function () {
     // Verify deleted/updated stock
     expect(await getStock(p1)).to.equal(100) // Restored back to base
     expect(await getStock(p2)).to.equal(105) // Down from 120 to 105
+  })
+
+  it('rejects DELETE without a version with 400 and changes nothing', async () => {
+    const tag = `delete-no-version-${Date.now()}`
+    const personId = await createPerson(tag)
+    const productId = await createProduct(tag, 100)
+    let purchaseId: number | undefined
+
+    try {
+      const createRes = await client
+        .post('/purchases/with-details')
+        .send({
+          date: '2026-03-12',
+          purchaseDetails: [{ weight_kg: 10, productId, personId }],
+        })
+        .expect(200)
+
+      purchaseId = createRes.body.id
+      expect(await getStock(productId)).to.equal(110)
+
+      // The optimistic-lock token is mandatory on delete: a stale client
+      // must not be able to wipe out another user's concurrent edit.
+      await client.delete(`/purchases/${purchaseId}`).expect(400)
+
+      expect(await getStock(productId)).to.equal(110)
+      await client.get(`/purchases/${purchaseId}`).expect(200)
+    } finally {
+      await cleanupTransaction(client, '/purchases', purchaseId)
+      await client.del(`/products/${productId}`).catch(() => undefined)
+      await client.del(`/people/${personId}`).catch(() => undefined)
+    }
+  })
+
+  it('rolls back the whole update when a later reconciliation step fails', async () => {
+    const tag = `update-rollback-${Date.now()}`
+    const personId = await createPerson(tag)
+    const productId = await createProduct(tag, 100)
+    let purchaseId: number | undefined
+
+    try {
+      const createRes = await client
+        .post('/purchases/with-details')
+        .send({
+          date: '2026-03-13',
+          purchaseDetails: [{ weight_kg: 10, productId, personId }],
+        })
+        .expect(200)
+
+      purchaseId = createRes.body.id
+      const detailId = createRes.body.purchase_details[0].id
+      const kardexBefore = await countKardexByProduct(productId)
+      expect(await getStock(productId)).to.equal(110)
+
+      // The update phase order is delete → update → create, so the valid
+      // weight change applies first and the nonexistent product fails later.
+      await client
+        .put('/purchases/with-details')
+        .send({
+          id: purchaseId,
+          version: 1,
+          date: '2026-03-13',
+          purchaseDetails: [
+            { id: detailId, weight_kg: 15, productId, personId },
+            { weight_kg: 3, productId: 999999999, personId },
+          ],
+        })
+        .expect(404)
+
+      // Nothing from the partially-applied update may survive the rollback.
+      expect(await getStock(productId)).to.equal(110)
+      expect(await countKardexByProduct(productId)).to.equal(kardexBefore)
+
+      const includeDetails = encodeURIComponent(
+        JSON.stringify({ include: [{ relation: 'purchase_details' }] }),
+      )
+      const after = await client
+        .get(`/purchases/${purchaseId}?filter=${includeDetails}`)
+        .expect(200)
+      expect(after.body.version).to.equal(1)
+      expect(after.body.purchase_details).to.have.length(1)
+      expect(Number(after.body.purchase_details[0].weight_kg)).to.equal(10)
+    } finally {
+      await cleanupTransaction(client, '/purchases', purchaseId)
+      await client.del(`/products/${productId}`).catch(() => undefined)
+      await client.del(`/people/${personId}`).catch(() => undefined)
+    }
+  })
+
+  it('allows exactly one concurrent single-detail patch for the same parentVersion', async () => {
+    const tag = `detail-race-${Date.now()}`
+    const personId = await createPerson(tag)
+    const productId = await createProduct(tag, 100)
+    let purchaseId: number | undefined
+
+    try {
+      const createRes = await client
+        .post('/purchases/with-details')
+        .send({
+          date: '2026-03-14',
+          purchaseDetails: [{ weight_kg: 10, productId, personId }],
+        })
+        .expect(200)
+
+      purchaseId = createRes.body.id
+      const detailId = createRes.body.purchase_details[0].id
+
+      const responses = await Promise.all([
+        client
+          .patch(`/purchase-details/${detailId}`)
+          .query({ parentVersion: 1 })
+          .send({ weight_kg: 15, productId, personId }),
+        client
+          .patch(`/purchase-details/${detailId}`)
+          .query({ parentVersion: 1 })
+          .send({ weight_kg: 20, productId, personId }),
+      ])
+
+      const statuses = responses.map(res => res.status).sort()
+      expect(statuses).to.eql([200, 409])
+
+      const winner = responses.find(res => res.status === 200)
+      const finalWeight = Number(winner?.body.weight_kg)
+      expect([15, 20]).to.containEql(finalWeight)
+      expect(await getStock(productId)).to.equal(100 + finalWeight)
+    } finally {
+      await cleanupTransaction(client, '/purchases', purchaseId)
+      await client.del(`/products/${productId}`).catch(() => undefined)
+      await client.del(`/people/${personId}`).catch(() => undefined)
+    }
+  })
+
+  it('writes one kardex row per stock movement across the with-details lifecycle', async () => {
+    const tag = `kardex-lifecycle-${Date.now()}`
+    const personId = await createPerson(tag)
+    const p1 = await createProduct(tag + '1', 100)
+    const p2 = await createProduct(tag + '2', 100)
+    let purchaseId: number | undefined
+
+    async function kardexRows(productId: number) {
+      const filter = encodeURIComponent(
+        JSON.stringify({ where: { productId }, order: ['id ASC'] }),
+      )
+      const res = await client
+        .get(`/kardexes?filter=${filter}&page=1&limit=10`)
+        .expect(200)
+      return res.body.data as Array<Record<string, unknown>>
+    }
+
+    try {
+      // CREATE: one apply row per detail.
+      const createRes = await client
+        .post('/purchases/with-details')
+        .send({
+          date: '2026-03-15',
+          purchaseDetails: [
+            { weight_kg: 10, productId: p1, personId },
+            { weight_kg: 20, productId: p2, personId },
+          ],
+        })
+        .expect(200)
+
+      purchaseId = createRes.body.id
+      const d1 = createRes.body.purchase_details.find(
+        (d: { productId: number }) => d.productId === p1,
+      )?.id
+
+      expect(await kardexRows(p1)).to.have.length(1)
+      expect(await kardexRows(p2)).to.have.length(1)
+
+      // UPDATE: edit p1 (delta row) and drop p2 (undo row).
+      await client
+        .put('/purchases/with-details')
+        .send({
+          id: purchaseId,
+          version: 1,
+          date: '2026-03-15',
+          purchaseDetails: [{ id: d1, weight_kg: 15, productId: p1, personId }],
+        })
+        .expect(200)
+
+      const p1AfterUpdate = await kardexRows(p1)
+      expect(p1AfterUpdate).to.have.length(2)
+      expect(p1AfterUpdate[1]).to.containDeep({
+        input: 5,
+        output: 0,
+        balance: 115,
+        sourceKind: 'purchase',
+        sourceId: purchaseId,
+        sourceDetailId: d1,
+        userId: 1,
+      })
+
+      const p2AfterUpdate = await kardexRows(p2)
+      expect(p2AfterUpdate).to.have.length(2)
+      expect(p2AfterUpdate[1]).to.containDeep({
+        input: 0,
+        output: 20,
+        balance: 100,
+        sourceKind: 'purchase',
+        sourceId: purchaseId,
+        userId: 1,
+      })
+
+      // DELETE: one undo row for the remaining detail.
+      await client
+        .delete(`/purchases/${purchaseId}`)
+        .query({ version: 2 })
+        .expect(204)
+      purchaseId = undefined
+
+      const p1AfterDelete = await kardexRows(p1)
+      expect(p1AfterDelete).to.have.length(3)
+      expect(p1AfterDelete[2]).to.containDeep({
+        input: 0,
+        output: 15,
+        balance: 100,
+        sourceKind: 'purchase',
+        sourceDetailId: d1,
+        userId: 1,
+      })
+    } finally {
+      await cleanupTransaction(client, '/purchases', purchaseId)
+      await client.del(`/products/${p1}`).catch(() => undefined)
+      await client.del(`/products/${p2}`).catch(() => undefined)
+      await client.del(`/people/${personId}`).catch(() => undefined)
+    }
   })
 
   it('restores old product stock and applies new product stock when a detail changes product', async () => {

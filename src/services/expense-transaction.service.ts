@@ -1,7 +1,8 @@
 import { BindingScope, injectable, service } from '@loopback/core'
 import { repository } from '@loopback/repository'
 import { Expense, ExpenseDetails } from '../models'
-import { ExpenseRepository } from '../repositories'
+import { ExpenseDetailsRepository, ExpenseRepository } from '../repositories'
+import { DetailMutationService } from './detail-mutation.service'
 import { TransactionKind } from './transaction-kind.enum'
 import { TransactionWithDetailsService } from './transaction-with-details.service'
 
@@ -26,18 +27,28 @@ export interface UpdateExpenseWithDetailsInput {
   }>
 }
 
+/**
+ * Per-kind facade: binds the generic transaction/detail engines to the
+ * expense repositories once, so controllers never wire infrastructure
+ * (dataSource, relation factories, TransactionKind) themselves.
+ */
 @injectable({ scope: BindingScope.TRANSIENT })
 export class ExpenseTransactionService {
   constructor(
     @service(TransactionWithDetailsService)
     private readonly transactionWithDetailsService: TransactionWithDetailsService,
+    @service(DetailMutationService)
+    private readonly detailMutationService: DetailMutationService,
     @repository(ExpenseRepository)
     private readonly expenseRepository: ExpenseRepository,
+    @repository(ExpenseDetailsRepository)
+    private readonly expenseDetailsRepository: ExpenseDetailsRepository,
   ) {}
 
+  /** Creates the expense + details atomically and returns the new id. */
   async createWithDetails(
     input: CreateExpenseWithDetailsInput,
-  ): Promise<Expense> {
+  ): Promise<number> {
     return this.transactionWithDetailsService.createWithDetails<
       Expense,
       ExpenseDetails
@@ -52,10 +63,8 @@ export class ExpenseTransactionService {
     )
   }
 
-  async updateWithDetails(
-    input: UpdateExpenseWithDetailsInput,
-  ): Promise<Expense> {
-    return this.transactionWithDetailsService.updateWithDetails<
+  async updateWithDetails(input: UpdateExpenseWithDetailsInput): Promise<void> {
+    await this.transactionWithDetailsService.updateWithDetails<
       Expense,
       ExpenseDetails
     >(
@@ -71,15 +80,54 @@ export class ExpenseTransactionService {
     )
   }
 
-  async deleteWithDetails(id: number): Promise<void> {
+  async deleteWithDetails(id: number, version?: number): Promise<void> {
     await this.transactionWithDetailsService.deleteWithDetails<
       Expense,
       ExpenseDetails
     >(
       id,
+      version,
       this.expenseRepository,
       expenseId => this.expenseRepository.expense_details(expenseId),
       TransactionKind.EXPENSE,
+    )
+  }
+
+  async createDetail(
+    expenseId: number,
+    detail: Partial<ExpenseDetails>,
+    parentVersion?: number,
+  ): Promise<ExpenseDetails> {
+    return this.detailMutationService.createSingleDetail(
+      expenseId,
+      detail,
+      id => this.expenseRepository.expense_details(id),
+      this.expenseRepository.dataSource,
+      TransactionKind.EXPENSE,
+      parentVersion,
+    )
+  }
+
+  async updateDetail(
+    id: number,
+    detail: Partial<ExpenseDetails>,
+    parentVersion?: number,
+  ): Promise<ExpenseDetails> {
+    return this.detailMutationService.updateSingleDetail(
+      id,
+      detail,
+      this.expenseDetailsRepository,
+      TransactionKind.EXPENSE,
+      parentVersion,
+    )
+  }
+
+  async deleteDetail(id: number, parentVersion?: number): Promise<void> {
+    await this.detailMutationService.deleteSingleDetail(
+      id,
+      this.expenseDetailsRepository,
+      TransactionKind.EXPENSE,
+      parentVersion,
     )
   }
 }

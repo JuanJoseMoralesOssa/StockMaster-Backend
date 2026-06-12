@@ -57,17 +57,19 @@ export class DetailsReportsController {
     )
   }
 
-  /** Drill-down: historial de un proveedor para un producto en un rango de fechas. */
+  /**
+   * Drill-down: historial de un proveedor para un producto en un rango de
+   * fechas. Misma consulta que /reports/details/person/{id}/product/{id};
+   * la ruta se conserva por compatibilidad con el frontend.
+   */
   @get('/reports/details/supplier/{supplierId}/product/{productId}')
   async getSupplierProductDetails(
     @param.path.number('supplierId') supplierId: number,
     @param.path.number('productId') productId: number,
     @param.query.string('startDate') startDate: string,
     @param.query.string('endDate') endDate: string,
-  ): Promise<
-    Array<{ date: string; weight_kg: number; type: 'Compra' | 'Gasto' }>
-  > {
-    return this.transactionQueryService.getSupplierProductDetails(
+  ): Promise<TransactionDetailPersonProduct[]> {
+    return this.transactionQueryService.getPersonProductTransactions(
       supplierId,
       productId,
       startDate,

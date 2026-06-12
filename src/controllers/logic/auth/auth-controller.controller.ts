@@ -8,7 +8,7 @@ import {
   response,
 } from '@loopback/rest'
 import { SecurityBindings, UserProfile } from '@loopback/security'
-import { requireAuth } from '../../../auth'
+import { allowAuthenticated, requireAuth } from '../../../auth'
 import { Credentials, LoginResult, WhoAmIResponse } from '../../../models'
 import { SecurityService } from '../../../services'
 
@@ -52,6 +52,7 @@ export class AuthControllerController {
    * @description This method returns information about the currently authenticated user
    */
   @requireAuth()
+  @allowAuthenticated()
   @get('/whoami')
   @response(200, {
     description: 'Current user information',
