@@ -23,6 +23,39 @@ npx lb-mocha --allow-console-logs "dist/__tests__/acceptance/inventory-stock.acc
 ```
 
 Tests require a live PostgreSQL database (acceptance tests hit it directly — no mocks).
+The full suite takes ~4–5 minutes because the database is remote (see gotchas below).
+
+## Critical gotchas (hard-won — read before touching env/config/datasource code)
+
+1. **dotenv import order can silently poison the DB config.** `src/config/database.ts`
+   and `src/config/security.ts` capture `process.env` **at module load**. Both start
+   with `import 'dotenv/config'` — NEVER remove it. Without it, any module chain that
+   reaches a config file before something else loads dotenv (e.g. a test file importing
+   `src/auth` before `src/index`) caches the `localhost:5432` fallback, and every
+   request then fails with instant `AggregateError` connection refusals that look like
+   network/DB flakiness. This cost hours to diagnose: the failures appear only in some
+   runs (they depend on mocha's alphabetical file-load order), the real config looks
+   correct when probed, and individual suites can pass while the combined run fails.
+   If you ever see `La conexión falla: AggregateError` on every suite, check env load
+   order FIRST.
+2. **The database is a remote Neon serverless pooler, not localhost** (see `.env`).
+   Cold starts take ~5s, during which connections are refused at TCP level. The
+   datasource handles this: `PostgresDataSource.start()` connects eagerly and polls
+   `this.connected` with a deadline — do NOT "simplify" it to `await this.connect()`;
+   juggler's `connect()` promise can stay pending forever even after the connection
+   succeeds. The constructor's `'error'` listener is also load-bearing: without it a
+   refused attempt becomes an uncaught EventEmitter error that kills the process (or
+   whatever mocha test is running). `stop()` must keep disconnecting the pool.
+3. **Node ≥ 20 Happy Eyeballs**: the default 250ms per-address connect timeout is too
+   tight for remote TLS endpoints under event-loop load; `postgres.datasource.ts`
+   raises it (`NET_FAMILY_ATTEMPT_TIMEOUT_MS`, default 3000).
+4. **Optimistic locking is mandatory everywhere, including DELETE.**
+   `DELETE /purchases/{id}` and `/expenses/{id}` require `?version=` (400 without it,
+   409 on mismatch); detail mutations require `?parentVersion=`. Test cleanup must use
+   the `cleanupTransaction` helper in `test-helper.ts` (fetches current version first).
+5. **test-helper's auth proxy must wrap `del` as well as `delete`** — supertest's
+   `.del()` alias otherwise bypasses the Authorization header and cleanup silently
+   401s, leaking rows that pollute later runs.
 
 ## Environment variables
 
