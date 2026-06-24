@@ -132,6 +132,8 @@ interface GeminiGenerateContentResponse {
   }
 }
 
+// Operational guard, not a Google-documented latency target. Keep it
+// configurable and use the per-attempt logs below to tune it with real traffic.
 const DEFAULT_GEMINI_TIMEOUT_MS = 8000
 const DEFAULT_GEMINI_TOTAL_TIMEOUT_MS = 26000
 const DEFAULT_GEMINI_MEDIA_RESOLUTION = 'MEDIA_RESOLUTION_HIGH'
@@ -378,10 +380,23 @@ export class GeminiFormVisionProvider implements FormVisionProvider {
     const mediaResolution = getGeminiMediaResolution()
     const estimatedTokens = estimateGeminiRequestTokens(mediaResolution)
     const startedAt = Date.now()
-    const deadline = startedAt + getGeminiTotalTimeoutMs()
+    const perModelTimeoutMs = getGeminiTimeoutMs()
+    const totalTimeoutMs = getGeminiTotalTimeoutMs()
+    const deadline = startedAt + totalTimeoutMs
     let lastRetryableError: RetryableGeminiError | undefined
 
+    console.info('[purchase-extract] Gemini extraction start', {
+      models,
+      mediaResolution,
+      estimatedTokens,
+      imageBytes: imageBuffer.length,
+      mimeType,
+      perModelTimeoutMs,
+      totalTimeoutMs,
+    })
+
     for (const model of models) {
+      const attemptStartedAt = Date.now()
       try {
         const remainingTimeoutMs = deadline - Date.now()
         if (remainingTimeoutMs <= 500) {
@@ -393,19 +408,37 @@ export class GeminiFormVisionProvider implements FormVisionProvider {
         if (!quota.ok) {
           throw new RetryableGeminiError(quota.reason)
         }
-        return await this.readFormWithModel(
+        const result = await this.readFormWithModel(
           model,
           imageBuffer,
           mimeType,
           mediaResolution,
           remainingTimeoutMs,
+          perModelTimeoutMs,
         )
+        console.info('[purchase-extract] Gemini model succeeded', {
+          model,
+          durationMs: Date.now() - attemptStartedAt,
+          totalDurationMs: Date.now() - startedAt,
+        })
+        return result
       } catch (error) {
-        if (!(error instanceof RetryableGeminiError)) throw error
+        if (!(error instanceof RetryableGeminiError)) {
+          console.warn('[purchase-extract] Gemini model failed', {
+            model,
+            durationMs: Date.now() - attemptStartedAt,
+            totalDurationMs: Date.now() - startedAt,
+            retryable: false,
+            reason: error instanceof Error ? error.message : String(error),
+          })
+          throw error
+        }
         lastRetryableError = error
         console.warn('[purchase-extract] Gemini model fallback', {
           failedModel: model,
           remainingModels: models.length - models.indexOf(model) - 1,
+          durationMs: Date.now() - attemptStartedAt,
+          totalDurationMs: Date.now() - startedAt,
           reason: error.message,
         })
       }
@@ -420,6 +453,7 @@ export class GeminiFormVisionProvider implements FormVisionProvider {
     mimeType: string,
     mediaResolution: string,
     remainingTimeoutMs: number,
+    perModelTimeoutMs: number,
   ): Promise<RawExtractionFields> {
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey)
@@ -428,7 +462,7 @@ export class GeminiFormVisionProvider implements FormVisionProvider {
     const url = new URL(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     )
-    const timeoutMs = Math.min(getGeminiTimeoutMs(), remainingTimeoutMs)
+    const timeoutMs = Math.min(perModelTimeoutMs, remainingTimeoutMs)
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
