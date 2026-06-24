@@ -48,6 +48,7 @@ export class FormExtractionService {
 
   private toHttpError(error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
+    console.error('[purchase-extract] vision provider failed', { message })
 
     if (/timed out|timeout|abort|DEADLINE_EXCEEDED/i.test(message)) {
       return new HttpErrors.RequestTimeout(
@@ -70,6 +71,22 @@ export class FormExtractionService {
     ) {
       return new HttpErrors.TooManyRequests(
         'El servicio de lectura del formulario está ocupado temporalmente. Intenta de nuevo en unos minutos.',
+      )
+    }
+
+    if (/not found|not supported|404|model/i.test(message)) {
+      return new HttpErrors.UnprocessableEntity(
+        'El modelo de lectura configurado no está disponible para esta API key o región. Revisa GEMINI_VISION_MODEL y los modelos fallback del servidor.',
+      )
+    }
+
+    if (
+      /did not return extraction JSON|invalid extraction JSON|non-JSON/i.test(
+        message,
+      )
+    ) {
+      return new HttpErrors.UnprocessableEntity(
+        'El servicio de visión respondió, pero no devolvió un JSON de extracción válido. Intenta de nuevo o revisa el modelo configurado.',
       )
     }
 
