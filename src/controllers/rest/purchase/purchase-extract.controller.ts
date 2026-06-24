@@ -139,6 +139,12 @@ export class PurchaseExtractController {
         'No se adjuntó ninguna imagen (campo: image)',
       )
 
+    console.info('[purchase-extract] image received', {
+      mimetype: file.mimetype,
+      sizeBytes: file.buffer.length,
+      provider: this.formExtractionService.providerName,
+    })
+
     const [people, products] = await Promise.all([
       this.personRepository.find({ fields: { id: true, name: true } }),
       this.productRepository.find({ fields: { id: true, name: true } }),

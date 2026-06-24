@@ -132,13 +132,202 @@ interface GeminiGenerateContentResponse {
   }
 }
 
-const DEFAULT_GEMINI_TIMEOUT_MS = 45000
+const DEFAULT_GEMINI_TIMEOUT_MS = 20000
+const DEFAULT_GEMINI_MEDIA_RESOLUTION = 'MEDIA_RESOLUTION_HIGH'
+const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash'
+const DEFAULT_GEMINI_FALLBACK_MODELS = [
+  'gemini-3-flash-preview',
+  'gemini-3.1-flash-lite',
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-flash',
+  'gemma-4-31b-it',
+  'gemma-4-26b-a4b-it',
+]
+
+interface GeminiModelLimit {
+  rpm: number
+  tpm: number
+  rpd: number
+}
+
+const DEFAULT_GEMINI_MODEL_LIMIT: GeminiModelLimit = {
+  rpm: 5,
+  tpm: 250000,
+  rpd: 20,
+}
+
+const GEMINI_MODEL_LIMITS: Record<string, GeminiModelLimit> = {
+  'gemini-3.5-flash': { rpm: 5, tpm: 250000, rpd: 20 },
+  'gemini-3-flash-preview': { rpm: 5, tpm: 250000, rpd: 20 },
+  'gemini-3.1-flash-lite': { rpm: 15, tpm: 250000, rpd: 500 },
+  'gemini-2.5-flash-lite': { rpm: 10, tpm: 250000, rpd: 20 },
+  'gemini-2.5-flash': { rpm: 5, tpm: 250000, rpd: 20 },
+  'gemma-4-31b-it': { rpm: 5, tpm: 250000, rpd: 20 },
+  'gemma-4-26b-a4b-it': { rpm: 5, tpm: 250000, rpd: 20 },
+}
+
+interface GeminiQuotaWindow {
+  minuteStartedAt: number
+  minuteRequests: number
+  minuteTokens: number
+  dayStartedAt: number
+  dayRequests: number
+}
+
+const geminiQuotaWindows = new Map<string, GeminiQuotaWindow>()
+const ONE_MINUTE_MS = 60 * 1000
+const ONE_DAY_MS = 24 * 60 * 60 * 1000
+
+class RetryableGeminiError extends Error {}
 
 function getGeminiTimeoutMs(): number {
   const configured = Number(process.env.GEMINI_TIMEOUT_MS)
   return Number.isFinite(configured) && configured > 0
     ? configured
     : DEFAULT_GEMINI_TIMEOUT_MS
+}
+
+function getGeminiMediaResolution(): string {
+  return process.env.GEMINI_MEDIA_RESOLUTION ?? DEFAULT_GEMINI_MEDIA_RESOLUTION
+}
+
+function getGeminiModelChain(): string[] {
+  const primaryModel = process.env.GEMINI_VISION_MODEL ?? DEFAULT_GEMINI_MODEL
+  const configuredFallbacks =
+    process.env.GEMINI_VISION_FALLBACK_MODELS?.split(',') ??
+    DEFAULT_GEMINI_FALLBACK_MODELS
+
+  return Array.from(
+    new Set([
+      primaryModel,
+      ...configuredFallbacks.map(model => model.trim()).filter(Boolean),
+    ]),
+  )
+}
+
+function getGeminiModelLimit(model: string): GeminiModelLimit {
+  return GEMINI_MODEL_LIMITS[model] ?? DEFAULT_GEMINI_MODEL_LIMIT
+}
+
+function getGeminiThinkingLevel(model: string): string | undefined {
+  if (model === 'gemini-3.5-flash') return 'medium'
+  if (model === 'gemini-3-flash-preview') return 'low'
+  if (model === 'gemini-3.1-flash-lite') return 'low'
+  return undefined
+}
+
+function getGeminiMaxOutputTokens(model: string): number {
+  if (model === 'gemini-3.1-flash-lite') return 2048
+  if (model === 'gemini-2.5-flash-lite') return 2048
+  if (model.startsWith('gemma-')) return 2048
+  return 4096
+}
+
+function buildGenerationConfig(
+  model: string,
+  mediaResolution: string,
+): Record<string, unknown> {
+  const thinkingLevel = getGeminiThinkingLevel(model)
+  const config: Record<string, unknown> = {
+    mediaResolution,
+    maxOutputTokens: getGeminiMaxOutputTokens(model),
+    responseMimeType: 'application/json',
+    responseSchema: FIELD_EXTRACTION_SCHEMA,
+  }
+
+  if (thinkingLevel) {
+    config.thinkingConfig = { thinkingLevel }
+  }
+
+  return config
+}
+
+function estimateGeminiRequestTokens(mediaResolution: string): number {
+  const visualTokens =
+    {
+      MEDIA_RESOLUTION_LOW: 280,
+      MEDIA_RESOLUTION_MEDIUM: 560,
+      MEDIA_RESOLUTION_HIGH: 1120,
+      MEDIA_RESOLUTION_ULTRA_HIGH: 2240,
+    }[mediaResolution] ?? 1120
+
+  // Prompt + schema are small compared with the 250K TPM quota, but reserving
+  // extra room keeps the local guard conservative.
+  return visualTokens + 1500
+}
+
+function getQuotaWindow(model: string, now: number): GeminiQuotaWindow {
+  const existing = geminiQuotaWindows.get(model)
+  if (!existing) {
+    const created = {
+      minuteStartedAt: now,
+      minuteRequests: 0,
+      minuteTokens: 0,
+      dayStartedAt: now,
+      dayRequests: 0,
+    }
+    geminiQuotaWindows.set(model, created)
+    return created
+  }
+
+  if (now - existing.minuteStartedAt >= ONE_MINUTE_MS) {
+    existing.minuteStartedAt = now
+    existing.minuteRequests = 0
+    existing.minuteTokens = 0
+  }
+  if (now - existing.dayStartedAt >= ONE_DAY_MS) {
+    existing.dayStartedAt = now
+    existing.dayRequests = 0
+  }
+
+  return existing
+}
+
+function reserveGeminiModelQuota(
+  model: string,
+  estimatedTokens: number,
+): { ok: true } | { ok: false; reason: string; limit: GeminiModelLimit } {
+  const now = Date.now()
+  const limit = getGeminiModelLimit(model)
+  const window = getQuotaWindow(model, now)
+
+  if (window.minuteRequests >= limit.rpm) {
+    return {
+      ok: false,
+      limit,
+      reason: `${model} alcanzó su límite local de ${limit.rpm} RPM`,
+    }
+  }
+  if (window.dayRequests >= limit.rpd) {
+    return {
+      ok: false,
+      limit,
+      reason: `${model} alcanzó su límite local de ${limit.rpd} RPD`,
+    }
+  }
+  if (window.minuteTokens + estimatedTokens > limit.tpm) {
+    return {
+      ok: false,
+      limit,
+      reason: `${model} alcanzó su límite local estimado de ${limit.tpm} TPM`,
+    }
+  }
+
+  window.minuteRequests += 1
+  window.dayRequests += 1
+  window.minuteTokens += estimatedTokens
+  return { ok: true }
+}
+
+function isRetryableGeminiFailure(status: number, message: string): boolean {
+  if ([429, 503].includes(status)) return true
+  return /RESOURCE_EXHAUSTED|quota exceeded|rate limit|UNAVAILABLE|try again later/i.test(
+    message,
+  )
+}
+
+export function resetGeminiModelQuotaForTests() {
+  geminiQuotaWindows.clear()
 }
 
 function extractJsonText(response: GeminiGenerateContentResponse): string {
@@ -181,11 +370,47 @@ export class GeminiFormVisionProvider implements FormVisionProvider {
     imageBuffer: Buffer,
     mimeType: string,
   ): Promise<RawExtractionFields> {
+    const models = getGeminiModelChain()
+    const mediaResolution = getGeminiMediaResolution()
+    const estimatedTokens = estimateGeminiRequestTokens(mediaResolution)
+    let lastRetryableError: RetryableGeminiError | undefined
+
+    for (const model of models) {
+      try {
+        const quota = reserveGeminiModelQuota(model, estimatedTokens)
+        if (!quota.ok) {
+          throw new RetryableGeminiError(quota.reason)
+        }
+        return await this.readFormWithModel(
+          model,
+          imageBuffer,
+          mimeType,
+          mediaResolution,
+        )
+      } catch (error) {
+        if (!(error instanceof RetryableGeminiError)) throw error
+        lastRetryableError = error
+        console.warn('[purchase-extract] Gemini model fallback', {
+          failedModel: model,
+          remainingModels: models.length - models.indexOf(model) - 1,
+          reason: error.message,
+        })
+      }
+    }
+
+    throw lastRetryableError ?? new Error('Gemini extraction failed')
+  }
+
+  private async readFormWithModel(
+    model: string,
+    imageBuffer: Buffer,
+    mimeType: string,
+    mediaResolution: string,
+  ): Promise<RawExtractionFields> {
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey)
       throw new Error('GEMINI_API_KEY environment variable is not set')
 
-    const model = process.env.GEMINI_VISION_MODEL ?? 'gemini-3.5-flash'
     const url = new URL(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     )
@@ -211,29 +436,23 @@ export class GeminiFormVisionProvider implements FormVisionProvider {
               role: 'user',
               parts: [
                 {
+                  text: 'Extract all handwritten values from this J.A.A.G receipt form. Return only valid JSON. Return null for any field that is blank or unreadable.',
+                },
+                {
                   inline_data: {
                     mime_type: toSupportedMime(mimeType),
                     data: imageBuffer.toString('base64'),
                   },
                 },
-                {
-                  text: 'Extract all handwritten values from this J.A.A.G receipt form. Return null for any field that is blank or unreadable.',
-                },
               ],
             },
           ],
-          generationConfig: {
-            temperature: 0,
-            response_mime_type: 'application/json',
-            response_schema: FIELD_EXTRACTION_SCHEMA,
-          },
+          generationConfig: buildGenerationConfig(model, mediaResolution),
         }),
       })
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(
-          `Gemini extraction timed out after ${timeoutMs}ms`,
-        )
+        throw new Error(`Gemini extraction timed out after ${timeoutMs}ms`)
       }
       throw error
     } finally {
@@ -243,9 +462,12 @@ export class GeminiFormVisionProvider implements FormVisionProvider {
     const responseText = await response.text()
     const payload = parseGeminiResponse(responseText, response.statusText)
     if (!response.ok) {
-      throw new Error(
-        `Gemini extraction failed: ${payload.error?.message ?? response.statusText}`,
-      )
+      const message = payload.error?.message ?? response.statusText
+      const formattedMessage = `Gemini extraction failed with ${model}: ${message}`
+      if (isRetryableGeminiFailure(response.status, message)) {
+        throw new RetryableGeminiError(formattedMessage)
+      }
+      throw new Error(formattedMessage)
     }
 
     return parseExtractionJson(extractJsonText(payload))

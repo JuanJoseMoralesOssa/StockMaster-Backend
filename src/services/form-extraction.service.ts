@@ -1,4 +1,5 @@
 import { BindingScope, inject, injectable } from '@loopback/core'
+import { HttpErrors } from '@loopback/rest'
 import { ExtractionResult, normalize } from './form-extraction.normalizer'
 import {
   FORM_VISION_PROVIDER_BINDING,
@@ -25,13 +26,55 @@ export class FormExtractionService {
     private readonly provider: FormVisionProvider,
   ) {}
 
+  get providerName(): string {
+    return this.provider.name
+  }
+
   async extractForm(
     imageBuffer: Buffer,
     mimeType: string,
     people: Array<{ id: number; name: string }>,
     products: Array<{ id: number; name: string }>,
   ): Promise<ExtractionResult> {
-    const raw = await this.provider.readForm(imageBuffer, mimeType)
+    let raw
+    try {
+      raw = await this.provider.readForm(imageBuffer, mimeType)
+    } catch (error) {
+      throw this.toHttpError(error)
+    }
+
     return normalize(raw, people, products)
+  }
+
+  private toHttpError(error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+
+    if (/timed out|timeout|abort/i.test(message)) {
+      return new HttpErrors.RequestTimeout(
+        'El servicio de lectura del formulario tardó demasiado. Intenta de nuevo.',
+      )
+    }
+
+    if (
+      /api key not valid|api_key|environment variable is not set/i.test(message)
+    ) {
+      return new HttpErrors.UnprocessableEntity(
+        'El servicio de lectura del formulario no está configurado correctamente. Revisa la API key del servidor.',
+      )
+    }
+
+    if (
+      /quota|rate limit|high demand|try again later|límite local|limite local/i.test(
+        message,
+      )
+    ) {
+      return new HttpErrors.TooManyRequests(
+        'El servicio de lectura del formulario está ocupado temporalmente. Intenta de nuevo en unos minutos.',
+      )
+    }
+
+    return new HttpErrors.UnprocessableEntity(
+      'No se pudo leer el formulario con el servicio de visión. Intenta de nuevo.',
+    )
   }
 }

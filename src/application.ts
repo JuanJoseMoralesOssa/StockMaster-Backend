@@ -23,6 +23,15 @@ import {
 
 export { ApplicationConfig }
 
+const PURCHASE_EXTRACT_PATH = '/purchases/extract'
+const DEFAULT_GEMINI_EXTRACT_RPM_LIMIT = 50
+const DEFAULT_GEMINI_EXTRACT_RPD_LIMIT = 620
+
+function getPositiveIntegerEnv(name: string, fallback: number): number {
+  const configured = Number(process.env[name])
+  return Number.isInteger(configured) && configured > 0 ? configured : fallback
+}
+
 export class App extends BootMixin(
   ServiceMixin(RepositoryMixin(RestApplication)),
 ) {
@@ -56,6 +65,15 @@ export class App extends BootMixin(
       },
     }
 
+    const extractRequestsPerMinute = getPositiveIntegerEnv(
+      'GEMINI_EXTRACT_RPM_LIMIT',
+      DEFAULT_GEMINI_EXTRACT_RPM_LIMIT,
+    )
+    const extractRequestsPerDay = getPositiveIntegerEnv(
+      'GEMINI_EXTRACT_RPD_LIMIT',
+      DEFAULT_GEMINI_EXTRACT_RPD_LIMIT,
+    )
+
     // Rate limiting: protege /sign-in (fuerza bruta) y /purchases/extract (costo LLM).
     // Cada limitador se salta el resto de rutas vía `skip`.
     this.expressMiddleware(
@@ -74,16 +92,33 @@ export class App extends BootMixin(
       }),
     )
     this.expressMiddleware(
-      'middleware.rateLimit.extract',
+      'middleware.rateLimit.extractMinute',
       rateLimit({
-        windowMs: 60 * 60 * 1000, // 1 hora
-        limit: 60,
+        windowMs: 60 * 1000, // Overall endpoint guard; per-model Gemini quota is enforced in the provider.
+        limit: extractRequestsPerMinute,
         standardHeaders: true,
         legacyHeaders: false,
-        skip: req => req.path !== '/purchases/extract',
+        skip: req => req.path !== PURCHASE_EXTRACT_PATH,
         message: {
           error: {
-            message: 'Límite de escaneos alcanzado. Inténtalo más tarde.',
+            message:
+              'Límite de escaneos por minuto alcanzado. Inténtalo de nuevo en un momento.',
+          },
+        },
+      }),
+    )
+    this.expressMiddleware(
+      'middleware.rateLimit.extractDaily',
+      rateLimit({
+        windowMs: 24 * 60 * 60 * 1000, // Sum of the configured fallback-chain daily request limits.
+        limit: extractRequestsPerDay,
+        standardHeaders: true,
+        legacyHeaders: false,
+        skip: req => req.path !== PURCHASE_EXTRACT_PATH,
+        message: {
+          error: {
+            message:
+              'Límite diario de escaneos alcanzado. Inténtalo de nuevo mañana.',
           },
         },
       }),

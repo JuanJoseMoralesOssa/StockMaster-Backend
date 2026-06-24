@@ -92,4 +92,111 @@ describe('Purchase extraction', function () {
       }
     }
   })
+
+  it('accepts an optimized JPEG upload', async () => {
+    const res = await client
+      .post('/purchases/extract')
+      .attach('image', Buffer.from('optimized-jpeg'), {
+        filename: 'form.jpg',
+        contentType: 'image/jpeg',
+      })
+      .expect(200)
+
+    expect(res.body.details[0]).to.containDeep({
+      fieldName: 'pieles',
+      weightLb: 100,
+    })
+  })
+
+  it('rejects requests without an image field', async () => {
+    await client
+      .post('/purchases/extract')
+      .field('note', 'missing image')
+      .expect(400)
+  })
+
+  it('rejects non-image uploads', async () => {
+    await client
+      .post('/purchases/extract')
+      .attach('image', Buffer.from('not an image'), {
+        filename: 'form.txt',
+        contentType: 'text/plain',
+      })
+      .expect(400)
+  })
+})
+
+describe('Purchase extraction rate limit', function () {
+  // eslint-disable-next-line @typescript-eslint/no-invalid-this
+  this.timeout(30000)
+
+  let app: App
+  let client: Client
+  let originalRpmLimit: string | undefined
+  let originalRpdLimit: string | undefined
+
+  before('setupApplication', async () => {
+    originalRpmLimit = process.env.GEMINI_EXTRACT_RPM_LIMIT
+    originalRpdLimit = process.env.GEMINI_EXTRACT_RPD_LIMIT
+    process.env.GEMINI_EXTRACT_RPM_LIMIT = '2'
+    process.env.GEMINI_EXTRACT_RPD_LIMIT = '20'
+    ;({ app, client } = await setupApplication())
+    app.bind(FORM_VISION_PROVIDER_BINDING).to({
+      name: 'stub',
+      async readForm() {
+        return {
+          fecha: '11/06/2026',
+          librasTotal: 100,
+          pieles: 100,
+          sebo: null,
+          hueso: null,
+          recibiDelSr: 'Proveedor Rate Limit',
+          fieldConfidences: {
+            fecha: 0.99,
+            librasTotal: 0.99,
+            pieles: 0.99,
+            sebo: 0.99,
+            hueso: 0.99,
+            recibiDelSr: 0.99,
+          },
+        }
+      },
+    } satisfies FormVisionProvider)
+  })
+
+  after(async () => {
+    if (originalRpmLimit == null) {
+      delete process.env.GEMINI_EXTRACT_RPM_LIMIT
+    } else {
+      process.env.GEMINI_EXTRACT_RPM_LIMIT = originalRpmLimit
+    }
+    if (originalRpdLimit == null) {
+      delete process.env.GEMINI_EXTRACT_RPD_LIMIT
+    } else {
+      process.env.GEMINI_EXTRACT_RPD_LIMIT = originalRpdLimit
+    }
+    await app.stop()
+  })
+
+  it('caps extraction requests per minute before calling Gemini again', async () => {
+    for (let index = 0; index < 2; index += 1) {
+      await client
+        .post('/purchases/extract')
+        .attach('image', Buffer.from(`optimized-jpeg-${index}`), {
+          filename: `form-${index}.jpg`,
+          contentType: 'image/jpeg',
+        })
+        .expect(200)
+    }
+
+    const res = await client
+      .post('/purchases/extract')
+      .attach('image', Buffer.from('optimized-jpeg-limited'), {
+        filename: 'form-limited.jpg',
+        contentType: 'image/jpeg',
+      })
+      .expect(429)
+
+    expect(res.body.error.message).to.containEql('por minuto')
+  })
 })
