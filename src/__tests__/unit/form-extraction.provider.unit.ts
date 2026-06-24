@@ -97,7 +97,7 @@ describe('GeminiFormVisionProvider', () => {
       'MEDIA_RESOLUTION_HIGH',
     )
     expect(requestBody?.generationConfig?.thinkingConfig).to.containDeep({
-      thinkingLevel: 'medium',
+      thinkingLevel: 'MEDIUM',
     })
     expect(requestBody?.generationConfig?.maxOutputTokens).to.equal(4096)
     expect(requestBody?.generationConfig).to.not.have.property('temperature')
@@ -221,5 +221,65 @@ describe('GeminiFormVisionProvider', () => {
       expect(url).to.containEql('gemini-3.5-flash')
     }
     expect(requestedUrls[5]).to.containEql('gemini-3.1-flash-lite')
+  })
+
+  it('falls back when a Gemini model times out', async () => {
+    process.env.GEMINI_API_KEY = 'test-key'
+    process.env.GEMINI_VISION_MODEL = 'gemini-3.5-flash'
+    process.env.GEMINI_VISION_FALLBACK_MODELS = 'gemini-3-flash-preview'
+
+    const requestedUrls: string[] = []
+
+    globalThis.fetch = (async (url: string | URL | Request) => {
+      requestedUrls.push(String(url))
+
+      if (requestedUrls.length === 1) {
+        const error = new Error('aborted')
+        error.name = 'AbortError'
+        throw error
+      }
+
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text: JSON.stringify({
+                      fecha: null,
+                      librasTotal: null,
+                      pieles: 100,
+                      sebo: null,
+                      hueso: null,
+                      recibiDelSr: null,
+                      fieldConfidences: {
+                        fecha: 0,
+                        librasTotal: 0,
+                        pieles: 0.99,
+                        sebo: 0,
+                        hueso: 0,
+                        recibiDelSr: 0,
+                      },
+                    }),
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+        { status: 200 },
+      )
+    }) as typeof fetch
+
+    const result = await new GeminiFormVisionProvider().readForm(
+      Buffer.from('image'),
+      'image/jpeg',
+    )
+
+    expect(result.pieles).to.equal(100)
+    expect(requestedUrls).to.have.length(2)
+    expect(requestedUrls[0]).to.containEql('gemini-3.5-flash')
+    expect(requestedUrls[1]).to.containEql('gemini-3-flash-preview')
   })
 })

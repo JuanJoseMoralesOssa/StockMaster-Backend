@@ -25,7 +25,7 @@ export { ApplicationConfig }
 
 const PURCHASE_EXTRACT_PATH = '/purchases/extract'
 const DEFAULT_GEMINI_EXTRACT_RPM_LIMIT = 50
-const DEFAULT_GEMINI_EXTRACT_RPD_LIMIT = 620
+const DEFAULT_GEMINI_EXTRACT_RPD_LIMIT = 618
 
 function getPositiveIntegerEnv(name: string, fallback: number): number {
   const configured = Number(process.env[name])

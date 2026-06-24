@@ -49,7 +49,7 @@ export class FormExtractionService {
   private toHttpError(error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
 
-    if (/timed out|timeout|abort/i.test(message)) {
+    if (/timed out|timeout|abort|DEADLINE_EXCEEDED/i.test(message)) {
       return new HttpErrors.RequestTimeout(
         'El servicio de lectura del formulario tardó demasiado. Intenta de nuevo.',
       )
@@ -64,7 +64,7 @@ export class FormExtractionService {
     }
 
     if (
-      /quota|rate limit|high demand|try again later|límite local|limite local/i.test(
+      /RESOURCE_EXHAUSTED|UNAVAILABLE|quota|rate limit|high demand|try again later|límite local|limite local/i.test(
         message,
       )
     ) {

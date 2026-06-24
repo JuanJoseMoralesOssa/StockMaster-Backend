@@ -157,7 +157,7 @@ const DEFAULT_GEMINI_MODEL_LIMIT: GeminiModelLimit = {
 }
 
 const GEMINI_MODEL_LIMITS: Record<string, GeminiModelLimit> = {
-  'gemini-3.5-flash': { rpm: 5, tpm: 250000, rpd: 20 },
+  'gemini-3.5-flash': { rpm: 5, tpm: 250000, rpd: 18 },
   'gemini-3-flash-preview': { rpm: 5, tpm: 250000, rpd: 20 },
   'gemini-3.1-flash-lite': { rpm: 15, tpm: 250000, rpd: 500 },
   'gemini-2.5-flash-lite': { rpm: 10, tpm: 250000, rpd: 20 },
@@ -210,9 +210,9 @@ function getGeminiModelLimit(model: string): GeminiModelLimit {
 }
 
 function getGeminiThinkingLevel(model: string): string | undefined {
-  if (model === 'gemini-3.5-flash') return 'medium'
-  if (model === 'gemini-3-flash-preview') return 'low'
-  if (model === 'gemini-3.1-flash-lite') return 'low'
+  if (model === 'gemini-3.5-flash') return 'MEDIUM'
+  if (model === 'gemini-3-flash-preview') return 'LOW'
+  if (model === 'gemini-3.1-flash-lite') return 'LOW'
   return undefined
 }
 
@@ -320,8 +320,8 @@ function reserveGeminiModelQuota(
 }
 
 function isRetryableGeminiFailure(status: number, message: string): boolean {
-  if ([429, 503].includes(status)) return true
-  return /RESOURCE_EXHAUSTED|quota exceeded|rate limit|UNAVAILABLE|try again later/i.test(
+  if ([408, 429, 503, 504].includes(status)) return true
+  return /RESOURCE_EXHAUSTED|quota exceeded|rate limit|UNAVAILABLE|DEADLINE_EXCEEDED|timeout|timed out|try again later/i.test(
     message,
   )
 }
@@ -452,7 +452,9 @@ export class GeminiFormVisionProvider implements FormVisionProvider {
       })
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(`Gemini extraction timed out after ${timeoutMs}ms`)
+        throw new RetryableGeminiError(
+          `Gemini extraction timed out with ${model} after ${timeoutMs}ms`,
+        )
       }
       throw error
     } finally {
