@@ -139,8 +139,8 @@ const DEFAULT_GEMINI_TOTAL_TIMEOUT_MS = 26000
 const DEFAULT_GEMINI_MEDIA_RESOLUTION = 'MEDIA_RESOLUTION_HIGH'
 const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash'
 const DEFAULT_GEMINI_FALLBACK_MODELS = [
-  'gemini-3-flash-preview',
   'gemini-3.1-flash-lite',
+  'gemini-3-flash-preview',
   'gemini-2.5-flash-lite',
   'gemini-2.5-flash',
 ]
