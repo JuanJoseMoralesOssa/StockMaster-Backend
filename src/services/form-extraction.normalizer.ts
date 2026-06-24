@@ -1,5 +1,5 @@
 // Pure domain logic for normalising a scanned J.A.A.G form into a purchase prefill.
-// Kept free of any I/O (no LLM/Anthropic dependency) so it can be unit-tested directly.
+// Kept free of any I/O (no LLM/Google dependency) so it can be unit-tested directly.
 
 export interface RawExtractionFields {
   fecha: string | null

@@ -125,7 +125,7 @@ The `version` field on Purchase/Expense is an optimistic-lock counter. `PUT /pur
 `POST /purchases/extract` accepts a multipart image upload (max 15 MB, images only). The pipeline:
 
 1. `PurchaseExtractController` parses the file via multer (in-memory, never persisted).
-2. `FormExtractionService` calls a `FormVisionProvider` (Claude by default, swappable) to get raw fields.
+2. `FormExtractionService` calls a `FormVisionProvider` (Gemini by default, swappable) to get raw fields.
 3. `form-extraction.normalizer.ts` maps raw fields to structured `ExtractionResult` with fuzzy-matched people/product IDs and confidence scores.
 
 Rate-limited to 60 requests/hour per IP.

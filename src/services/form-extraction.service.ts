@@ -14,7 +14,7 @@ export {
 
 /**
  * Orchestrates form extraction: a swappable vision provider reads the photo into
- * raw fields (Claude by default; Gemini behind the same interface), then the pure
+ * raw fields (Gemini by default), then the pure
  * normalizer turns those into a purchase prefill with confidence + review flags.
  * The image is processed in memory and never persisted.
  */
