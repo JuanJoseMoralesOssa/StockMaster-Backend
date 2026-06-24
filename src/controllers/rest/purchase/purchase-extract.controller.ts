@@ -139,10 +139,20 @@ export class PurchaseExtractController {
         'No se adjuntó ninguna imagen (campo: image)',
       )
 
+    const body = (request as Request & { body?: Record<string, unknown> }).body
     console.info('[purchase-extract] image received', {
       mimetype: file.mimetype,
       sizeBytes: file.buffer.length,
       provider: this.formExtractionService.providerName,
+      clientMetadata: {
+        optimizedSizeBytes: body?.optimizedSizeBytes,
+        optimizedWidth: body?.optimizedWidth,
+        optimizedHeight: body?.optimizedHeight,
+        cropX: body?.cropX,
+        cropY: body?.cropY,
+        cropWidth: body?.cropWidth,
+        cropHeight: body?.cropHeight,
+      },
     })
 
     const [people, products] = await Promise.all([
@@ -150,11 +160,36 @@ export class PurchaseExtractController {
       this.productRepository.find({ fields: { id: true, name: true } }),
     ])
 
-    return this.formExtractionService.extractForm(
+    const result = await this.formExtractionService.extractForm(
       file.buffer,
       file.mimetype,
       people.map(p => ({ id: p.id!, name: p.name })),
       products.map(p => ({ id: p.id!, name: p.name })),
     )
+
+    console.info('[purchase-extract] extraction result', {
+      detailsCount: result.details.length,
+      details: result.details.map(detail => ({
+        fieldName: detail.fieldName,
+        weightLb: detail.weightLb,
+        weightKg: detail.weightKg,
+        confidence: detail.confidence,
+        needsReview: detail.needsReview,
+        productId: detail.productId,
+      })),
+      date: result.date,
+      librasTotal: result.librasTotal,
+      supplier: {
+        rawName: result.supplier.rawName,
+        personId: result.supplier.personId,
+        confidence: result.supplier.confidence,
+        needsReview: result.supplier.needsReview,
+      },
+      totalWeightCheck: result.totalWeightCheck,
+      needsReview: result.needsReview,
+      reviewReasons: result.reviewReasons,
+    })
+
+    return result
   }
 }

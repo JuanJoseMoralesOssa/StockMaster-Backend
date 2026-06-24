@@ -108,6 +108,51 @@ describe('Purchase extraction', function () {
     })
   })
 
+  it('returns a review result instead of an error when no values are detected', async () => {
+    app.bind(FORM_VISION_PROVIDER_BINDING).to({
+      name: 'stub-empty',
+      async readForm() {
+        return {
+          fecha: null,
+          librasTotal: null,
+          pieles: null,
+          sebo: null,
+          hueso: null,
+          recibiDelSr: null,
+          fieldConfidences: {
+            fecha: 1,
+            librasTotal: 1,
+            pieles: 1,
+            sebo: 1,
+            hueso: 1,
+            recibiDelSr: 1,
+          },
+        }
+      },
+    } satisfies FormVisionProvider)
+
+    const res = await client
+      .post('/purchases/extract')
+      .field('optimizedSizeBytes', '52910')
+      .field('optimizedWidth', '900')
+      .field('optimizedHeight', '600')
+      .field('cropX', '10')
+      .field('cropY', '20')
+      .field('cropWidth', '800')
+      .field('cropHeight', '500')
+      .attach('image', Buffer.from('blank-optimized-jpeg'), {
+        filename: 'blank-form.jpg',
+        contentType: 'image/jpeg',
+      })
+      .expect(200)
+
+    expect(res.body.details).to.have.length(0)
+    expect(res.body.needsReview).to.equal(true)
+    expect(res.body.reviewReasons).to.containEql(
+      'No se detectaron valores de productos',
+    )
+  })
+
   it('rejects requests without an image field', async () => {
     await client
       .post('/purchases/extract')
