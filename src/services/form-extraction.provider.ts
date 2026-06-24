@@ -133,6 +133,7 @@ interface GeminiGenerateContentResponse {
 }
 
 const DEFAULT_GEMINI_TIMEOUT_MS = 20000
+const DEFAULT_GEMINI_TOTAL_TIMEOUT_MS = 24000
 const DEFAULT_GEMINI_MEDIA_RESOLUTION = 'MEDIA_RESOLUTION_HIGH'
 const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash'
 const DEFAULT_GEMINI_FALLBACK_MODELS = [
@@ -140,8 +141,6 @@ const DEFAULT_GEMINI_FALLBACK_MODELS = [
   'gemini-3.1-flash-lite',
   'gemini-2.5-flash-lite',
   'gemini-2.5-flash',
-  'gemma-4-31b-it',
-  'gemma-4-26b-a4b-it',
 ]
 
 interface GeminiModelLimit {
@@ -157,13 +156,11 @@ const DEFAULT_GEMINI_MODEL_LIMIT: GeminiModelLimit = {
 }
 
 const GEMINI_MODEL_LIMITS: Record<string, GeminiModelLimit> = {
-  'gemini-3.5-flash': { rpm: 5, tpm: 250000, rpd: 18 },
+  'gemini-3.5-flash': { rpm: 5, tpm: 250000, rpd: 20 },
   'gemini-3-flash-preview': { rpm: 5, tpm: 250000, rpd: 20 },
   'gemini-3.1-flash-lite': { rpm: 15, tpm: 250000, rpd: 500 },
   'gemini-2.5-flash-lite': { rpm: 10, tpm: 250000, rpd: 20 },
   'gemini-2.5-flash': { rpm: 5, tpm: 250000, rpd: 20 },
-  'gemma-4-31b-it': { rpm: 5, tpm: 250000, rpd: 20 },
-  'gemma-4-26b-a4b-it': { rpm: 5, tpm: 250000, rpd: 20 },
 }
 
 interface GeminiQuotaWindow {
@@ -185,6 +182,13 @@ function getGeminiTimeoutMs(): number {
   return Number.isFinite(configured) && configured > 0
     ? configured
     : DEFAULT_GEMINI_TIMEOUT_MS
+}
+
+function getGeminiTotalTimeoutMs(): number {
+  const configured = Number(process.env.GEMINI_TOTAL_TIMEOUT_MS)
+  return Number.isFinite(configured) && configured > 0
+    ? configured
+    : DEFAULT_GEMINI_TOTAL_TIMEOUT_MS
 }
 
 function getGeminiMediaResolution(): string {
@@ -373,10 +377,18 @@ export class GeminiFormVisionProvider implements FormVisionProvider {
     const models = getGeminiModelChain()
     const mediaResolution = getGeminiMediaResolution()
     const estimatedTokens = estimateGeminiRequestTokens(mediaResolution)
+    const startedAt = Date.now()
+    const deadline = startedAt + getGeminiTotalTimeoutMs()
     let lastRetryableError: RetryableGeminiError | undefined
 
     for (const model of models) {
       try {
+        const remainingTimeoutMs = deadline - Date.now()
+        if (remainingTimeoutMs <= 500) {
+          throw new RetryableGeminiError(
+            `Gemini extraction reached total timeout after ${Date.now() - startedAt}ms`,
+          )
+        }
         const quota = reserveGeminiModelQuota(model, estimatedTokens)
         if (!quota.ok) {
           throw new RetryableGeminiError(quota.reason)
@@ -386,6 +398,7 @@ export class GeminiFormVisionProvider implements FormVisionProvider {
           imageBuffer,
           mimeType,
           mediaResolution,
+          remainingTimeoutMs,
         )
       } catch (error) {
         if (!(error instanceof RetryableGeminiError)) throw error
@@ -406,6 +419,7 @@ export class GeminiFormVisionProvider implements FormVisionProvider {
     imageBuffer: Buffer,
     mimeType: string,
     mediaResolution: string,
+    remainingTimeoutMs: number,
   ): Promise<RawExtractionFields> {
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey)
@@ -414,7 +428,7 @@ export class GeminiFormVisionProvider implements FormVisionProvider {
     const url = new URL(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     )
-    const timeoutMs = getGeminiTimeoutMs()
+    const timeoutMs = Math.min(getGeminiTimeoutMs(), remainingTimeoutMs)
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
