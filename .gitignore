@@ -113,3 +113,8 @@ build/
 *.log
 
 docker
+
+# Stray scratch images at the repo root (not app assets — those live in public/)
+/*.jpg
+/*.jpeg
+/*.png
