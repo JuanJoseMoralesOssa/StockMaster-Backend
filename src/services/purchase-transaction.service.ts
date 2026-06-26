@@ -1,36 +1,29 @@
-import { BindingScope, injectable, service } from '@loopback/core'
+import { BindingScope, inject, injectable, service } from '@loopback/core'
 import { repository } from '@loopback/repository'
-import { Purchase, PurchaseDetails } from '../models'
-import { PurchaseDetailsRepository, PurchaseRepository } from '../repositories'
+import { SecurityBindings, UserProfile } from '@loopback/security'
+import { Purchase, PurchaseDetails, PurchaseWithTotal } from '../models'
+import {
+  PurchaseDetailsRepository,
+  PurchaseRepository,
+  PurchaseWithTotalRepository,
+} from '../repositories'
 import { DetailMutationService } from './detail-mutation.service'
 import { TransactionKind } from './transaction-kind.enum'
+import {
+  WithDetailsCreateInput,
+  WithDetailsUpdateInput,
+} from './transaction.types'
 import { TransactionWithDetailsService } from './transaction-with-details.service'
 
-export interface CreatePurchaseWithDetailsInput {
-  date: string
-  details?: Array<{
-    weight_kg: number
-    productId: number
-    personId: number
-  }>
-}
-
-export interface UpdatePurchaseWithDetailsInput {
-  id: number
-  version?: number
-  date?: string
-  details?: Array<{
-    id?: number
-    weight_kg: number
-    productId: number
-    personId: number
-  }>
-}
+const PURCHASE_INCLUDE = { include: ['purchase_details'] }
 
 /**
  * Per-kind facade: binds the generic transaction/detail engines to the
  * purchase repositories once, so controllers never wire infrastructure
- * (dataSource, relation factories, TransactionKind) themselves.
+ * (dataSource, relation factories, TransactionKind, the acting user) themselves.
+ * It also resolves the authenticated user id here — the request-scoped boundary
+ * — and passes it into the engines so the low-level stock service stays free of
+ * request/auth context (audit Finding M5).
  */
 @injectable({ scope: BindingScope.TRANSIENT })
 export class PurchaseTransactionService {
@@ -43,13 +36,22 @@ export class PurchaseTransactionService {
     private readonly purchaseRepository: PurchaseRepository,
     @repository(PurchaseDetailsRepository)
     private readonly purchaseDetailsRepository: PurchaseDetailsRepository,
+    @repository(PurchaseWithTotalRepository)
+    private readonly purchaseWithTotalRepository: PurchaseWithTotalRepository,
+    @inject(SecurityBindings.USER, { optional: true })
+    private readonly currentUser?: UserProfile,
   ) {}
 
-  /** Creates the purchase + details atomically and returns the new id. */
+  private actorId(): number | undefined {
+    const id = Number(this.currentUser?.id)
+    return Number.isFinite(id) ? id : undefined
+  }
+
+  /** Creates the purchase + details atomically and returns the canonical view. */
   async createWithDetails(
-    input: CreatePurchaseWithDetailsInput,
-  ): Promise<number> {
-    return this.transactionWithDetailsService.createWithDetails<
+    input: WithDetailsCreateInput,
+  ): Promise<PurchaseWithTotal> {
+    const id = await this.transactionWithDetailsService.createWithDetails<
       Purchase,
       PurchaseDetails
     >(
@@ -58,14 +60,16 @@ export class PurchaseTransactionService {
         details: input.details as PurchaseDetails[] | undefined,
       },
       this.purchaseRepository,
-      id => this.purchaseRepository.purchase_details(id),
+      purchaseId => this.purchaseRepository.purchase_details(purchaseId),
       TransactionKind.PURCHASE,
+      this.actorId(),
     )
+    return this.purchaseWithTotalRepository.findById(id, PURCHASE_INCLUDE)
   }
 
   async updateWithDetails(
-    input: UpdatePurchaseWithDetailsInput,
-  ): Promise<void> {
+    input: WithDetailsUpdateInput,
+  ): Promise<PurchaseWithTotal> {
     await this.transactionWithDetailsService.updateWithDetails<
       Purchase,
       PurchaseDetails
@@ -77,9 +81,11 @@ export class PurchaseTransactionService {
         details: input.details as PurchaseDetails[] | undefined,
       },
       this.purchaseRepository,
-      id => this.purchaseRepository.purchase_details(id),
+      purchaseId => this.purchaseRepository.purchase_details(purchaseId),
       TransactionKind.PURCHASE,
+      this.actorId(),
     )
+    return this.purchaseWithTotalRepository.findById(input.id, PURCHASE_INCLUDE)
   }
 
   async deleteWithDetails(id: number, version?: number): Promise<void> {
@@ -92,6 +98,7 @@ export class PurchaseTransactionService {
       this.purchaseRepository,
       purchaseId => this.purchaseRepository.purchase_details(purchaseId),
       TransactionKind.PURCHASE,
+      this.actorId(),
     )
   }
 
@@ -107,6 +114,7 @@ export class PurchaseTransactionService {
       this.purchaseRepository.dataSource,
       TransactionKind.PURCHASE,
       parentVersion,
+      this.actorId(),
     )
   }
 
@@ -121,6 +129,7 @@ export class PurchaseTransactionService {
       this.purchaseDetailsRepository,
       TransactionKind.PURCHASE,
       parentVersion,
+      this.actorId(),
     )
   }
 
@@ -130,6 +139,7 @@ export class PurchaseTransactionService {
       this.purchaseDetailsRepository,
       TransactionKind.PURCHASE,
       parentVersion,
+      this.actorId(),
     )
   }
 }

@@ -1,2 +1,5 @@
 dist
 *.json
+
+# Ad-hoc manual debugging script at the repo root; excluded from linting too.
+test_axios.js

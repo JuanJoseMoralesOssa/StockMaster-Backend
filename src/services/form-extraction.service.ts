@@ -1,9 +1,15 @@
 import { BindingScope, inject, injectable } from '@loopback/core'
-import { HttpErrors } from '@loopback/rest'
+import {
+  DomainError,
+  RateLimitedError,
+  TimeoutError,
+  UnprocessableError,
+} from '../errors'
 import { ExtractionResult, normalize } from './form-extraction.normalizer'
 import {
   FORM_VISION_PROVIDER_BINDING,
   FormVisionProvider,
+  VisionProviderError,
 } from './form-extraction.provider'
 
 export {
@@ -40,57 +46,37 @@ export class FormExtractionService {
     try {
       raw = await this.provider.readForm(imageBuffer, mimeType)
     } catch (error) {
-      throw this.toHttpError(error)
+      throw this.toDomainError(error)
     }
 
     return normalize(raw, people, products)
   }
 
-  private toHttpError(error: unknown) {
+  /**
+   * Maps a typed provider failure to an HTTP-agnostic domain error. The
+   * classification is decided BELOW the seam (the provider throws a
+   * VisionProviderError with a `kind`), so this agnostic orchestrator carries no
+   * provider-specific error vocabulary — a second provider is classified by the
+   * same table without rewording its messages (audit Finding M2).
+   */
+  private toDomainError(error: unknown): DomainError {
     const message = error instanceof Error ? error.message : String(error)
     console.error('[purchase-extract] vision provider failed', { message })
 
-    if (/timed out|timeout|abort|DEADLINE_EXCEEDED/i.test(message)) {
-      return new HttpErrors.RequestTimeout(
-        'El servicio de lectura del formulario tardó demasiado. Intenta de nuevo.',
-      )
+    if (error instanceof VisionProviderError) {
+      switch (error.kind) {
+        case 'timeout':
+          return new TimeoutError(error.message)
+        case 'rate_limited':
+          return new RateLimitedError(error.message)
+        case 'unprocessable':
+          return new UnprocessableError(error.message)
+      }
     }
 
-    if (
-      /api key not valid|api_key|environment variable is not set/i.test(message)
-    ) {
-      return new HttpErrors.UnprocessableEntity(
-        'El servicio de lectura del formulario no está configurado correctamente. Revisa la API key del servidor.',
-      )
-    }
-
-    if (
-      /RESOURCE_EXHAUSTED|UNAVAILABLE|quota|rate limit|high demand|try again later|límite local|limite local/i.test(
-        message,
-      )
-    ) {
-      return new HttpErrors.TooManyRequests(
-        'El servicio de lectura del formulario está ocupado temporalmente. Intenta de nuevo en unos minutos.',
-      )
-    }
-
-    if (/not found|not supported|404|model/i.test(message)) {
-      return new HttpErrors.UnprocessableEntity(
-        'El modelo de lectura configurado no está disponible para esta API key o región. Revisa GEMINI_VISION_MODEL y los modelos fallback del servidor.',
-      )
-    }
-
-    if (
-      /did not return extraction JSON|invalid extraction JSON|non-JSON/i.test(
-        message,
-      )
-    ) {
-      return new HttpErrors.UnprocessableEntity(
-        'El servicio de visión respondió, pero no devolvió un JSON de extracción válido. Intenta de nuevo o revisa el modelo configurado.',
-      )
-    }
-
-    return new HttpErrors.UnprocessableEntity(
+    // Defensive fallback for a genuinely untyped failure (a provider that did
+    // not wrap its error). No provider-specific strings here.
+    return new UnprocessableError(
       'No se pudo leer el formulario con el servicio de visión. Intenta de nuevo.',
     )
   }

@@ -1,30 +1,25 @@
-import { BindingScope, inject, injectable } from '@loopback/core'
+import { BindingScope, injectable } from '@loopback/core'
 import { repository } from '@loopback/repository'
-import { HttpErrors } from '@loopback/rest'
-import { SecurityBindings, UserProfile } from '@loopback/security'
-import { productStockNotFoundMessage } from '../errors'
+import { productStockNotFoundError } from '../errors'
 import { KardexRepository } from '../repositories'
+import { KardexOperation } from '../models'
+import { computeStockDeltas } from './stock-delta.utils'
 import { extractRows } from './transaction-execution.utils'
-import { TransactionKind } from './transaction-kind.enum'
 import {
   getKardexOperation,
   getStockOperator,
   StockMutationMode,
 } from './transaction-type.const'
-import {
-  DataSourceWithTransactions,
-  DetailBase,
-  TransactionContext,
-} from './transaction.types'
+import { DetailBase, TransactionContext, TxScope } from './transaction.types'
 import { roundWeightKg } from './weight.utils'
 
 export type { StockMutationMode } from './transaction-type.const'
 
 /**
  * Provenance for the Kardex row a stock mutation produces: which document and
- * detail line caused the movement. The acting user is resolved from the
- * request context (this service is TRANSIENT, so it is instantiated per
- * request with the authenticated profile available).
+ * detail line caused the movement. The acting user is carried on the
+ * {@link TxScope} (`actorId`), resolved at the request-scoped facade and passed
+ * in explicitly — this service no longer reads request/auth context itself.
  */
 export interface KardexSource {
   /** Id of the parent purchase/expense document. */
@@ -38,8 +33,6 @@ export class StockReconciliationService {
   constructor(
     @repository(KardexRepository)
     private readonly kardexRepository: KardexRepository,
-    @inject(SecurityBindings.USER, { optional: true })
-    private readonly currentUser?: UserProfile,
   ) {}
 
   /**
@@ -50,34 +43,72 @@ export class StockReconciliationService {
    * {@link attachDetailToKardex}.
    */
   async adjustStock(
-    dataSource: DataSourceWithTransactions,
+    scope: TxScope,
     productId: number,
     weightKg: number,
-    transactionKind: TransactionKind,
     mode: StockMutationMode,
-    tx: TransactionContext,
     source?: KardexSource,
   ): Promise<number | undefined> {
-    const operator = getStockOperator(transactionKind, mode)
+    const operator = getStockOperator(scope.transactionKind, mode)
     return this.executeStockUpdate(
-      dataSource,
+      scope,
       productId,
       weightKg,
       operator,
-      transactionKind,
       mode,
-      tx,
       source,
     )
   }
 
-  /** Backfills the detail id on a Kardex row created before the detail row. */
+  /**
+   * Records the opening-balance Kardex row for a product created with non-zero
+   * stock. The product row already carries the balance (set on insert); this
+   * only writes the audit movement so the Kardex can reconstruct current stock
+   * from its rows. No-op for zero/negative opening stock. The product INSERT
+   * and this row must share the same transaction (see ProductService.create)
+   * so a product never exists without its opening movement. `actorId` is passed
+   * explicitly because this catalog-level path has no TransactionKind/TxScope.
+   */
+  async recordOpeningBalance(
+    productId: number,
+    openingStock: number,
+    tx: TransactionContext,
+    actorId?: number,
+  ): Promise<void> {
+    const opening = roundWeightKg(openingStock)
+    if (!Number.isFinite(opening) || opening <= 0) return
+
+    await this.kardexRepository.create(
+      {
+        date: new Date().toISOString(),
+        input: opening,
+        output: 0,
+        balance: opening,
+        operation: KardexOperation.OpeningBalance,
+        productId,
+        userId: this.resolveUserId(actorId),
+      },
+      { transaction: tx } as object,
+    )
+  }
+
+  /**
+   * Backfills the detail id on a Kardex row created before the detail row.
+   * Both ids are generated primary keys produced earlier in the SAME
+   * transaction, so a null here is an internal invariant violation (a movement
+   * Kardex row that can never be traced to its detail line), not a normal case
+   * — surface it loudly instead of silently leaving null provenance.
+   */
   async attachDetailToKardex(
     kardexId: number | undefined,
     detailId: number | undefined,
     tx: TransactionContext,
   ): Promise<void> {
-    if (kardexId == null || detailId == null) return
+    if (kardexId == null || detailId == null) {
+      throw new Error(
+        `Kardex provenance backfill missing an id (kardexId=${kardexId}, detailId=${detailId})`,
+      )
+    }
     await this.kardexRepository.updateById(
       kardexId,
       { sourceDetailId: detailId },
@@ -86,65 +117,39 @@ export class StockReconciliationService {
   }
 
   async applyDetailStockDelta(
-    dataSource: DataSourceWithTransactions,
-    oldDetail: Pick<DetailBase, 'productId' | 'weight_kg'>,
-    newDetail: Pick<DetailBase, 'productId' | 'weight_kg'>,
-    transactionKind: TransactionKind,
-    tx: TransactionContext,
+    scope: TxScope,
+    change: {
+      old: Pick<DetailBase, 'productId' | 'weight_kg'>
+      new: Pick<DetailBase, 'productId' | 'weight_kg'>
+    },
     source?: KardexSource,
   ): Promise<void> {
-    const newWeight = roundWeightKg(newDetail.weight_kg)
-
-    if (oldDetail.productId !== newDetail.productId) {
+    // The branch arithmetic lives in the pure, unit-tested planner; this method
+    // is the thin DB executor for whatever movements it returns.
+    for (const delta of computeStockDeltas(change.old, change.new)) {
       await this.adjustStock(
-        dataSource,
-        oldDetail.productId,
-        oldDetail.weight_kg,
-        transactionKind,
-        'undo',
-        tx,
-        source,
-      )
-      await this.adjustStock(
-        dataSource,
-        newDetail.productId,
-        newWeight,
-        transactionKind,
-        'apply',
-        tx,
-        source,
-      )
-      return
-    }
-
-    const diff = roundWeightKg(newWeight - oldDetail.weight_kg)
-    if (diff !== 0) {
-      await this.adjustStock(
-        dataSource,
-        newDetail.productId,
-        Math.abs(diff),
-        transactionKind,
-        diff > 0 ? 'apply' : 'undo',
-        tx,
+        scope,
+        delta.productId,
+        delta.weightKg,
+        delta.mode,
         source,
       )
     }
   }
 
   private async executeStockUpdate(
-    dataSource: DataSourceWithTransactions,
+    scope: TxScope,
     productId: number,
     weightKg: number,
     operator: '+' | '-',
-    transactionKind: TransactionKind,
     mode: StockMutationMode,
-    tx: TransactionContext,
     source?: KardexSource,
   ): Promise<number | undefined> {
+    const tx = scope.options.transaction
     // Single round-trip: update stock and read the new balance atomically.
     // Using RETURNING eliminates the separate SELECT and the race where a
     // concurrent detail could change the balance between the two statements.
-    const updateResult = await dataSource.execute(
+    const updateResult = await scope.dataSource.execute(
       `UPDATE product SET stock = COALESCE(stock, 0) ${operator} $1 WHERE id = $2 RETURNING stock`,
       [weightKg, productId],
       { transaction: tx },
@@ -163,12 +168,12 @@ export class StockReconciliationService {
         input,
         output,
         balance,
-        operation: getKardexOperation(transactionKind, mode),
+        operation: getKardexOperation(scope.transactionKind, mode),
         productId,
-        sourceKind: transactionKind,
+        sourceKind: scope.transactionKind,
         sourceId: source?.sourceId,
         sourceDetailId: source?.sourceDetailId,
-        userId: this.resolveUserId(),
+        userId: this.resolveUserId(scope.actorId),
       },
       { transaction: tx } as object,
     )
@@ -177,7 +182,7 @@ export class StockReconciliationService {
 
   private extractProductStock(rows: unknown[], productId: number): number {
     if (rows.length === 0) {
-      throw new HttpErrors.NotFound(productStockNotFoundMessage(productId))
+      throw productStockNotFoundError(productId)
     }
 
     const firstRow = rows[0] as { stock?: unknown }
@@ -185,9 +190,8 @@ export class StockReconciliationService {
     return Number.isFinite(stock) ? stock : 0
   }
 
-  private resolveUserId(): number | undefined {
-    const rawId = this.currentUser?.id
-    const userId = Number(rawId)
+  private resolveUserId(actorId?: number): number | undefined {
+    const userId = Number(actorId)
     return Number.isFinite(userId) ? userId : undefined
   }
 }

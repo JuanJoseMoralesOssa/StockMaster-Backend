@@ -8,6 +8,16 @@ import { Credentials, LoginResult, User } from '../models'
 import { TokenPayload } from '../models/types/token-payload.type'
 import { UserRepository } from '../repositories'
 
+/**
+ * NOTE ON ERROR TYPES: this service intentionally throws `HttpErrors.Unauthorized`
+ * (401) rather than the HTTP-agnostic domain errors used elsewhere. `verifyToken`
+ * is invoked by the JWT authentication strategy during the *authentication*
+ * phase of the request sequence, which runs BEFORE controller invocation and is
+ * therefore NOT wrapped by the global ErrorHandlerInterceptor. A domain error
+ * thrown here would escape the interceptor's `kind → status` mapping and render
+ * as a 500 instead of a 401, breaking the auth contract. Auth is an inherent
+ * HTTP boundary; keep these as HttpErrors.
+ */
 @injectable({ scope: BindingScope.TRANSIENT })
 export class SecurityService {
   constructor(

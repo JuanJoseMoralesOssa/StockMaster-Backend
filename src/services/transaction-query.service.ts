@@ -1,6 +1,6 @@
 import { BindingScope, injectable } from '@loopback/core'
 import { repository } from '@loopback/repository'
-import { HttpErrors } from '@loopback/rest'
+import { ResourceNotFoundError } from '../errors'
 import {
   Expense,
   ExpenseDetails,
@@ -100,7 +100,9 @@ export class TransactionQueryService {
     })
 
     if (!person) {
-      throw new HttpErrors.NotFound(`Persona con ID ${personId} no encontrada`)
+      throw new ResourceNotFoundError(
+        `Persona con ID ${personId} no encontrada`,
+      )
     }
 
     return this.processTransactions(person, productId)
@@ -273,14 +275,16 @@ export class TransactionQueryService {
   private async ensurePersonExists(personId: number): Promise<void> {
     const person = await this.personRepository.findById(personId)
     if (!person) {
-      throw new HttpErrors.NotFound(`Persona con ID ${personId} no encontrada`)
+      throw new ResourceNotFoundError(
+        `Persona con ID ${personId} no encontrada`,
+      )
     }
   }
 
   private async ensureProductExists(productId: number): Promise<void> {
     const product = await this.productRepository.findById(productId)
     if (!product) {
-      throw new HttpErrors.NotFound(
+      throw new ResourceNotFoundError(
         `Producto con ID ${productId} no encontrado`,
       )
     }

@@ -7,7 +7,12 @@ import {
   ValueOrPromise,
 } from '@loopback/core'
 import { HttpErrors } from '@loopback/rest'
-import { DB_CONSTRAINTS, PG_ERROR_CODES, USER_MESSAGES } from '../errors'
+import {
+  DB_CONSTRAINTS,
+  DomainError,
+  PG_ERROR_CODES,
+  USER_MESSAGES,
+} from '../errors'
 
 type ErrorWithStatusCode = {
   statusCode: number
@@ -53,6 +58,25 @@ export class ErrorHandlerInterceptor implements Provider<Interceptor> {
     return this.intercept.bind(this)
   }
 
+  private toHttpError(error: DomainError): HttpErrors.HttpError {
+    switch (error.kind) {
+      case 'validation':
+        return new HttpErrors.BadRequest(error.message)
+      case 'not_found':
+        return new HttpErrors.NotFound(error.message)
+      case 'conflict':
+        return new HttpErrors.Conflict(error.message)
+      case 'forbidden':
+        return new HttpErrors.Forbidden(error.message)
+      case 'timeout':
+        return new HttpErrors.RequestTimeout(error.message)
+      case 'rate_limited':
+        return new HttpErrors.TooManyRequests(error.message)
+      case 'unprocessable':
+        return new HttpErrors.UnprocessableEntity(error.message)
+    }
+  }
+
   async intercept(
     invocationCtx: InvocationContext,
     next: () => ValueOrPromise<InvocationResult>,
@@ -64,6 +88,13 @@ export class ErrorHandlerInterceptor implements Provider<Interceptor> {
       // 1. Errores HTTP conocidos (ya lanzados como HttpErrors) los dejamos pasar
       if (error instanceof HttpErrors.HttpError || hasStatusCode(error)) {
         throw error
+      }
+
+      // Errores de dominio (HTTP-agnósticos): única frontera donde se decide el
+      // status HTTP a partir de su `kind`. Permite que servicios, helpers SQL y
+      // utilidades puras no dependan de @loopback/rest.
+      if (error instanceof DomainError) {
+        throw this.toHttpError(error)
       }
 
       // Convertir EntityNotFoundError genérico de la Base de Datos a 404 HTTP

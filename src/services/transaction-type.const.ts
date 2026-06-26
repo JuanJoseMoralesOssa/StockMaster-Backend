@@ -63,6 +63,17 @@ export function getKardexOperation(
   return TRANSACTION_CONFIG[transactionKind].kardexOperations[mode]
 }
 
+/**
+ * The only parent-document columns a `with-details` update may write. This is
+ * the SINGLE source of truth shared by the raw-SQL whitelist
+ * (`updateParentWithVersionCheck`) and the no-op/version-skip detector
+ * (`hasParentMutations`). Adding a column here must be a conscious act because
+ * the no-op comparison and the SQL writer both consume it — they cannot drift.
+ */
+export const UPDATABLE_PARENT_FIELDS = ['date'] as const
+
+export type UpdatableParentField = (typeof UPDATABLE_PARENT_FIELDS)[number]
+
 // Column names used in raw SQL UPDATE statements. The `satisfies` checks
 // enforce that each value is a valid DetailBase property key — TypeScript will
 // error here if the model property is renamed without updating this constant.

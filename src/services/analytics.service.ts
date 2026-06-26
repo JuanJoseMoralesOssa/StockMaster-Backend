@@ -127,12 +127,8 @@ export class AnalyticsService {
     validateDateRange(startDate, endDate)
     const normalizedLimit = normalizeLimit(limit)
 
-    const [supplierAnalytics, productAnalytics, weightTotals] =
-      await Promise.all([
-        this.getSupplierAnalytics(startDate, endDate, type),
-        this.getProductAnalytics(startDate, endDate, type),
-        this.getWeightTotalsByType(startDate, endDate, type),
-      ])
+    const { supplierAnalytics, productAnalytics, weightTotals } =
+      await this.collectAnalytics(startDate, endDate, type)
 
     return {
       summary: this.calculateSummary(
@@ -238,17 +234,26 @@ export class AnalyticsService {
     parentRelation: 'purchase' | 'expense'
   } {
     const config = TRANSACTION_CONFIG[kind]
-    if (kind === TransactionKind.PURCHASE) {
-      return {
+    // Config-driven lookup rather than an `if (kind === PURCHASE) … else`
+    // branch: the Record is exhaustive over TransactionKind, so adding a kind
+    // is a compile-checked map entry, not a new conditional (audit Finding 9).
+    const reposByKind: Record<
+      TransactionKind,
+      { parentRepo: ParentRepoLike; detailRepo: DetailRepoLike }
+    > = {
+      [TransactionKind.PURCHASE]: {
         parentRepo: this.purchaseRepository,
         detailRepo: this.purchaseDetailsRepository,
-        parentFk: config.parentFk,
-        parentRelation: config.parentTable,
-      }
+      },
+      [TransactionKind.EXPENSE]: {
+        parentRepo: this.expenseRepository,
+        detailRepo: this.expenseDetailsRepository,
+      },
     }
+    const { parentRepo, detailRepo } = reposByKind[kind]
     return {
-      parentRepo: this.expenseRepository,
-      detailRepo: this.expenseDetailsRepository,
+      parentRepo,
+      detailRepo,
       parentFk: config.parentFk,
       parentRelation: config.parentTable,
     }
@@ -256,14 +261,15 @@ export class AnalyticsService {
 
   /**
    * The single home for the "prefetch parent ids in range, then load their
-   * details" two-step (previously copy-pasted six times across this service).
-   * Returns the parent document count alongside the detail rows.
+   * details" two-step. Returns the parent document count (all documents in
+   * range, even detail-less ones) alongside the detail rows, eagerly loading
+   * the parent plus any requested relations.
    */
   private async fetchDetailsInRange(
     kind: TransactionKind,
     startDate: string,
     endDate: string,
-    options: { include?: Array<'person' | 'product'>; weightsOnly?: boolean },
+    options: { include?: Array<'person' | 'product'> },
   ): Promise<{ parentCount: number; details: AggregatableTransaction[] }> {
     const { parentRepo, detailRepo, parentFk, parentRelation } =
       this.reposFor(kind)
@@ -275,114 +281,122 @@ export class AnalyticsService {
 
     const filter: Record<string, unknown> = {
       where: { [parentFk]: { inq: parentIds } },
-    }
-    if (options.weightsOnly) {
-      filter.fields = ['weight_kg']
-    } else {
-      filter.include = [
+      include: [
         { relation: parentRelation },
         ...(options.include ?? []).map(relation => ({ relation })),
-      ]
+      ],
     }
 
     const details = await detailRepo.find(filter)
     return { parentCount: parentIds.length, details }
   }
 
-  private getSupplierAnalytics(
+  /**
+   * Loads the detail rows once per transaction kind and derives the supplier,
+   * product and weight aggregates from that single pass. Previously each of
+   * those three outputs triggered its own `find` per kind (the same rows read
+   * 2–3× per dashboard call); folding them into one fetch removes the redundant
+   * reads while preserving the exact aggregation semantics (audit Finding 4).
+   *
+   * Two distinct skip rules are intentional and preserved:
+   *  - weight totals sum every positive-weight detail line in range;
+   *  - supplier/product groups additionally require the related entity and the
+   *    parent document to be present.
+   */
+  private async collectAnalytics(
     startDate: string,
     endDate: string,
     type: TransactionTypeFilter,
-  ): Promise<SupplierAnalytics[]> {
-    return this.aggregateDetailsBy(
-      'person',
-      startDate,
-      endDate,
-      type,
-      'Proveedor',
-    ).then(rows =>
-      rows.map(row => ({
+  ): Promise<{
+    supplierAnalytics: SupplierAnalytics[]
+    productAnalytics: ProductAnalytics[]
+    weightTotals: {
+      purchaseWeight: number
+      expenseWeight: number
+      purchaseCount: number
+      expenseCount: number
+    }
+  }> {
+    const supplierAgg = new Map<number, EntityAggregate>()
+    const productAgg = new Map<number, EntityAggregate>()
+    const weightTotals = {
+      purchaseWeight: 0,
+      expenseWeight: 0,
+      purchaseCount: 0,
+      expenseCount: 0,
+    }
+
+    for (const kind of this.kindsFor(type)) {
+      const { parentCount, details } = await this.fetchDetailsInRange(
+        kind,
+        startDate,
+        endDate,
+        { include: ['person', 'product'] },
+      )
+
+      let weightSum = 0
+      for (const transaction of details) {
+        const weight = transaction.weight_kg
+        if (!weight || weight <= 0) continue
+
+        weightSum += weight
+
+        // Supplier/product grouping also requires the parent document to have
+        // resolved (matches the previous aggregateDetailsBy contract).
+        if (!transaction.purchase && !transaction.expense) continue
+        this.accumulate(supplierAgg, transaction.person, weight, 'Proveedor')
+        this.accumulate(productAgg, transaction.product, weight, 'Producto')
+      }
+
+      if (kind === TransactionKind.PURCHASE) {
+        weightTotals.purchaseCount = parentCount
+        weightTotals.purchaseWeight = weightSum
+      } else {
+        weightTotals.expenseCount = parentCount
+        weightTotals.expenseWeight = weightSum
+      }
+    }
+
+    return {
+      supplierAnalytics: Array.from(supplierAgg.values()).map(row => ({
         personId: row.id,
         personName: row.name,
         totalWeight: row.totalWeight,
         transactionCount: row.transactionCount,
       })),
-    )
-  }
-
-  private getProductAnalytics(
-    startDate: string,
-    endDate: string,
-    type: TransactionTypeFilter,
-  ): Promise<ProductAnalytics[]> {
-    return this.aggregateDetailsBy(
-      'product',
-      startDate,
-      endDate,
-      type,
-      'Producto',
-    ).then(rows =>
-      rows.map(row => ({
+      productAnalytics: Array.from(productAgg.values()).map(row => ({
         productId: row.id,
         productName: row.name,
         totalWeight: row.totalWeight,
         transactionCount: row.transactionCount,
       })),
-    )
+      weightTotals,
+    }
   }
 
-  /**
-   * Sums weight and counts detail lines grouped by the related person or
-   * product. Skips rows without the relation, without a positive weight, or
-   * whose parent document failed to resolve.
-   */
-  private async aggregateDetailsBy(
-    entity: 'person' | 'product',
-    startDate: string,
-    endDate: string,
-    type: TransactionTypeFilter,
+  /** Folds one detail line into the running aggregate for its related entity. */
+  private accumulate(
+    aggregates: Map<number, EntityAggregate>,
+    related: RelatedEntity | undefined,
+    weight: number,
     fallbackLabel: string,
-  ): Promise<EntityAggregate[]> {
-    const aggregates = new Map<number, EntityAggregate>()
+  ): void {
+    if (!related) return
+    const id = related.id
+    if (id == null) return
 
-    for (const kind of this.kindsFor(type)) {
-      const { details } = await this.fetchDetailsInRange(
-        kind,
-        startDate,
-        endDate,
-        { include: [entity] },
-      )
-
-      for (const transaction of details) {
-        const related = transaction[entity]
-        if (
-          !related ||
-          !transaction.weight_kg ||
-          transaction.weight_kg <= 0 ||
-          (!transaction.purchase && !transaction.expense)
-        ) {
-          continue
-        }
-
-        const id = related.id
-        if (id == null) continue
-
-        const existing = aggregates.get(id)
-        if (existing) {
-          existing.totalWeight += transaction.weight_kg
-          existing.transactionCount += 1
-        } else {
-          aggregates.set(id, {
-            id,
-            name: related.name ?? `${fallbackLabel} ${id}`,
-            totalWeight: transaction.weight_kg,
-            transactionCount: 1,
-          })
-        }
-      }
+    const existing = aggregates.get(id)
+    if (existing) {
+      existing.totalWeight += weight
+      existing.transactionCount += 1
+    } else {
+      aggregates.set(id, {
+        id,
+        name: related.name ?? `${fallbackLabel} ${id}`,
+        totalWeight: weight,
+        transactionCount: 1,
+      })
     }
-
-    return Array.from(aggregates.values())
   }
 
   private calculateSummary(
@@ -412,53 +426,6 @@ export class AnalyticsService {
       totalExpenseWeight: weightTotals.expenseWeight,
       pendingWeight: weightTotals.purchaseWeight - weightTotals.expenseWeight,
     }
-  }
-
-  /**
-   * Sums detail weight (kg) for purchases ("Compra") and expenses ("Gasto")
-   * separately in the given range, so the dashboard can show outstanding
-   * (pending) weight = purchases - expenses.
-   */
-  private async getWeightTotalsByType(
-    startDate: string,
-    endDate: string,
-    type: TransactionTypeFilter,
-  ): Promise<{
-    purchaseWeight: number
-    expenseWeight: number
-    purchaseCount: number
-    expenseCount: number
-  }> {
-    const sumWeights = (rows: { weight_kg?: number }[]) =>
-      rows.reduce(
-        (sum, r) => sum + (r.weight_kg && r.weight_kg > 0 ? r.weight_kg : 0),
-        0,
-      )
-
-    const totals = {
-      purchaseWeight: 0,
-      expenseWeight: 0,
-      purchaseCount: 0,
-      expenseCount: 0,
-    }
-
-    for (const kind of this.kindsFor(type)) {
-      const { parentCount, details } = await this.fetchDetailsInRange(
-        kind,
-        startDate,
-        endDate,
-        { weightsOnly: true },
-      )
-      if (kind === TransactionKind.PURCHASE) {
-        totals.purchaseCount = parentCount
-        totals.purchaseWeight = sumWeights(details)
-      } else {
-        totals.expenseCount = parentCount
-        totals.expenseWeight = sumWeights(details)
-      }
-    }
-
-    return totals
   }
 
   private getTopResults<T extends { totalWeight: number }>(

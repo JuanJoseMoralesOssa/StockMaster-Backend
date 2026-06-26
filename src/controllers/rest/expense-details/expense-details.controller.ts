@@ -25,12 +25,19 @@ import { fieldRequiredMessage } from '../../../errors'
 import { ExpenseDetails } from '../../../models'
 import { ExpenseDetailsRepository } from '../../../repositories'
 import { ExpenseTransactionService } from '../../../services'
+import { singleDetailReplaceSchema } from '../detail-schemas'
 
 @requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class ExpenseDetailsController {
   constructor(
+    // Read-only surface: detail WRITES must go through ExpenseTransactionService
+    // so stock + Kardex stay consistent. Narrowing the type makes a stray
+    // repository.create/updateById/deleteById a compile error (audit Finding M6).
     @repository(ExpenseDetailsRepository)
-    public expenseDetailsRepository: ExpenseDetailsRepository,
+    public expenseDetailsRepository: Pick<
+      ExpenseDetailsRepository,
+      'find' | 'findById' | 'count'
+    >,
     @service(ExpenseTransactionService)
     public expenseTransactionService: ExpenseTransactionService,
   ) {}
@@ -180,10 +187,9 @@ export class ExpenseDetailsController {
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(ExpenseDetails, {
-            title: 'ExpenseDetailsReplace',
-            exclude: ['id'],
-          }),
+          // PUT replaces the whole detail line, so the full representation is
+          // required (no partial merge). Use PATCH for partial updates.
+          schema: singleDetailReplaceSchema('expenseId'),
         },
       },
     })

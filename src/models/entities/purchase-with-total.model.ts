@@ -3,6 +3,13 @@ import { Person } from './person.model'
 import { Product } from './product.model'
 import { PurchaseDetails } from './purchase-details.model'
 
+/**
+ * READ twin of {@link Purchase}, mapped to the `purchase_with_total` DB view so
+ * it can expose the computed `total_kg`. Read-only: never create/update through
+ * this model (its id is not generated and the view is not writable). Shares the
+ * date/version/relation columns with the write model — change them in both
+ * files. See CLAUDE.md › "Dual-model read pattern".
+ */
 @model({
   settings: {
     postgresql: { table: 'purchase_with_total' },

@@ -3,6 +3,14 @@ import { ExpenseDetails } from './expense-details.model'
 import { Person } from './person.model'
 import { Product } from './product.model'
 
+/**
+ * WRITE model for expenses (table `expense`). All mutations go through this
+ * model; reads that need the computed `total_kg` use its twin
+ * {@link ExpenseWithTotal}, backed by the `expense_with_total` DB view. Shares
+ * columns with the twin but cannot be merged (generated id + physical table vs
+ * read-only view). Keep the shared columns in sync across both files. See
+ * CLAUDE.md › "Dual-model read pattern".
+ */
 @model({
   settings: {
     indexes: {

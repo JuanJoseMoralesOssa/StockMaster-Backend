@@ -10,7 +10,6 @@ import {
   del,
   get,
   getModelSchemaRef,
-  HttpErrors,
   param,
   patch,
   post,
@@ -18,30 +17,23 @@ import {
   requestBody,
   response,
 } from '@loopback/rest'
+import { service } from '@loopback/core'
 import { Roles, requireRoles } from '../../../auth'
 import {
   normalizePagination,
   paginationConfig,
 } from '../../../config/pagination'
 import { Pagination, Product } from '../../../models'
-import {
-  ExpenseDetailsRepository,
-  KardexRepository,
-  ProductRepository,
-  PurchaseDetailsRepository,
-} from '../../../repositories'
+import { ProductRepository } from '../../../repositories'
+import { ProductService } from '../../../services'
 
 @requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class ProductController {
   constructor(
     @repository(ProductRepository)
     public productRepository: ProductRepository,
-    @repository(ExpenseDetailsRepository)
-    public expenseDetailsRepository: ExpenseDetailsRepository,
-    @repository(PurchaseDetailsRepository)
-    public purchaseDetailsRepository: PurchaseDetailsRepository,
-    @repository(KardexRepository)
-    public kardexRepository: KardexRepository,
+    @service(ProductService)
+    public productService: ProductService,
   ) {}
 
   @post('/products')
@@ -62,7 +54,9 @@ export class ProductController {
     })
     product: Omit<Product, 'id'>,
   ): Promise<Product> {
-    return this.productRepository.create(product)
+    // Delegated so a non-zero opening stock writes its Kardex movement
+    // atomically with the product row (see ProductService).
+    return this.productService.create(product)
   }
 
   @get('/products/count')
@@ -144,10 +138,9 @@ export class ProductController {
     product: Product,
     @param.where(Product) where?: Where<Product>,
   ): Promise<Count> {
-    // stock is write-protected: only StockReconciliationService may change it.
-    const safeProduct: Partial<Product> = { ...product }
-    delete safeProduct.stock
-    return this.productRepository.updateAll(safeProduct, where)
+    // Delegated: ProductService is the single chokepoint that strips the
+    // reconciler-owned `stock` column, so no write path can desync it.
+    return this.productService.updateAll(product, where)
   }
 
   @get('/products/{id}')
@@ -186,11 +179,8 @@ export class ProductController {
     })
     product: Partial<Product>,
   ): Promise<Product> {
-    // stock is write-protected: only StockReconciliationService may change it.
-    const safeProduct: Partial<Product> = { ...product }
-    delete safeProduct.stock
-    await this.productRepository.updateById(id, safeProduct)
-    return this.productRepository.findById(id, { include: [] })
+    // Delegated to the single stock-protection chokepoint (see ProductService).
+    return this.productService.updateById(id, product)
   }
 
   @put('/products/{id}')
@@ -216,11 +206,8 @@ export class ProductController {
     })
     product: Omit<Product, 'id'>,
   ): Promise<Product> {
-    // stock is write-protected: only StockReconciliationService may change it.
-    const safeProduct: Partial<Product> = { ...product }
-    delete safeProduct.stock
-    await this.productRepository.updateById(id, safeProduct)
-    return this.productRepository.findById(id, { include: [] })
+    // Delegated to the single stock-protection chokepoint (see ProductService).
+    return this.productService.replaceById(id, product)
   }
 
   @del('/products/{id}')
@@ -228,27 +215,9 @@ export class ProductController {
     description: 'Product DELETE success',
   })
   async deleteById(@param.path.number('id') id: number): Promise<void> {
-    const product = await this.productRepository.findById(id)
-    if (!product) {
-      throw new HttpErrors.NotFound(`Product with id ${id} not found`)
-    }
-
-    const [expenseDetailsCount, purchaseDetailsCount, kardexCount] =
-      await Promise.all([
-        this.expenseDetailsRepository.count({ productId: id }),
-        this.purchaseDetailsRepository.count({ productId: id }),
-        this.kardexRepository.count({ productId: id }),
-      ])
-
-    const totalReferences =
-      expenseDetailsCount.count + purchaseDetailsCount.count + kardexCount.count
-
-    if (totalReferences > 0) {
-      throw new HttpErrors.Conflict(
-        'Cannot deactivate product with transaction history',
-      )
-    }
-
-    await this.productRepository.deleteById(id)
+    // Delegated: deletion must distinguish a pristine product (only an
+    // opening-balance Kardex row) from one with real transaction history, and
+    // clean up the opening row atomically (see ProductService).
+    await this.productService.deleteById(id)
   }
 }

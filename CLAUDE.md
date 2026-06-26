@@ -118,7 +118,9 @@ The `version` field on Purchase/Expense is an optimistic-lock counter. `PUT /pur
 
 ### Dual-model read pattern
 
-`Purchase` / `Expense` are used for **writes**. `PurchaseWithTotal` / `ExpenseWithTotal` are separate LoopBack models (mapped to the same table via a DB view or virtual column) used for **reads** — they add a computed `total` field. Both have paired repositories; controllers inject both.
+`Purchase` / `Expense` are used for **writes**. `PurchaseWithTotal` / `ExpenseWithTotal` are separate LoopBack models used for **reads** — they are mapped to the `purchase_with_total` / `expense_with_total` DB **views** and add the computed `total_kg` field. Both have paired repositories; controllers inject both.
+
+The write model and its read twin deliberately duplicate the shared columns (`date`, `version`, and the `_details` / `people` / `products` relations). They are **not** merged via inheritance because the write model owns a generated id and the physical table while the twin is read-only over a view with a non-generated id and different relation key specs. The cost of the split is that **a change to a shared column must be made in both model files** (e.g. `purchase.model.ts` *and* `purchase-with-total.model.ts`); each file carries a header comment naming its twin. Never create/update through a `*WithTotal` model — the view is not writable.
 
 ### AI form extraction
 

@@ -1,8 +1,5 @@
 import { expect } from '@loopback/testlab'
-import {
-  GeminiFormVisionProvider,
-  resetGeminiModelQuotaForTests,
-} from '../../services/form-extraction.provider'
+import { GeminiFormVisionProvider } from '../../services/form-extraction.provider'
 
 describe('GeminiFormVisionProvider', () => {
   const originalFetch = globalThis.fetch
@@ -11,9 +8,10 @@ describe('GeminiFormVisionProvider', () => {
   const originalModel = process.env.GEMINI_VISION_MODEL
   const originalFallbackModels = process.env.GEMINI_VISION_FALLBACK_MODELS
 
+  // Quota state is now instance-scoped: each `new GeminiFormVisionProvider()`
+  // starts fresh, so no global reset is needed between tests.
   afterEach(() => {
     globalThis.fetch = originalFetch
-    resetGeminiModelQuotaForTests()
     process.env.GEMINI_API_KEY = originalApiKey
     if (originalMediaResolution === undefined) {
       delete process.env.GEMINI_MEDIA_RESOLUTION

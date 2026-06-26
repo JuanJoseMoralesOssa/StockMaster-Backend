@@ -1,13 +1,14 @@
 import { BindingScope, injectable, service } from '@loopback/core'
-import { HttpErrors } from '@loopback/rest'
-import { USER_MESSAGES } from '../errors'
+import { USER_MESSAGES, ValidationError } from '../errors'
 import {
   DataSourceWithTransactions,
   DetailBase,
   DetailRepository,
   RelationFactory,
-  TransactionOptions,
+  TxScope,
 } from './transaction.types'
+import { assertDetailValid } from './detail-validation.utils'
+import { DetailReconciliationService } from './detail-reconciliation.service'
 import { requireVersion } from './optimistic-lock.utils'
 import { runInTransaction } from './transaction-execution.utils'
 import { StockReconciliationService } from './stock-reconciliation.service'
@@ -21,6 +22,8 @@ export class DetailMutationService {
   constructor(
     @service(StockReconciliationService)
     private readonly stockReconciliationService: StockReconciliationService,
+    @service(DetailReconciliationService)
+    private readonly detailReconciliationService: DetailReconciliationService,
   ) {}
 
   async createSingleDetail<TDetail extends DetailBase>(
@@ -30,44 +33,30 @@ export class DetailMutationService {
     dataSource: DataSourceWithTransactions,
     transactionKind: TransactionKind,
     expectedParentVersion?: number,
+    actorId?: number,
   ): Promise<TDetail> {
-    this.validateDetail(newDetail)
+    assertDetailValid(newDetail)
     const parentVersion = requireVersion(expectedParentVersion, 'parentVersion')
 
-    if (newDetail.weight_kg != null) {
-      newDetail.weight_kg = roundWeightKg(newDetail.weight_kg)
-    }
-
-    return runInTransaction(dataSource, async (tx: TransactionOptions) => {
-      await this.bumpParentVersion(
+    return runInTransaction(dataSource, async options => {
+      const scope: TxScope = {
         dataSource,
         transactionKind,
-        parentId,
-        parentVersion,
-        tx,
-      )
+        options,
+        actorId,
+      }
+      await this.bumpParentVersion(scope, parentId, parentVersion)
 
       const detailsRelation = detailsRelationFactory(parentId)
-      // Stock first: adjustStock 404s when the product does not exist, which
-      // must win over the detail INSERT's FK violation (409). The Kardex row
-      // therefore predates the detail row; its id is backfilled after.
-      const kardexId = await this.stockReconciliationService.adjustStock(
-        dataSource,
-        newDetail.productId!,
-        newDetail.weight_kg!,
-        transactionKind,
-        'apply',
-        tx.transaction,
-        { sourceId: parentId },
+      // Single source of truth for "adjust stock → create detail → backfill
+      // Kardex provenance" — shared with the bulk reconciler so the ordering
+      // rule (stock 404 must beat the FK 409) lives in one place.
+      return this.detailReconciliationService.applyCreation(
+        scope,
+        newDetail,
+        parentId,
+        detailsRelation,
       )
-      const detail = await detailsRelation.create(newDetail, tx)
-      await this.stockReconciliationService.attachDetailToKardex(
-        kardexId,
-        detail.id,
-        tx.transaction,
-      )
-
-      return detail
     })
   }
 
@@ -77,49 +66,47 @@ export class DetailMutationService {
     detailsRepository: DetailRepository<TDetail>,
     transactionKind: TransactionKind,
     expectedParentVersion?: number,
+    actorId?: number,
   ): Promise<TDetail> {
     const parentVersion = requireVersion(expectedParentVersion, 'parentVersion')
 
     if (updatedDetail.weight_kg != null) {
       if (updatedDetail.weight_kg <= 0) {
-        throw new HttpErrors.BadRequest(USER_MESSAGES.WEIGHT_POSITIVE)
+        throw new ValidationError(USER_MESSAGES.WEIGHT_POSITIVE)
       }
       updatedDetail.weight_kg = roundWeightKg(updatedDetail.weight_kg)
     }
 
-    return runInTransaction(
-      detailsRepository.dataSource,
-      async (tx: TransactionOptions) => {
-        const oldDetail = await detailsRepository.findById(id, {}, tx)
-        const parentId = this.resolveParentId(oldDetail, transactionKind)
-        this.rejectParentMove(updatedDetail, oldDetail, transactionKind)
-        await this.bumpParentVersion(
-          detailsRepository.dataSource,
-          transactionKind,
-          parentId,
-          parentVersion,
-          tx,
-        )
+    return runInTransaction(detailsRepository.dataSource, async options => {
+      const scope: TxScope = {
+        dataSource: detailsRepository.dataSource,
+        transactionKind,
+        options,
+        actorId,
+      }
+      const oldDetail = await detailsRepository.findById(id, {}, options)
+      const parentId = this.resolveParentId(oldDetail, transactionKind)
+      this.rejectParentMove(updatedDetail, oldDetail, transactionKind)
+      await this.bumpParentVersion(scope, parentId, parentVersion)
 
-        const newWeight = updatedDetail.weight_kg ?? oldDetail.weight_kg
-        const oldWeight = oldDetail.weight_kg
-        const newProductId = updatedDetail.productId ?? oldDetail.productId
-        const oldProductId = oldDetail.productId
+      const newWeight = updatedDetail.weight_kg ?? oldDetail.weight_kg
+      const oldWeight = oldDetail.weight_kg
+      const newProductId = updatedDetail.productId ?? oldDetail.productId
+      const oldProductId = oldDetail.productId
 
-        await this.stockReconciliationService.applyDetailStockDelta(
-          detailsRepository.dataSource,
-          { productId: oldProductId, weight_kg: oldWeight },
-          { productId: newProductId, weight_kg: newWeight },
-          transactionKind,
-          tx.transaction,
-          { sourceId: parentId, sourceDetailId: id },
-        )
+      await this.stockReconciliationService.applyDetailStockDelta(
+        scope,
+        {
+          old: { productId: oldProductId, weight_kg: oldWeight },
+          new: { productId: newProductId, weight_kg: newWeight },
+        },
+        { sourceId: parentId, sourceDetailId: id },
+      )
 
-        await detailsRepository.updateById(id, updatedDetail, tx)
+      await detailsRepository.updateById(id, updatedDetail, options)
 
-        return detailsRepository.findById(id, { include: [] }, tx)
-      },
-    )
+      return detailsRepository.findById(id, { include: [] }, options)
+    })
   }
 
   async deleteSingleDetail<TDetail extends DetailBase>(
@@ -127,44 +114,31 @@ export class DetailMutationService {
     detailsRepository: DetailRepository<TDetail>,
     transactionKind: TransactionKind,
     expectedParentVersion?: number,
+    actorId?: number,
   ): Promise<void> {
     const parentVersion = requireVersion(expectedParentVersion, 'parentVersion')
 
-    await runInTransaction(
-      detailsRepository.dataSource,
-      async (tx: TransactionOptions) => {
-        const detail = await detailsRepository.findById(id, {}, tx)
-        const parentId = this.resolveParentId(detail, transactionKind)
-        await this.bumpParentVersion(
-          detailsRepository.dataSource,
-          transactionKind,
-          parentId,
-          parentVersion,
-          tx,
-        )
+    await runInTransaction(detailsRepository.dataSource, async options => {
+      const scope: TxScope = {
+        dataSource: detailsRepository.dataSource,
+        transactionKind,
+        options,
+        actorId,
+      }
+      const detail = await detailsRepository.findById(id, {}, options)
+      const parentId = this.resolveParentId(detail, transactionKind)
+      await this.bumpParentVersion(scope, parentId, parentVersion)
 
-        await this.stockReconciliationService.adjustStock(
-          detailsRepository.dataSource,
-          detail.productId,
-          detail.weight_kg,
-          transactionKind,
-          'undo',
-          tx.transaction,
-          { sourceId: parentId, sourceDetailId: id },
-        )
+      await this.stockReconciliationService.adjustStock(
+        scope,
+        detail.productId,
+        detail.weight_kg,
+        'undo',
+        { sourceId: parentId, sourceDetailId: id },
+      )
 
-        await detailsRepository.deleteById(id, tx)
-      },
-    )
-  }
-
-  private validateDetail(detail: Partial<DetailBase>): void {
-    if (detail.productId == null || detail.personId == null) {
-      throw new HttpErrors.BadRequest(USER_MESSAGES.DETAIL_FIELDS_REQUIRED)
-    }
-    if (detail.weight_kg == null || detail.weight_kg <= 0) {
-      throw new HttpErrors.BadRequest(USER_MESSAGES.WEIGHT_POSITIVE)
-    }
+      await detailsRepository.deleteById(id, options)
+    })
   }
 
   private resolveParentId(
@@ -175,9 +149,8 @@ export class DetailMutationService {
     const record = detail as unknown as Record<string, unknown>
     const parentId = record[config.parentFk]
     if (typeof parentId !== 'number') {
-      throw new HttpErrors.InternalServerError(
-        'Detail row is missing its parent transaction id.',
-      )
+      // Internal invariant: a persisted detail row always carries its parent FK.
+      throw new Error('Detail row is missing its parent transaction id.')
     }
     return parentId
   }
@@ -193,18 +166,19 @@ export class DetailMutationService {
 
     const oldParentId = this.resolveParentId(oldDetail, transactionKind)
     if (updated[config.parentFk] !== oldParentId) {
-      throw new HttpErrors.BadRequest(USER_MESSAGES.DETAIL_MOVE_FORBIDDEN)
+      throw new ValidationError(USER_MESSAGES.DETAIL_MOVE_FORBIDDEN)
     }
   }
 
   private async bumpParentVersion(
-    dataSource: DataSourceWithTransactions,
-    transactionKind: TransactionKind,
+    scope: TxScope,
     parentId: number,
     expectedParentVersion: number,
-    options: TransactionOptions,
   ): Promise<void> {
-    const sql = new TransactionDetailsSqlHelper(dataSource, transactionKind)
-    await sql.bumpParentVersion(parentId, expectedParentVersion, options)
+    const sql = new TransactionDetailsSqlHelper(
+      scope.dataSource,
+      scope.transactionKind,
+    )
+    await sql.bumpParentVersion(parentId, expectedParentVersion, scope.options)
   }
 }

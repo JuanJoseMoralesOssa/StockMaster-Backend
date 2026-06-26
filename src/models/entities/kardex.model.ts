@@ -6,6 +6,12 @@ export enum KardexOperation {
   PurchaseUndo = 2,
   ExpenseApply = 3,
   ExpenseUndo = 4,
+  /**
+   * Opening balance recorded when a product is created with non-zero stock.
+   * Without it the Kardex could not reconstruct current stock from its
+   * movements (sum of inputs − outputs would miss the starting quantity).
+   */
+  OpeningBalance = 5,
 }
 
 @model()

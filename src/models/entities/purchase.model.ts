@@ -3,6 +3,15 @@ import { Person } from './person.model'
 import { Product } from './product.model'
 import { PurchaseDetails } from './purchase-details.model'
 
+/**
+ * WRITE model for purchases (table `purchase`). All mutations go through this
+ * model; reads that need the computed `total_kg` use its twin
+ * {@link PurchaseWithTotal}, which is backed by the `purchase_with_total` DB
+ * view. The two intentionally share columns (date, version, the three
+ * relations) but cannot be merged: this one owns a generated id and the
+ * physical table, the twin is read-only over a view. Keep the shared columns in
+ * sync across both files. See CLAUDE.md › "Dual-model read pattern".
+ */
 @model({
   settings: {
     indexes: {

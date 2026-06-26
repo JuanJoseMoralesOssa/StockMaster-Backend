@@ -36,6 +36,10 @@ import {
 } from '../../../repositories'
 import { PurchaseTransactionService } from '../../../services'
 import { validateDate } from '../../../services/date-validation.utils'
+import {
+  withDetailsCreateSchema,
+  withDetailsUpdateSchema,
+} from '../detail-schemas'
 
 // Compras: lectura y mutaciones para Oficina y Admin.
 @requireRoles(Roles.OFFICE, Roles.ADMIN)
@@ -257,26 +261,7 @@ export class PurchaseController {
     @requestBody({
       content: {
         'application/json': {
-          schema: {
-            type: 'object',
-            required: ['date'],
-            properties: {
-              date: { type: 'string', format: 'date' },
-              purchaseDetails: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  required: ['weight_kg', 'productId', 'personId'],
-                  properties: {
-                    id: { type: 'number' },
-                    weight_kg: { type: 'number' },
-                    productId: { type: 'number' },
-                    personId: { type: 'number' },
-                  },
-                },
-              },
-            },
-          },
+          schema: withDetailsCreateSchema('purchaseDetails'),
         },
       },
     })
@@ -285,12 +270,11 @@ export class PurchaseController {
       purchaseDetails?: TransactionDetailRequestDTO[]
     },
   ): Promise<PurchaseWithTotal> {
-    const createdId = await this.purchaseTransactionService.createWithDetails({
+    // The facade performs the write AND the canonical WithTotal re-read, so the
+    // controller no longer needs to know the read twin or its include set.
+    return this.purchaseTransactionService.createWithDetails({
       date: purchase.date,
       details: purchase.purchaseDetails,
-    })
-    return this.purchaseWithTotalRepository.findById(createdId, {
-      include: ['purchase_details'],
     })
   }
 
@@ -312,27 +296,7 @@ export class PurchaseController {
     @requestBody({
       content: {
         'application/json': {
-          schema: {
-            type: 'object',
-            required: ['id', 'version'],
-            properties: {
-              id: { type: 'number' },
-              version: { type: 'number' },
-              date: { type: 'string', format: 'date' },
-              purchaseDetails: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    id: { type: 'number' },
-                    weight_kg: { type: 'number' },
-                    productId: { type: 'number' },
-                    personId: { type: 'number' },
-                  },
-                },
-              },
-            },
-          },
+          schema: withDetailsUpdateSchema('purchaseDetails'),
         },
       },
     })
@@ -343,14 +307,11 @@ export class PurchaseController {
       purchaseDetails?: TransactionDetailRequestDTO[]
     },
   ): Promise<PurchaseWithTotal> {
-    await this.purchaseTransactionService.updateWithDetails({
+    return this.purchaseTransactionService.updateWithDetails({
       id: purchaseData.id,
       version: purchaseData.version,
       date: purchaseData.date,
       details: purchaseData.purchaseDetails,
-    })
-    return this.purchaseWithTotalRepository.findById(purchaseData.id, {
-      include: ['purchase_details'],
     })
   }
 

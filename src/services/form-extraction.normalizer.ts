@@ -1,25 +1,29 @@
 // Pure domain logic for normalising a scanned J.A.A.G form into a purchase prefill.
 // Kept free of any I/O (no LLM/Google dependency) so it can be unit-tested directly.
 
-export interface RawExtractionFields {
+import {
+  PRODUCT_ALIASES,
+  PRODUCT_FIELD_LABELS,
+  PRODUCT_FIELDS,
+  ProductField,
+} from './form-spec'
+
+// The product-line fields are derived from the shared PRODUCT_FIELDS spec via
+// `Record<ProductField, …>`, so adding a field to the spec forces this type (and
+// every map below) to cover it — no silent drift with the Gemini schema.
+export type RawExtractionFields = {
   fecha: string | null
   librasTotal: number | null
-  pieles: number | null
-  sebo: number | null
-  hueso: number | null
   recibiDelSr: string | null
   fieldConfidences: {
     fecha: number
     librasTotal: number
-    pieles: number
-    sebo: number
-    hueso: number
     recibiDelSr: number
-  }
-}
+  } & Record<ProductField, number>
+} & Record<ProductField, number | null>
 
 export interface ExtractedDetail {
-  fieldName: 'pieles' | 'sebo' | 'hueso'
+  fieldName: ProductField
   productId: number | undefined
   productName: string
   weightLb: number
@@ -173,14 +177,10 @@ export function parseDate(raw: string | null): {
   return { value: iso, confidence: 0.95, needsReview: false }
 }
 
-export const PRODUCT_ALIASES: Record<'pieles' | 'sebo' | 'hueso', string[]> = {
-  pieles: ['piel', 'pieles', 'hide', 'hides', 'cuero', 'cueros'],
-  sebo: ['sebo', 'cebo', 'tallow', 'grasa'],
-  hueso: ['hueso', 'huesos', 'bone', 'bones'],
-}
+export { PRODUCT_ALIASES } from './form-spec'
 
 export function matchProduct(
-  field: 'pieles' | 'sebo' | 'hueso',
+  field: ProductField,
   products: Array<{ id: number; name: string }>,
 ): { id: number; name: string } | undefined {
   const aliases = PRODUCT_ALIASES[field]
@@ -197,12 +197,8 @@ export function matchProduct(
   return undefined
 }
 
-const FIELD_MAP: Array<{ field: 'pieles' | 'sebo' | 'hueso'; label: string }> =
-  [
-    { field: 'pieles', label: 'Pieles' },
-    { field: 'sebo', label: 'Sebo' },
-    { field: 'hueso', label: 'Hueso' },
-  ]
+const FIELD_MAP: Array<{ field: ProductField; label: string }> =
+  PRODUCT_FIELDS.map(field => ({ field, label: PRODUCT_FIELD_LABELS[field] }))
 
 /** Round to 3 decimals (kg precision). */
 function round3(n: number): number {

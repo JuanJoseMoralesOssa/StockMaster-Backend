@@ -26,8 +26,29 @@ export const USER_MESSAGES = {
   TRANSACTION_ID_REQUIRED:
     'El ID de la transacción es obligatorio para actualizarla.',
 
+  // Validación de fechas y rangos
+  DATE_INVALID_FORMAT: 'Formato de fecha inválido. Usa AAAA-MM-DD.',
+  DATE_RANGE_REQUIRED: 'startDate y endDate son obligatorios.',
+  DATE_RANGE_ORDER: 'startDate debe ser anterior o igual a endDate.',
+
   UNEXPECTED: 'Ocurrió un error inesperado. Por favor contacta a soporte.',
 } as const
+
+export function invalidDateYearMessage(currentYear: number): string {
+  return `Fecha inválida. El año debe estar entre 2000 y ${currentYear}.`
+}
+
+export function invalidDateFormatMessage(label: string): string {
+  return `Formato de ${label} inválido. Usa AAAA-MM-DD.`
+}
+
+export function invalidDateValueMessage(label: string): string {
+  return `Valor de ${label} inválido.`
+}
+
+export function dateRangeTooLargeMessage(maxDays: number): string {
+  return `El rango de fechas no puede superar ${maxDays} días.`
+}
 
 export function versionRequiredMessage(paramName: string): string {
   return `El parámetro ${paramName} es obligatorio y debe ser un número positivo.`

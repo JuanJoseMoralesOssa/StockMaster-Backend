@@ -1,3 +1,3 @@
 export * from './db-constraints'
-export * from './foreign-detail.error'
+export * from './domain-errors'
 export * from './user-messages'

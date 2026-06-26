@@ -1,36 +1,29 @@
-import { BindingScope, injectable, service } from '@loopback/core'
+import { BindingScope, inject, injectable, service } from '@loopback/core'
 import { repository } from '@loopback/repository'
-import { Expense, ExpenseDetails } from '../models'
-import { ExpenseDetailsRepository, ExpenseRepository } from '../repositories'
+import { SecurityBindings, UserProfile } from '@loopback/security'
+import { Expense, ExpenseDetails, ExpenseWithTotal } from '../models'
+import {
+  ExpenseDetailsRepository,
+  ExpenseRepository,
+  ExpenseWithTotalRepository,
+} from '../repositories'
 import { DetailMutationService } from './detail-mutation.service'
 import { TransactionKind } from './transaction-kind.enum'
+import {
+  WithDetailsCreateInput,
+  WithDetailsUpdateInput,
+} from './transaction.types'
 import { TransactionWithDetailsService } from './transaction-with-details.service'
 
-export interface CreateExpenseWithDetailsInput {
-  date: string
-  details?: Array<{
-    weight_kg: number
-    productId: number
-    personId: number
-  }>
-}
-
-export interface UpdateExpenseWithDetailsInput {
-  id: number
-  version?: number
-  date?: string
-  details?: Array<{
-    id?: number
-    weight_kg: number
-    productId: number
-    personId: number
-  }>
-}
+const EXPENSE_INCLUDE = { include: ['expense_details'] }
 
 /**
  * Per-kind facade: binds the generic transaction/detail engines to the
  * expense repositories once, so controllers never wire infrastructure
- * (dataSource, relation factories, TransactionKind) themselves.
+ * (dataSource, relation factories, TransactionKind, the acting user) themselves.
+ * It also resolves the authenticated user id here — the request-scoped boundary
+ * — and passes it into the engines so the low-level stock service stays free of
+ * request/auth context (audit Finding M5).
  */
 @injectable({ scope: BindingScope.TRANSIENT })
 export class ExpenseTransactionService {
@@ -43,13 +36,22 @@ export class ExpenseTransactionService {
     private readonly expenseRepository: ExpenseRepository,
     @repository(ExpenseDetailsRepository)
     private readonly expenseDetailsRepository: ExpenseDetailsRepository,
+    @repository(ExpenseWithTotalRepository)
+    private readonly expenseWithTotalRepository: ExpenseWithTotalRepository,
+    @inject(SecurityBindings.USER, { optional: true })
+    private readonly currentUser?: UserProfile,
   ) {}
 
-  /** Creates the expense + details atomically and returns the new id. */
+  private actorId(): number | undefined {
+    const id = Number(this.currentUser?.id)
+    return Number.isFinite(id) ? id : undefined
+  }
+
+  /** Creates the expense + details atomically and returns the canonical view. */
   async createWithDetails(
-    input: CreateExpenseWithDetailsInput,
-  ): Promise<number> {
-    return this.transactionWithDetailsService.createWithDetails<
+    input: WithDetailsCreateInput,
+  ): Promise<ExpenseWithTotal> {
+    const id = await this.transactionWithDetailsService.createWithDetails<
       Expense,
       ExpenseDetails
     >(
@@ -58,12 +60,16 @@ export class ExpenseTransactionService {
         details: input.details as ExpenseDetails[] | undefined,
       },
       this.expenseRepository,
-      id => this.expenseRepository.expense_details(id),
+      expenseId => this.expenseRepository.expense_details(expenseId),
       TransactionKind.EXPENSE,
+      this.actorId(),
     )
+    return this.expenseWithTotalRepository.findById(id, EXPENSE_INCLUDE)
   }
 
-  async updateWithDetails(input: UpdateExpenseWithDetailsInput): Promise<void> {
+  async updateWithDetails(
+    input: WithDetailsUpdateInput,
+  ): Promise<ExpenseWithTotal> {
     await this.transactionWithDetailsService.updateWithDetails<
       Expense,
       ExpenseDetails
@@ -75,9 +81,11 @@ export class ExpenseTransactionService {
         details: input.details as ExpenseDetails[] | undefined,
       },
       this.expenseRepository,
-      id => this.expenseRepository.expense_details(id),
+      expenseId => this.expenseRepository.expense_details(expenseId),
       TransactionKind.EXPENSE,
+      this.actorId(),
     )
+    return this.expenseWithTotalRepository.findById(input.id, EXPENSE_INCLUDE)
   }
 
   async deleteWithDetails(id: number, version?: number): Promise<void> {
@@ -90,6 +98,7 @@ export class ExpenseTransactionService {
       this.expenseRepository,
       expenseId => this.expenseRepository.expense_details(expenseId),
       TransactionKind.EXPENSE,
+      this.actorId(),
     )
   }
 
@@ -105,6 +114,7 @@ export class ExpenseTransactionService {
       this.expenseRepository.dataSource,
       TransactionKind.EXPENSE,
       parentVersion,
+      this.actorId(),
     )
   }
 
@@ -119,6 +129,7 @@ export class ExpenseTransactionService {
       this.expenseDetailsRepository,
       TransactionKind.EXPENSE,
       parentVersion,
+      this.actorId(),
     )
   }
 
@@ -128,6 +139,7 @@ export class ExpenseTransactionService {
       this.expenseDetailsRepository,
       TransactionKind.EXPENSE,
       parentVersion,
+      this.actorId(),
     )
   }
 }

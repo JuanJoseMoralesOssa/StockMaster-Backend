@@ -15,6 +15,7 @@ import {
   ROLES_METHOD_KEY,
   RolesMetadata,
 } from '../decorators/auth-decorators'
+import { roleSatisfies } from '../roles'
 
 /**
  * Controladores provistos por el framework (no viven en src/controllers) que
@@ -77,7 +78,12 @@ export class AuthorizeInterceptor implements Provider<Interceptor> {
     if (!rolesMetadata.anyAuthenticated) {
       const userProfile = user as UserProfile & { role?: string }
       const requiredRoles = rolesMetadata.allowedRoles
-      if (!userProfile.role || !requiredRoles.includes(userProfile.role)) {
+      // Hierarchy-aware: a higher role (admin) satisfies a lower requirement
+      // (office) without being listed explicitly. See roleSatisfies / ROLE_RANK.
+      if (
+        !userProfile.role ||
+        !roleSatisfies(userProfile.role, requiredRoles)
+      ) {
         throw new HttpErrors.Forbidden(
           `Access denied. Required roles: ${requiredRoles.join(', ')}. Your role: ${userProfile.role ?? 'none'}`,
         )

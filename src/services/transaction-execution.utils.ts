@@ -1,4 +1,3 @@
-import { HttpErrors } from '@loopback/rest'
 import {
   DataSourceWithTransactions,
   TransactionOptions,
@@ -9,9 +8,9 @@ export async function runInTransaction<T>(
   work: (tx: TransactionOptions) => Promise<T>,
 ): Promise<T> {
   if (typeof dataSource.beginTransaction !== 'function') {
-    throw new HttpErrors.InternalServerError(
-      'DataSource does not support transactions',
-    )
+    // Internal invariant: the Postgres datasource always supports transactions.
+    // A miss is a wiring bug, so let it surface as a 500 via the interceptor.
+    throw new Error('DataSource does not support transactions')
   }
 
   const transaction = await dataSource.beginTransaction({
@@ -22,7 +21,15 @@ export async function runInTransaction<T>(
     await transaction.commit()
     return result
   } catch (error) {
-    await transaction.rollback()
+    // Guard the rollback so its own failure (e.g. a Neon connection dropped
+    // mid-transaction) cannot REPLACE the meaningful error the caller raised.
+    // Without this, a 409 version conflict surfaces to the client as an opaque
+    // 500 because the rollback rejection — not `error` — is what propagates.
+    try {
+      await transaction.rollback()
+    } catch (rollbackError) {
+      console.error('[tx] rollback failed', rollbackError)
+    }
     throw error
   }
 }

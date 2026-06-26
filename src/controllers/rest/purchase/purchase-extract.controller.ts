@@ -12,6 +12,7 @@ import multer from 'multer'
 import { Roles, requireRoles } from '../../../auth'
 import { PersonRepository, ProductRepository } from '../../../repositories'
 import { ExtractionResult, FormExtractionService } from '../../../services'
+import { PRODUCT_FIELDS } from '../../../services/form-spec'
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -74,7 +75,7 @@ const EXTRACTION_RESULT_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          fieldName: { type: 'string', enum: ['pieles', 'sebo', 'hueso'] },
+          fieldName: { type: 'string', enum: [...PRODUCT_FIELDS] },
           productId: { type: 'number', nullable: true },
           productName: { type: 'string' },
           weightLb: { type: 'number' },
@@ -179,8 +180,9 @@ export class PurchaseExtractController {
       })),
       date: result.date,
       librasTotal: result.librasTotal,
+      // Supplier name (PII) is intentionally omitted from logs; only the
+      // resolved id + match quality are recorded for telemetry.
       supplier: {
-        rawName: result.supplier.rawName,
         personId: result.supplier.personId,
         confidence: result.supplier.confidence,
         needsReview: result.supplier.needsReview,

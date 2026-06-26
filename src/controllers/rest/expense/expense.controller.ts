@@ -24,13 +24,22 @@ import {
   normalizePagination,
   paginationConfig,
 } from '../../../config/pagination'
-import { Expense, ExpenseWithTotal, Pagination } from '../../../models'
+import {
+  Expense,
+  ExpenseWithTotal,
+  Pagination,
+  TransactionDetailRequestDTO,
+} from '../../../models'
 import {
   ExpenseRepository,
   ExpenseWithTotalRepository,
 } from '../../../repositories'
 import { ExpenseTransactionService } from '../../../services'
 import { validateDate } from '../../../services/date-validation.utils'
+import {
+  withDetailsCreateSchema,
+  withDetailsUpdateSchema,
+} from '../detail-schemas'
 
 // Gastos: lectura y mutaciones para Oficina y Admin.
 @requireRoles(Roles.OFFICE, Roles.ADMIN)
@@ -82,43 +91,20 @@ export class ExpenseController {
     @requestBody({
       content: {
         'application/json': {
-          schema: {
-            type: 'object',
-            required: ['date'],
-            properties: {
-              date: { type: 'string', format: 'date' },
-              expenseDetails: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  required: ['weight_kg', 'productId', 'personId'],
-                  properties: {
-                    weight_kg: { type: 'number' },
-                    productId: { type: 'number' },
-                    personId: { type: 'number' },
-                  },
-                },
-              },
-            },
-          },
+          schema: withDetailsCreateSchema('expenseDetails'),
         },
       },
     })
     expense: {
       date: string
-      expenseDetails?: Array<{
-        weight_kg: number
-        productId: number
-        personId: number
-      }>
+      expenseDetails?: TransactionDetailRequestDTO[]
     },
   ): Promise<ExpenseWithTotal> {
-    const createdId = await this.expenseTransactionService.createWithDetails({
+    // The facade performs the write AND the canonical WithTotal re-read, so the
+    // controller no longer needs to know the read twin or its include set.
+    return this.expenseTransactionService.createWithDetails({
       date: expense.date,
       details: expense.expenseDetails,
-    })
-    return this.expenseWithTotalRepository.findById(createdId, {
-      include: ['expense_details'],
     })
   }
 
@@ -281,27 +267,7 @@ export class ExpenseController {
     @requestBody({
       content: {
         'application/json': {
-          schema: {
-            type: 'object',
-            required: ['id', 'version'],
-            properties: {
-              id: { type: 'number' },
-              version: { type: 'number' },
-              date: { type: 'string', format: 'date' },
-              expenseDetails: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    id: { type: 'number' },
-                    weight_kg: { type: 'number' },
-                    productId: { type: 'number' },
-                    personId: { type: 'number' },
-                  },
-                },
-              },
-            },
-          },
+          schema: withDetailsUpdateSchema('expenseDetails'),
         },
       },
     })
@@ -309,22 +275,14 @@ export class ExpenseController {
       id: number
       version: number
       date?: string
-      expenseDetails?: Array<{
-        id?: number
-        weight_kg: number
-        productId: number
-        personId: number
-      }>
+      expenseDetails?: TransactionDetailRequestDTO[]
     },
   ): Promise<ExpenseWithTotal> {
-    await this.expenseTransactionService.updateWithDetails({
+    return this.expenseTransactionService.updateWithDetails({
       id: expenseData.id,
       version: expenseData.version,
       date: expenseData.date,
       details: expenseData.expenseDetails,
-    })
-    return this.expenseWithTotalRepository.findById(expenseData.id, {
-      include: ['expense_details'],
     })
   }
 

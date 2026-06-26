@@ -274,6 +274,48 @@ describe('InventoryStockFlow', function () {
     }
   })
 
+  it('PUT /purchase-details/{id} replaces the whole line and rejects a partial body', async () => {
+    const tag = `put-replace-${Date.now()}`
+    const personId = await createPerson(tag)
+    const productId = await createProduct(tag, 100)
+    let purchaseId: number | undefined
+
+    try {
+      const createRes = await client
+        .post('/purchases/with-details')
+        .send({
+          date: '2026-04-01',
+          purchaseDetails: [{ weight_kg: 10, productId, personId }],
+        })
+        .expect(200)
+
+      purchaseId = createRes.body.id
+      const detailId = createRes.body.purchase_details[0].id
+      expect(await getStock(productId)).to.equal(110)
+
+      // PUT requires the full representation: a partial body is rejected (422)
+      // and leaves stock/version untouched.
+      await client
+        .put(`/purchase-details/${detailId}`)
+        .query({ parentVersion: 1 })
+        .send({ weight_kg: 20 })
+        .expect(422)
+      expect(await getStock(productId)).to.equal(110)
+
+      // Full representation replaces the line.
+      await client
+        .put(`/purchase-details/${detailId}`)
+        .query({ parentVersion: 1 })
+        .send({ weight_kg: 20, productId, personId })
+        .expect(200)
+      expect(await getStock(productId)).to.equal(120)
+    } finally {
+      await cleanupTransaction(client, '/purchases', purchaseId)
+      await client.del(`/products/${productId}`).catch(() => undefined)
+      await client.del(`/people/${personId}`).catch(() => undefined)
+    }
+  })
+
   it('blocks bulk expense detail patch for stock consistency', async () => {
     await client.patch('/expense-details').send({ weight_kg: 99 }).expect(405)
   })
@@ -541,7 +583,11 @@ describe('InventoryStockFlow', function () {
         .get(`/kardexes?filter=${filter}&page=1&limit=10`)
         .expect(200)
 
-      const rows = kardexRes.body.data
+      // Exclude the opening-balance row (operation 5) so indices line up with
+      // the transaction movements asserted below.
+      const rows = (
+        kardexRes.body.data as Array<Record<string, unknown>>
+      ).filter(row => row.operation !== 5)
       expect(rows.length).to.be.greaterThanOrEqual(2)
       expect(rows[0]).to.containDeep({
         input: 10,
@@ -571,6 +617,52 @@ describe('InventoryStockFlow', function () {
       await client.del(`/products/${productId}`).catch(() => undefined)
       await client.del(`/products/${seedProductId}`).catch(() => undefined)
       await client.del(`/people/${personId}`).catch(() => undefined)
+    }
+  })
+
+  it('records an opening-balance kardex row when a product is created with stock', async () => {
+    const tag = `opening-balance-${Date.now()}`
+    let withStockId: number | undefined
+    let zeroStockId: number | undefined
+
+    try {
+      withStockId = await createProduct(tag, 50)
+      zeroStockId = await createProduct(`${tag}-zero`, 0)
+
+      const openingFilter = encodeURIComponent(
+        JSON.stringify({
+          where: { productId: withStockId },
+          order: ['id ASC'],
+        }),
+      )
+      const openingRes = await client
+        .get(`/kardexes?filter=${openingFilter}&page=1&limit=10`)
+        .expect(200)
+
+      expect(openingRes.body.data).to.have.length(1)
+      expect(openingRes.body.data[0]).to.containDeep({
+        input: 50,
+        output: 0,
+        balance: 50,
+        operation: 5, // KardexOperation.OpeningBalance
+        productId: withStockId,
+      })
+
+      // A product created with zero stock writes no opening movement.
+      const zeroFilter = encodeURIComponent(
+        JSON.stringify({ where: { productId: zeroStockId } }),
+      )
+      const zeroRes = await client
+        .get(`/kardexes?filter=${zeroFilter}&page=1&limit=10`)
+        .expect(200)
+      expect(zeroRes.body.data).to.have.length(0)
+    } finally {
+      if (withStockId) {
+        await client.del(`/products/${withStockId}`).catch(() => undefined)
+      }
+      if (zeroStockId) {
+        await client.del(`/products/${zeroStockId}`).catch(() => undefined)
+      }
     }
   })
 

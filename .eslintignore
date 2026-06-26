@@ -2,3 +2,7 @@ node_modules/
 dist/
 coverage/
 .eslintrc.js
+
+# Ad-hoc manual debugging script at the repo root; not part of the TS project
+# (tsconfig does not include it), so typed-linting cannot parse it.
+test_axios.js

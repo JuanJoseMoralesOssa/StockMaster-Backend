@@ -2,6 +2,10 @@ import { Client, expect } from '@loopback/testlab'
 import { App } from '../..'
 import { cleanupTransaction, setupApplication } from './test-helper'
 
+// KardexOperation.OpeningBalance — the audit row written when a product is
+// created with non-zero stock. Filtered out of movement assertions.
+const KARDEX_OPENING_BALANCE = 5
+
 describe('ServerSideReconciliation Flow', function () {
   // eslint-disable-next-line @typescript-eslint/no-invalid-this
   this.timeout(30000)
@@ -68,7 +72,8 @@ describe('ServerSideReconciliation Flow', function () {
     expect(aggregate.version).to.equal(1)
     const detailId = aggregate.purchase_details[0].id
 
-    // Test missing version -> 400
+    // Test missing version -> 400 (service requireVersion owns the check, so it
+    // is consistent with DELETE and the single-detail endpoints).
     await client
       .put('/purchases/with-details')
       .send({
@@ -77,7 +82,7 @@ describe('ServerSideReconciliation Flow', function () {
         date: '2026-03-01',
         purchaseDetails: [{ id: detailId, weight_kg: 15, productId, personId }],
       })
-      .expect(422)
+      .expect(400)
 
     // Test mismatched version -> 409
     const conflictRes = await client
@@ -573,6 +578,8 @@ describe('ServerSideReconciliation Flow', function () {
     const p2 = await createProduct(tag + '2', 100)
     let purchaseId: number | undefined
 
+    // Excludes the opening-balance row (operation 5) written at product
+    // creation, so these assertions stay focused on transaction movements.
     async function kardexRows(productId: number) {
       const filter = encodeURIComponent(
         JSON.stringify({ where: { productId }, order: ['id ASC'] }),
@@ -580,7 +587,9 @@ describe('ServerSideReconciliation Flow', function () {
       const res = await client
         .get(`/kardexes?filter=${filter}&page=1&limit=10`)
         .expect(200)
-      return res.body.data as Array<Record<string, unknown>>
+      return (res.body.data as Array<Record<string, unknown>>).filter(
+        row => row.operation !== KARDEX_OPENING_BALANCE,
+      )
     }
 
     try {

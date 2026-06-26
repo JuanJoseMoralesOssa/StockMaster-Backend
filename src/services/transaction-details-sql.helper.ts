@@ -1,5 +1,4 @@
-import { HttpErrors } from '@loopback/rest'
-import { notFoundMessage, USER_MESSAGES } from '../errors'
+import { transactionNotFoundError, versionConflictError } from '../errors'
 import {
   DataSourceWithTransactions,
   TransactionOptions,
@@ -7,7 +6,11 @@ import {
 import { extractRows } from './transaction-execution.utils'
 import { requireVersion } from './optimistic-lock.utils'
 import { TransactionKind } from './transaction-kind.enum'
-import { DETAIL_COLUMNS, TRANSACTION_CONFIG } from './transaction-type.const'
+import {
+  DETAIL_COLUMNS,
+  TRANSACTION_CONFIG,
+  UPDATABLE_PARENT_FIELDS,
+} from './transaction-type.const'
 
 /** Wraps the raw-SQL batch operations for a specific detail table. */
 export class TransactionDetailsSqlHelper {
@@ -20,9 +23,9 @@ export class TransactionDetailsSqlHelper {
   ) {
     const config = TRANSACTION_CONFIG[transactionKind]
     if (!config) {
-      throw new HttpErrors.BadRequest(
-        `Unsupported transaction kind: ${transactionKind}`,
-      )
+      // Unreachable: TransactionKind is a closed enum. A miss here is an
+      // internal wiring bug, not client input, so surface it as a 500.
+      throw new Error(`Unsupported transaction kind: ${transactionKind}`)
     }
     this.tableName = config.detailTable
     this.parentTableName = config.parentTable
@@ -52,10 +55,10 @@ export class TransactionDetailsSqlHelper {
     )
     const rows = extractRows(result) as { id: number; version: number }[]
     if (!Array.isArray(rows) || rows.length === 0) {
-      throw new HttpErrors.NotFound(notFoundMessage(this.parentTableName, id))
+      throw transactionNotFoundError(this.parentTableName, id)
     }
     if (Number(rows[0].version) !== expectedVersion) {
-      throw new HttpErrors.Conflict(USER_MESSAGES.CONFLICT_MODIFIED)
+      throw versionConflictError()
     }
   }
 
@@ -83,10 +86,10 @@ export class TransactionDetailsSqlHelper {
       ([, value]) => value !== undefined,
     )
     for (const [key] of entries) {
-      if (key !== 'date') {
-        throw new HttpErrors.BadRequest(
-          `Unsupported parent transaction field: ${key}`,
-        )
+      if (!(UPDATABLE_PARENT_FIELDS as readonly string[]).includes(key)) {
+        // Unreachable from the HTTP path: buildParentUpdatePayload only forwards
+        // whitelisted fields. A hit here is an internal bug, hence a 500.
+        throw new Error(`Unsupported parent transaction field: ${key}`)
       }
     }
 
@@ -149,9 +152,9 @@ export class TransactionDetailsSqlHelper {
     )
     const existsRows = extractRows(existsResult)
     if (existsRows.length === 0) {
-      throw new HttpErrors.NotFound(notFoundMessage(this.parentTableName, id))
+      throw transactionNotFoundError(this.parentTableName, id)
     }
 
-    throw new HttpErrors.Conflict(USER_MESSAGES.CONFLICT_MODIFIED)
+    throw versionConflictError()
   }
 }
