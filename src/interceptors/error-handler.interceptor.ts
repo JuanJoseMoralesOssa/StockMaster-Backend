@@ -105,8 +105,8 @@ export class ErrorHandlerInterceptor implements Provider<Interceptor> {
       }
 
       if (hasCode(error, PG_ERROR_CODES.CHECK_VIOLATION)) {
-        if (getConstraint(error) === DB_CONSTRAINTS.PRODUCT_STOCK_MIN) {
-          throw new HttpErrors.Conflict(USER_MESSAGES.INSUFFICIENT_STOCK)
+        if (getConstraint(error) === DB_CONSTRAINTS.PRODUCT_BALANCE_MIN) {
+          throw new HttpErrors.Conflict(USER_MESSAGES.INSUFFICIENT_BALANCE)
         }
         throw new HttpErrors.UnprocessableEntity(USER_MESSAGES.DATA_CONSTRAINT)
       }
@@ -120,7 +120,7 @@ export class ErrorHandlerInterceptor implements Provider<Interceptor> {
       }
 
       // Fallos transitorios de PostgreSQL (deadlock entre transacciones que
-      // ajustan stock de productos en orden opuesto, o fallo de
+      // ajustan balance de productos en orden opuesto, o fallo de
       // serialización): son reintetables — 409 con mensaje de reintento, no
       // un 500 opaco de "contacta a soporte".
       if (

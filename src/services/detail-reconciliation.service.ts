@@ -1,7 +1,7 @@
 import { BindingScope, injectable, service } from '@loopback/core'
 import { computeDetailsDiff, DetailDiff } from './transaction-diff.utils'
 import { DetailBase, TransactionOptions, TxScope } from './transaction.types'
-import { StockReconciliationService } from './stock-reconciliation.service'
+import { BalanceReconciliationService } from './balance-reconciliation.service'
 import { TransactionDetailsSqlHelper } from './transaction-details-sql.helper'
 import { roundWeightKg } from './weight.utils'
 
@@ -12,8 +12,8 @@ type RelationsAccessor<D extends DetailBase> = {
 @injectable({ scope: BindingScope.TRANSIENT })
 export class DetailReconciliationService {
   constructor(
-    @service(StockReconciliationService)
-    private readonly stockReconciliationService: StockReconciliationService,
+    @service(BalanceReconciliationService)
+    private readonly balanceReconciliationService: BalanceReconciliationService,
   ) {}
 
   computeDiff<D extends DetailBase>(
@@ -55,7 +55,7 @@ export class DetailReconciliationService {
       scope.transactionKind,
     )
     for (const detail of toDelete) {
-      await this.stockReconciliationService.adjustStock(
+      await this.balanceReconciliationService.adjustBalance(
         scope,
         detail.productId,
         detail.weight_kg,
@@ -83,7 +83,7 @@ export class DetailReconciliationService {
     for (const { old, new: det } of toUpdate) {
       const newWeight = roundWeightKg(det.weight_kg)
 
-      await this.stockReconciliationService.applyDetailStockDelta(
+      await this.balanceReconciliationService.applyDetailBalanceDelta(
         scope,
         { old, new: { productId: det.productId, weight_kg: newWeight } },
         { sourceId: parentId, sourceDetailId: det.id },
@@ -111,11 +111,11 @@ export class DetailReconciliationService {
   }
 
   /**
-   * Creates ONE detail row and its stock movement atomically. The ordering is
+   * Creates ONE detail row and its balance movement atomically. The ordering is
    * load-bearing and therefore lives in exactly one place (shared by the bulk
    * reconciler above and DetailMutationService.createSingleDetail):
    *
-   *   1. adjust stock first — adjustStock 404s when the product does not exist,
+   *   1. adjust balance first — adjustBalance 404s when the product does not exist,
    *      which must win over the detail INSERT's FK violation (409);
    *   2. create the detail row;
    *   3. backfill the Kardex row's detail-id provenance (the Kardex row
@@ -128,7 +128,7 @@ export class DetailReconciliationService {
     relationsAccessor: RelationsAccessor<D>,
   ): Promise<D> {
     const weightKg = roundWeightKg(detail.weight_kg!)
-    const kardexId = await this.stockReconciliationService.adjustStock(
+    const kardexId = await this.balanceReconciliationService.adjustBalance(
       scope,
       detail.productId!,
       weightKg,
@@ -143,7 +143,7 @@ export class DetailReconciliationService {
       } as Partial<D>,
       scope.options,
     )
-    await this.stockReconciliationService.attachDetailToKardex(
+    await this.balanceReconciliationService.attachDetailToKardex(
       kardexId,
       created.id,
       scope.options.transaction,

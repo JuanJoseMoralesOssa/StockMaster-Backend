@@ -6,34 +6,34 @@ import {
 } from '@loopback/repository'
 import { PostgresDataSource } from '../datasources'
 import {
-  Expense,
-  ExpenseDetails,
-  ExpenseDetailsRelations,
+  Payment,
+  PaymentDetails,
+  PaymentDetailsRelations,
   Person,
   Product,
 } from '../models'
-import { ExpenseRepository } from './expense.repository'
+import { PaymentRepository } from './payment.repository'
 import { PersonRepository } from './person.repository'
 import { ProductRepository } from './product.repository'
 
-export class ExpenseDetailsRepository extends DefaultCrudRepository<
-  ExpenseDetails,
-  typeof ExpenseDetails.prototype.id,
-  ExpenseDetailsRelations
+export class PaymentDetailsRepository extends DefaultCrudRepository<
+  PaymentDetails,
+  typeof PaymentDetails.prototype.id,
+  PaymentDetailsRelations
 > {
   public readonly product: BelongsToAccessor<
     Product,
-    typeof ExpenseDetails.prototype.id
+    typeof PaymentDetails.prototype.id
   >
 
   public readonly person: BelongsToAccessor<
     Person,
-    typeof ExpenseDetails.prototype.id
+    typeof PaymentDetails.prototype.id
   >
 
-  public readonly expense: BelongsToAccessor<
-    Expense,
-    typeof ExpenseDetails.prototype.id
+  public readonly payment: BelongsToAccessor<
+    Payment,
+    typeof PaymentDetails.prototype.id
   >
 
   constructor(
@@ -42,15 +42,15 @@ export class ExpenseDetailsRepository extends DefaultCrudRepository<
     protected productRepositoryGetter: Getter<ProductRepository>,
     @repository.getter('PersonRepository')
     protected personRepositoryGetter: Getter<PersonRepository>,
-    @repository.getter('ExpenseRepository')
-    protected expenseRepositoryGetter: Getter<ExpenseRepository>,
+    @repository.getter('PaymentRepository')
+    protected paymentRepositoryGetter: Getter<PaymentRepository>,
   ) {
-    super(ExpenseDetails, dataSource)
-    this.expense = this.createBelongsToAccessorFor(
-      'expense',
-      expenseRepositoryGetter,
+    super(PaymentDetails, dataSource)
+    this.payment = this.createBelongsToAccessorFor(
+      'payment',
+      paymentRepositoryGetter,
     )
-    this.registerInclusionResolver('expense', this.expense.inclusionResolver)
+    this.registerInclusionResolver('payment', this.payment.inclusionResolver)
     this.person = this.createBelongsToAccessorFor(
       'person',
       personRepositoryGetter,

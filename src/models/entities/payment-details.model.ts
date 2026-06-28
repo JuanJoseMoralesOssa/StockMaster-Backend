@@ -1,24 +1,24 @@
 import { belongsTo, Entity, model, property } from '@loopback/repository'
-import { Expense } from './expense.model'
+import { Payment } from './payment.model'
 import { Person } from './person.model'
 import { Product } from './product.model'
 
 @model({
   settings: {
     indexes: {
-      idx_expense_details_expense: {
-        keys: { expenseId: 1 },
+      idx_payment_details_payment: {
+        keys: { paymentId: 1 },
       },
-      idx_expense_details_product: {
+      idx_payment_details_product: {
         keys: { productId: 1 },
       },
-      idx_expense_details_person: {
+      idx_payment_details_person: {
         keys: { personId: 1 },
       },
     },
   },
 })
-export class ExpenseDetails extends Entity {
+export class PaymentDetails extends Entity {
   @property({
     type: 'number',
     id: true,
@@ -41,17 +41,17 @@ export class ExpenseDetails extends Entity {
   @belongsTo(() => Person)
   personId: number
 
-  @belongsTo(() => Expense)
-  expenseId: number
+  @belongsTo(() => Payment)
+  paymentId: number
 
-  constructor(data?: Partial<ExpenseDetails>) {
+  constructor(data?: Partial<PaymentDetails>) {
     super(data)
   }
 }
 
-export interface ExpenseDetailsRelations {
+export interface PaymentDetailsRelations {
   // describe navigational properties here
 }
 
-export type ExpenseDetailsWithRelations = ExpenseDetails &
-  ExpenseDetailsRelations
+export type PaymentDetailsWithRelations = PaymentDetails &
+  PaymentDetailsRelations

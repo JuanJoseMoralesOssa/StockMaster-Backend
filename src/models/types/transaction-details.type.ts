@@ -8,13 +8,13 @@ export interface TransactionDetailRequestDTO {
 export interface TransactionDetailPersonProduct {
   date: string
   weight_kg: number
-  type: 'Compra' | 'Gasto'
+  type: 'Compra' | 'Pago'
 }
 
 export interface TransactionDetailProduct {
   date: string
   weight_kg: number
-  type: 'Compra' | 'Gasto'
+  type: 'Compra' | 'Pago'
   personId: number
   personName?: string
 }
@@ -22,7 +22,7 @@ export interface TransactionDetailProduct {
 export interface TransactionDetailPerson {
   date: string
   weight_kg: number
-  type: 'Compra' | 'Gasto'
+  type: 'Compra' | 'Pago'
   productId: number
   personName?: string
 }

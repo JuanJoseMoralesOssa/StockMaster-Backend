@@ -1,7 +1,7 @@
 import {
   foreignDetailMessage,
   notFoundMessage,
-  productStockNotFoundMessage,
+  productBalanceNotFoundMessage,
   USER_MESSAGES,
   versionRequiredMessage,
 } from './user-messages'
@@ -98,8 +98,8 @@ export function transactionNotFoundError(
   return new ResourceNotFoundError(notFoundMessage(entity, id))
 }
 
-export function productStockNotFoundError(
+export function productBalanceNotFoundError(
   productId: number,
 ): ResourceNotFoundError {
-  return new ResourceNotFoundError(productStockNotFoundMessage(productId))
+  return new ResourceNotFoundError(productBalanceNotFoundMessage(productId))
 }

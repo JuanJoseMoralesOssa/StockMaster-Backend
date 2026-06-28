@@ -10,6 +10,6 @@ export * from './purchase.model'
 
 export * from './kardex.model'
 
-export * from './expense-details.model'
-export * from './expense-with-total.model'
-export * from './expense.model'
+export * from './payment-details.model'
+export * from './payment-with-total.model'
+export * from './payment.model'

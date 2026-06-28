@@ -1,6 +1,6 @@
 import { Entity, hasMany, model, property } from '@loopback/repository'
-import { ExpenseDetails } from './expense-details.model'
-import { Expense } from './expense.model'
+import { PaymentDetails } from './payment-details.model'
+import { Payment } from './payment.model'
 import { Kardex } from './kardex.model'
 import { Person } from './person.model'
 import { PurchaseDetails } from './purchase-details.model'
@@ -24,10 +24,10 @@ export class Product extends Entity {
   @property({
     type: 'number',
   })
-  stock?: number
+  balance?: number
 
-  @hasMany(() => Person, { through: { model: () => ExpenseDetails } })
-  people_expense_details: Person[]
+  @hasMany(() => Person, { through: { model: () => PaymentDetails } })
+  people_payment_details: Person[]
 
   @hasMany(() => Person, { through: { model: () => PurchaseDetails } })
   people_purchase_details: Person[]
@@ -38,8 +38,8 @@ export class Product extends Entity {
   @hasMany(() => Purchase, { through: { model: () => PurchaseDetails } })
   purchases: Purchase[]
 
-  @hasMany(() => Expense, { through: { model: () => ExpenseDetails } })
-  expenses: Expense[]
+  @hasMany(() => Payment, { through: { model: () => PaymentDetails } })
+  payments: Payment[]
 
   constructor(data?: Partial<Product>) {
     super(data)

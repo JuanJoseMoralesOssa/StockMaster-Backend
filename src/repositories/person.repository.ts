@@ -6,16 +6,16 @@ import {
 } from '@loopback/repository'
 import { PostgresDataSource } from '../datasources'
 import {
-  Expense,
-  ExpenseDetails,
+  Payment,
+  PaymentDetails,
   Person,
   PersonRelations,
   Product,
   Purchase,
   PurchaseDetails,
 } from '../models'
-import { ExpenseDetailsRepository } from './expense-details.repository'
-import { ExpenseRepository } from './expense.repository'
+import { PaymentDetailsRepository } from './payment-details.repository'
+import { PaymentRepository } from './payment.repository'
 import { ProductRepository } from './product.repository'
 import { PurchaseDetailsRepository } from './purchase-details.repository'
 import { PurchaseRepository } from './purchase.repository'
@@ -25,10 +25,10 @@ export class PersonRepository extends DefaultCrudRepository<
   typeof Person.prototype.id,
   PersonRelations
 > {
-  public readonly products_expense_details: HasManyThroughRepositoryFactory<
+  public readonly products_payment_details: HasManyThroughRepositoryFactory<
     Product,
     typeof Product.prototype.id,
-    ExpenseDetails,
+    PaymentDetails,
     typeof Person.prototype.id
   >
 
@@ -39,10 +39,10 @@ export class PersonRepository extends DefaultCrudRepository<
     typeof Person.prototype.id
   >
 
-  public readonly expenses: HasManyThroughRepositoryFactory<
-    Expense,
-    typeof Expense.prototype.id,
-    ExpenseDetails,
+  public readonly payments: HasManyThroughRepositoryFactory<
+    Payment,
+    typeof Payment.prototype.id,
+    PaymentDetails,
     typeof Person.prototype.id
   >
 
@@ -55,14 +55,14 @@ export class PersonRepository extends DefaultCrudRepository<
 
   constructor(
     @inject('datasources.postgres') dataSource: PostgresDataSource,
-    @repository.getter('ExpenseDetailsRepository')
-    protected expenseDetailsRepositoryGetter: Getter<ExpenseDetailsRepository>,
+    @repository.getter('PaymentDetailsRepository')
+    protected paymentDetailsRepositoryGetter: Getter<PaymentDetailsRepository>,
     @repository.getter('ProductRepository')
     protected productRepositoryGetter: Getter<ProductRepository>,
     @repository.getter('PurchaseDetailsRepository')
     protected purchaseDetailsRepositoryGetter: Getter<PurchaseDetailsRepository>,
-    @repository.getter('ExpenseRepository')
-    protected expenseRepositoryGetter: Getter<ExpenseRepository>,
+    @repository.getter('PaymentRepository')
+    protected paymentRepositoryGetter: Getter<PaymentRepository>,
     @repository.getter('PurchaseRepository')
     protected purchaseRepositoryGetter: Getter<PurchaseRepository>,
   ) {
@@ -76,12 +76,12 @@ export class PersonRepository extends DefaultCrudRepository<
       'purchases',
       this.purchases.inclusionResolver,
     )
-    this.expenses = this.createHasManyThroughRepositoryFactoryFor(
-      'expenses',
-      expenseRepositoryGetter,
-      expenseDetailsRepositoryGetter,
+    this.payments = this.createHasManyThroughRepositoryFactoryFor(
+      'payments',
+      paymentRepositoryGetter,
+      paymentDetailsRepositoryGetter,
     )
-    this.registerInclusionResolver('expenses', this.expenses.inclusionResolver)
+    this.registerInclusionResolver('payments', this.payments.inclusionResolver)
     this.products_purchase_details =
       this.createHasManyThroughRepositoryFactoryFor(
         'products_purchase_details',
@@ -92,15 +92,15 @@ export class PersonRepository extends DefaultCrudRepository<
       'products_purchase_details',
       this.products_purchase_details.inclusionResolver,
     )
-    this.products_expense_details =
+    this.products_payment_details =
       this.createHasManyThroughRepositoryFactoryFor(
-        'products_expense_details',
+        'products_payment_details',
         productRepositoryGetter,
-        expenseDetailsRepositoryGetter,
+        paymentDetailsRepositoryGetter,
       )
     this.registerInclusionResolver(
-      'products_expense_details',
-      this.products_expense_details.inclusionResolver,
+      'products_payment_details',
+      this.products_payment_details.inclusionResolver,
     )
   }
 }

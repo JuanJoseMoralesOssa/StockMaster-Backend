@@ -14,7 +14,7 @@ import { ProductRepository } from './product.repository'
 /**
  * Shared relation wiring for transaction-document repositories.
  *
- * Purchase/Expense and their WithTotal read twins all expose the same three
+ * Purchase/Payment and their WithTotal read twins all expose the same three
  * relations (details, people-through-details, products-through-details).
  * Wiring them here once means a new relation is added in one place instead of
  * drifting between a base repository and its WithTotal twin.

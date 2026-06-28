@@ -2,7 +2,7 @@ import { Client, expect } from '@loopback/testlab'
 import { App } from '../..'
 import { cleanupTransaction, setupApplication } from './test-helper'
 
-describe('InventoryStockFlow', function () {
+describe('InventoryBalanceFlow', function () {
   // eslint-disable-next-line @typescript-eslint/no-invalid-this
   this.timeout(30000)
 
@@ -25,105 +25,105 @@ describe('InventoryStockFlow', function () {
     return res.body.id
   }
 
-  async function createProduct(tag: string, stock: number): Promise<number> {
+  async function createProduct(tag: string, balance: number): Promise<number> {
     const res = await client
       .post('/products')
-      .send({ name: `Product-${tag}`, stock })
+      .send({ name: `Product-${tag}`, balance })
       .expect(200)
     return res.body.id
   }
 
-  async function getStock(productId: number): Promise<number> {
+  async function getBalance(productId: number): Promise<number> {
     const res = await client.get(`/products/${productId}`).expect(200)
-    return Number(res.body.stock ?? 0)
+    return Number(res.body.balance ?? 0)
   }
 
-  it('decreases stock on expense create and restores it on delete with details', async () => {
-    const tag = `expense-${Date.now()}`
+  it('decreases balance on payment create and restores it on delete with details', async () => {
+    const tag = `payment-${Date.now()}`
     const personId = await createPerson(tag)
     const productId = await createProduct(tag, 100)
-    let expenseId: number | undefined
+    let paymentId: number | undefined
 
     try {
       const createResponse = await client
-        .post('/expenses/with-details')
+        .post('/payments/with-details')
         .send({
           date: '2026-02-10',
-          expenseDetails: [{ weight_kg: 12, productId, personId }],
+          paymentDetails: [{ weight_kg: 12, productId, personId }],
         })
         .expect(200)
 
-      expenseId = createResponse.body.id
-      expect(expenseId).to.be.Number()
+      paymentId = createResponse.body.id
+      expect(paymentId).to.be.Number()
       expect(createResponse.body.version).to.equal(1)
-      expect(await getStock(productId)).to.equal(88)
+      expect(await getBalance(productId)).to.equal(88)
 
       await client
-        .delete(`/expenses/${expenseId}`)
+        .delete(`/payments/${paymentId}`)
         .query({ version: 1 })
         .expect(204)
 
-      expect(await getStock(productId)).to.equal(100)
-      await client.get(`/expenses/${expenseId}`).expect(404)
+      expect(await getBalance(productId)).to.equal(100)
+      await client.get(`/payments/${paymentId}`).expect(404)
     } finally {
-      await cleanupTransaction(client, '/expenses', expenseId)
+      await cleanupTransaction(client, '/payments', paymentId)
       await client.del(`/products/${productId}`).catch(() => undefined)
       await client.del(`/people/${personId}`).catch(() => undefined)
     }
   })
 
-  it('updates stock when expense detail weight changes', async () => {
-    const tag = `expense-update-${Date.now()}`
+  it('updates balance when payment detail weight changes', async () => {
+    const tag = `payment-update-${Date.now()}`
     const personId = await createPerson(tag)
     const productId = await createProduct(tag, 100)
-    let expenseId: number | undefined
+    let paymentId: number | undefined
 
     try {
       const createResponse = await client
-        .post('/expenses/with-details')
+        .post('/payments/with-details')
         .send({
           date: '2026-02-11',
-          expenseDetails: [{ weight_kg: 10, productId, personId }],
+          paymentDetails: [{ weight_kg: 10, productId, personId }],
         })
         .expect(200)
 
-      expenseId = createResponse.body.id
-      const detailId = createResponse.body.expense_details?.[0]?.id
+      paymentId = createResponse.body.id
+      const detailId = createResponse.body.payment_details?.[0]?.id
       let parentVersion = Number(createResponse.body.version)
 
-      expect(expenseId).to.be.Number()
+      expect(paymentId).to.be.Number()
       expect(detailId).to.be.Number()
-      expect(await getStock(productId)).to.equal(90)
+      expect(await getBalance(productId)).to.equal(90)
 
       await client
-        .patch(`/expense-details/${detailId}`)
+        .patch(`/payment-details/${detailId}`)
         .query({ parentVersion })
         .send({ weight_kg: 15, productId, personId })
         .expect(200)
       parentVersion += 1
-      expect(await getStock(productId)).to.equal(85)
+      expect(await getBalance(productId)).to.equal(85)
 
       await client
-        .patch(`/expense-details/${detailId}`)
+        .patch(`/payment-details/${detailId}`)
         .query({ parentVersion })
         .send({ weight_kg: 8, productId, personId })
         .expect(200)
       parentVersion += 1
-      expect(await getStock(productId)).to.equal(92)
+      expect(await getBalance(productId)).to.equal(92)
 
       await client
-        .delete(`/expenses/${expenseId}`)
+        .delete(`/payments/${paymentId}`)
         .query({ version: parentVersion })
         .expect(204)
-      expect(await getStock(productId)).to.equal(100)
+      expect(await getBalance(productId)).to.equal(100)
     } finally {
-      await cleanupTransaction(client, '/expenses', expenseId)
+      await cleanupTransaction(client, '/payments', paymentId)
       await client.del(`/products/${productId}`).catch(() => undefined)
       await client.del(`/people/${personId}`).catch(() => undefined)
     }
   })
 
-  it('increases stock on purchase create and restores it on delete with details', async () => {
+  it('increases balance on purchase create and restores it on delete with details', async () => {
     const tag = `purchase-${Date.now()}`
     const personId = await createPerson(tag)
     const productId = await createProduct(tag, 100)
@@ -141,14 +141,14 @@ describe('InventoryStockFlow', function () {
       purchaseId = createResponse.body.id
       expect(purchaseId).to.be.Number()
       expect(createResponse.body.version).to.equal(1)
-      expect(await getStock(productId)).to.equal(109)
+      expect(await getBalance(productId)).to.equal(109)
 
       await client
         .delete(`/purchases/${purchaseId}`)
         .query({ version: 1 })
         .expect(204)
 
-      expect(await getStock(productId)).to.equal(100)
+      expect(await getBalance(productId)).to.equal(100)
       await client.get(`/purchases/${purchaseId}`).expect(404)
     } finally {
       await cleanupTransaction(client, '/purchases', purchaseId)
@@ -157,7 +157,7 @@ describe('InventoryStockFlow', function () {
     }
   })
 
-  it('updates stock when purchase detail weight changes', async () => {
+  it('updates balance when purchase detail weight changes', async () => {
     const tag = `purchase-update-${Date.now()}`
     const personId = await createPerson(tag)
     const productId = await createProduct(tag, 100)
@@ -178,7 +178,7 @@ describe('InventoryStockFlow', function () {
 
       expect(purchaseId).to.be.Number()
       expect(detailId).to.be.Number()
-      expect(await getStock(productId)).to.equal(110)
+      expect(await getBalance(productId)).to.equal(110)
 
       await client
         .patch(`/purchase-details/${detailId}`)
@@ -186,7 +186,7 @@ describe('InventoryStockFlow', function () {
         .send({ weight_kg: 4, productId, personId })
         .expect(200)
       parentVersion += 1
-      expect(await getStock(productId)).to.equal(104)
+      expect(await getBalance(productId)).to.equal(104)
 
       await client
         .patch(`/purchase-details/${detailId}`)
@@ -194,13 +194,13 @@ describe('InventoryStockFlow', function () {
         .send({ weight_kg: 12, productId, personId })
         .expect(200)
       parentVersion += 1
-      expect(await getStock(productId)).to.equal(112)
+      expect(await getBalance(productId)).to.equal(112)
 
       await client
         .delete(`/purchases/${purchaseId}`)
         .query({ version: parentVersion })
         .expect(204)
-      expect(await getStock(productId)).to.equal(100)
+      expect(await getBalance(productId)).to.equal(100)
     } finally {
       await cleanupTransaction(client, '/purchases', purchaseId)
       await client.del(`/products/${productId}`).catch(() => undefined)
@@ -208,40 +208,40 @@ describe('InventoryStockFlow', function () {
     }
   })
 
-  it('updates stock when creating expense detail directly', async () => {
-    const tag = `expense-direct-${Date.now()}`
+  it('updates balance when creating payment detail directly', async () => {
+    const tag = `payment-direct-${Date.now()}`
     const personId = await createPerson(tag)
     const productId = await createProduct(tag, 100)
-    let expenseId: number | undefined
+    let paymentId: number | undefined
 
     try {
-      const expenseRes = await client
-        .post('/expenses/with-details')
+      const paymentRes = await client
+        .post('/payments/with-details')
         .send({
           date: '2026-02-14',
-          expenseDetails: [{ weight_kg: 1, productId, personId }],
+          paymentDetails: [{ weight_kg: 1, productId, personId }],
         })
         .expect(200)
 
-      expenseId = expenseRes.body.id
-      expect(expenseId).to.be.Number()
-      expect(await getStock(productId)).to.equal(99)
+      paymentId = paymentRes.body.id
+      expect(paymentId).to.be.Number()
+      expect(await getBalance(productId)).to.equal(99)
 
       await client
-        .post('/expense-details')
-        .query({ parentVersion: Number(expenseRes.body.version) })
-        .send({ weight_kg: 5, productId, personId, expenseId })
+        .post('/payment-details')
+        .query({ parentVersion: Number(paymentRes.body.version) })
+        .send({ weight_kg: 5, productId, personId, paymentId })
         .expect(200)
 
-      expect(await getStock(productId)).to.equal(94)
+      expect(await getBalance(productId)).to.equal(94)
     } finally {
-      await cleanupTransaction(client, '/expenses', expenseId)
+      await cleanupTransaction(client, '/payments', paymentId)
       await client.del(`/products/${productId}`).catch(() => undefined)
       await client.del(`/people/${personId}`).catch(() => undefined)
     }
   })
 
-  it('updates stock when creating purchase detail directly', async () => {
+  it('updates balance when creating purchase detail directly', async () => {
     const tag = `purchase-direct-${Date.now()}`
     const personId = await createPerson(tag)
     const productId = await createProduct(tag, 100)
@@ -258,7 +258,7 @@ describe('InventoryStockFlow', function () {
 
       purchaseId = purchaseRes.body.id
       expect(purchaseId).to.be.Number()
-      expect(await getStock(productId)).to.equal(101)
+      expect(await getBalance(productId)).to.equal(101)
 
       await client
         .post('/purchase-details')
@@ -266,7 +266,7 @@ describe('InventoryStockFlow', function () {
         .send({ weight_kg: 7, productId, personId, purchaseId })
         .expect(200)
 
-      expect(await getStock(productId)).to.equal(108)
+      expect(await getBalance(productId)).to.equal(108)
     } finally {
       await cleanupTransaction(client, '/purchases', purchaseId)
       await client.del(`/products/${productId}`).catch(() => undefined)
@@ -291,16 +291,16 @@ describe('InventoryStockFlow', function () {
 
       purchaseId = createRes.body.id
       const detailId = createRes.body.purchase_details[0].id
-      expect(await getStock(productId)).to.equal(110)
+      expect(await getBalance(productId)).to.equal(110)
 
       // PUT requires the full representation: a partial body is rejected (422)
-      // and leaves stock/version untouched.
+      // and leaves balance/version untouched.
       await client
         .put(`/purchase-details/${detailId}`)
         .query({ parentVersion: 1 })
         .send({ weight_kg: 20 })
         .expect(422)
-      expect(await getStock(productId)).to.equal(110)
+      expect(await getBalance(productId)).to.equal(110)
 
       // Full representation replaces the line.
       await client
@@ -308,7 +308,7 @@ describe('InventoryStockFlow', function () {
         .query({ parentVersion: 1 })
         .send({ weight_kg: 20, productId, personId })
         .expect(200)
-      expect(await getStock(productId)).to.equal(120)
+      expect(await getBalance(productId)).to.equal(120)
     } finally {
       await cleanupTransaction(client, '/purchases', purchaseId)
       await client.del(`/products/${productId}`).catch(() => undefined)
@@ -316,42 +316,42 @@ describe('InventoryStockFlow', function () {
     }
   })
 
-  it('blocks bulk expense detail patch for stock consistency', async () => {
-    await client.patch('/expense-details').send({ weight_kg: 99 }).expect(405)
+  it('blocks bulk payment detail patch for balance consistency', async () => {
+    await client.patch('/payment-details').send({ weight_kg: 99 }).expect(405)
   })
 
-  it('blocks bulk purchase detail patch for stock consistency', async () => {
+  it('blocks bulk purchase detail patch for balance consistency', async () => {
     await client.patch('/purchase-details').send({ weight_kg: 99 }).expect(405)
   })
 
-  it('blocks nested bulk expense detail patch for stock consistency', async () => {
+  it('blocks nested bulk payment detail patch for balance consistency', async () => {
     await client
-      .patch('/expenses/999999/expense-details')
+      .patch('/payments/999999/payment-details')
       .send({ weight_kg: 99 })
       .expect(405)
   })
 
-  it('blocks nested bulk purchase detail patch for stock consistency', async () => {
+  it('blocks nested bulk purchase detail patch for balance consistency', async () => {
     await client
       .patch('/purchases/999999/purchase-details')
       .send({ weight_kg: 99 })
       .expect(405)
   })
 
-  it('blocks nested bulk expense detail delete for stock consistency', async () => {
-    await client.delete('/expenses/999999/expense-details').expect(405)
+  it('blocks nested bulk payment detail delete for balance consistency', async () => {
+    await client.delete('/payments/999999/payment-details').expect(405)
   })
 
-  it('blocks nested bulk purchase detail delete for stock consistency', async () => {
+  it('blocks nested bulk purchase detail delete for balance consistency', async () => {
     await client.delete('/purchases/999999/purchase-details').expect(405)
   })
 
   it('blocks plain transaction parent creation without details', async () => {
     await client.post('/purchases').send({ date: '2026-02-22' }).expect(405)
-    await client.post('/expenses').send({ date: '2026-02-22' }).expect(405)
+    await client.post('/payments').send({ date: '2026-02-22' }).expect(405)
   })
 
-  it('blocks purchase-product relation writes for stock consistency', async () => {
+  it('blocks purchase-product relation writes for balance consistency', async () => {
     const tag = `purchase-products-${Date.now()}`
     const personId = await createPerson(tag)
     const productId = await createProduct(tag, 100)
@@ -367,20 +367,20 @@ describe('InventoryStockFlow', function () {
         .expect(200)
 
       purchaseId = createResponse.body.id
-      expect(await getStock(productId)).to.equal(110)
+      expect(await getBalance(productId)).to.equal(110)
 
       await client
         .post(`/purchases/${purchaseId}/products`)
-        .send({ name: `Relation-${tag}`, stock: 9999 })
+        .send({ name: `Relation-${tag}`, balance: 9999 })
         .expect(405)
 
       await client
         .patch(`/purchases/${purchaseId}/products`)
-        .send({ stock: 9999 })
+        .send({ balance: 9999 })
         .expect(405)
 
       await client.delete(`/purchases/${purchaseId}/products`).expect(405)
-      expect(await getStock(productId)).to.equal(110)
+      expect(await getBalance(productId)).to.equal(110)
     } finally {
       await cleanupTransaction(client, '/purchases', purchaseId)
       await client.del(`/products/${productId}`).catch(() => undefined)
@@ -388,38 +388,38 @@ describe('InventoryStockFlow', function () {
     }
   })
 
-  it('blocks expense-product relation writes for stock consistency', async () => {
-    const tag = `expense-products-${Date.now()}`
+  it('blocks payment-product relation writes for balance consistency', async () => {
+    const tag = `payment-products-${Date.now()}`
     const personId = await createPerson(tag)
     const productId = await createProduct(tag, 100)
-    let expenseId: number | undefined
+    let paymentId: number | undefined
 
     try {
       const createResponse = await client
-        .post('/expenses/with-details')
+        .post('/payments/with-details')
         .send({
           date: '2026-02-20',
-          expenseDetails: [{ weight_kg: 10, productId, personId }],
+          paymentDetails: [{ weight_kg: 10, productId, personId }],
         })
         .expect(200)
 
-      expenseId = createResponse.body.id
-      expect(await getStock(productId)).to.equal(90)
+      paymentId = createResponse.body.id
+      expect(await getBalance(productId)).to.equal(90)
 
       await client
-        .post(`/expenses/${expenseId}/products`)
-        .send({ name: `Relation-${tag}`, stock: 9999 })
+        .post(`/payments/${paymentId}/products`)
+        .send({ name: `Relation-${tag}`, balance: 9999 })
         .expect(405)
 
       await client
-        .patch(`/expenses/${expenseId}/products`)
-        .send({ stock: 9999 })
+        .patch(`/payments/${paymentId}/products`)
+        .send({ balance: 9999 })
         .expect(405)
 
-      await client.delete(`/expenses/${expenseId}/products`).expect(405)
-      expect(await getStock(productId)).to.equal(90)
+      await client.delete(`/payments/${paymentId}/products`).expect(405)
+      expect(await getBalance(productId)).to.equal(90)
     } finally {
-      await cleanupTransaction(client, '/expenses', expenseId)
+      await cleanupTransaction(client, '/payments', paymentId)
       await client.del(`/products/${productId}`).catch(() => undefined)
       await client.del(`/people/${personId}`).catch(() => undefined)
     }
@@ -449,39 +449,39 @@ describe('InventoryStockFlow', function () {
     }
   })
 
-  it('preserves stock when replacing product data', async () => {
+  it('preserves balance when replacing product data', async () => {
     const tag = `product-replace-${Date.now()}`
     const productId = await createProduct(tag, 50)
 
     try {
       await client
         .put(`/products/${productId}`)
-        .send({ name: `Product-${tag}-renamed`, stock: 9999 })
+        .send({ name: `Product-${tag}-renamed`, balance: 9999 })
         .expect(200)
 
-      expect(await getStock(productId)).to.equal(50)
+      expect(await getBalance(productId)).to.equal(50)
     } finally {
       await client.del(`/products/${productId}`).catch(() => undefined)
     }
   })
 
-  it('preserves stock when patching product data', async () => {
+  it('preserves balance when patching product data', async () => {
     const tag = `product-patch-${Date.now()}`
     const productId = await createProduct(tag, 50)
 
     try {
       await client
         .patch(`/products/${productId}`)
-        .send({ name: `Product-${tag}-renamed`, stock: 9999 })
+        .send({ name: `Product-${tag}-renamed`, balance: 9999 })
         .expect(200)
 
-      expect(await getStock(productId)).to.equal(50)
+      expect(await getBalance(productId)).to.equal(50)
     } finally {
       await client.del(`/products/${productId}`).catch(() => undefined)
     }
   })
 
-  it('preserves stock on scoped bulk product patch', async () => {
+  it('preserves balance on scoped bulk product patch', async () => {
     const tag = `product-bulk-patch-${Date.now()}`
     const productId = await createProduct(tag, 50)
 
@@ -489,10 +489,10 @@ describe('InventoryStockFlow', function () {
       const where = encodeURIComponent(JSON.stringify({ id: productId }))
       await client
         .patch(`/products?where=${where}`)
-        .send({ name: `Product-${tag}-renamed`, stock: 9999 })
+        .send({ name: `Product-${tag}-renamed`, balance: 9999 })
         .expect(200)
 
-      expect(await getStock(productId)).to.equal(50)
+      expect(await getBalance(productId)).to.equal(50)
     } finally {
       await client.del(`/products/${productId}`).catch(() => undefined)
     }
@@ -502,41 +502,41 @@ describe('InventoryStockFlow', function () {
     const tag = `person-refs-${Date.now()}`
     const personId = await createPerson(tag)
     const productId = await createProduct(tag, 100)
-    let expenseId: number | undefined
+    let paymentId: number | undefined
 
     try {
       const createResponse = await client
-        .post('/expenses/with-details')
+        .post('/payments/with-details')
         .send({
           date: '2026-02-17',
-          expenseDetails: [{ weight_kg: 2, productId, personId }],
+          paymentDetails: [{ weight_kg: 2, productId, personId }],
         })
         .expect(200)
 
-      expenseId = createResponse.body.id
+      paymentId = createResponse.body.id
       await client.delete(`/people/${personId}`).expect(409)
     } finally {
-      await cleanupTransaction(client, '/expenses', expenseId)
+      await cleanupTransaction(client, '/payments', paymentId)
       await client.del(`/products/${productId}`).catch(() => undefined)
       await client.del(`/people/${personId}`).catch(() => undefined)
     }
   })
 
-  it('returns 409 and preserves stock when an expense overdrafts stock', async () => {
+  it('returns 409 and preserves balance when an payment overdrafts balance', async () => {
     const tag = `overdraw-${Date.now()}`
     const personId = await createPerson(tag)
     const productId = await createProduct(tag, 5)
 
     try {
       await client
-        .post('/expenses/with-details')
+        .post('/payments/with-details')
         .send({
           date: '2026-02-21',
-          expenseDetails: [{ weight_kg: 10, productId, personId }],
+          paymentDetails: [{ weight_kg: 10, productId, personId }],
         })
         .expect(409)
 
-      expect(await getStock(productId)).to.equal(5)
+      expect(await getBalance(productId)).to.equal(5)
     } finally {
       await client.del(`/products/${productId}`).catch(() => undefined)
       await client.del(`/people/${personId}`).catch(() => undefined)
@@ -620,18 +620,18 @@ describe('InventoryStockFlow', function () {
     }
   })
 
-  it('records an opening-balance kardex row when a product is created with stock', async () => {
+  it('records an opening-balance kardex row when a product is created with balance', async () => {
     const tag = `opening-balance-${Date.now()}`
-    let withStockId: number | undefined
-    let zeroStockId: number | undefined
+    let withBalanceId: number | undefined
+    let zeroBalanceId: number | undefined
 
     try {
-      withStockId = await createProduct(tag, 50)
-      zeroStockId = await createProduct(`${tag}-zero`, 0)
+      withBalanceId = await createProduct(tag, 50)
+      zeroBalanceId = await createProduct(`${tag}-zero`, 0)
 
       const openingFilter = encodeURIComponent(
         JSON.stringify({
-          where: { productId: withStockId },
+          where: { productId: withBalanceId },
           order: ['id ASC'],
         }),
       )
@@ -645,23 +645,23 @@ describe('InventoryStockFlow', function () {
         output: 0,
         balance: 50,
         operation: 5, // KardexOperation.OpeningBalance
-        productId: withStockId,
+        productId: withBalanceId,
       })
 
-      // A product created with zero stock writes no opening movement.
+      // A product created with zero balance writes no opening movement.
       const zeroFilter = encodeURIComponent(
-        JSON.stringify({ where: { productId: zeroStockId } }),
+        JSON.stringify({ where: { productId: zeroBalanceId } }),
       )
       const zeroRes = await client
         .get(`/kardexes?filter=${zeroFilter}&page=1&limit=10`)
         .expect(200)
       expect(zeroRes.body.data).to.have.length(0)
     } finally {
-      if (withStockId) {
-        await client.del(`/products/${withStockId}`).catch(() => undefined)
+      if (withBalanceId) {
+        await client.del(`/products/${withBalanceId}`).catch(() => undefined)
       }
-      if (zeroStockId) {
-        await client.del(`/products/${zeroStockId}`).catch(() => undefined)
+      if (zeroBalanceId) {
+        await client.del(`/products/${zeroBalanceId}`).catch(() => undefined)
       }
     }
   })

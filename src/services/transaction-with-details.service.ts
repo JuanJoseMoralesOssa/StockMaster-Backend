@@ -165,7 +165,7 @@ export class TransactionWithDetailsService {
   }
 
   /**
-   * Deletes the transaction with its details, undoing their stock effect.
+   * Deletes the transaction with its details, undoing their balance effect.
    * The optimistic-lock version is mandatory: delete is the most destructive
    * mutation and gets the same lost-update protection as update.
    */

@@ -1,18 +1,18 @@
-import { StockMutationMode } from './transaction-type.const'
+import { BalanceMutationMode } from './transaction-type.const'
 import { DetailBase } from './transaction.types'
 import { roundWeightKg } from './weight.utils'
 
-export interface StockDelta {
+export interface BalanceDelta {
   productId: number
   weightKg: number
-  mode: StockMutationMode
+  mode: BalanceMutationMode
 }
 
 type DetailWeight = Pick<DetailBase, 'productId' | 'weight_kg'>
 
 /**
- * Pure planner for a detail-line stock change. Given the old and new
- * (product, weight), it returns the ordered list of stock movements to apply:
+ * Pure planner for a detail-line balance change. Given the old and new
+ * (product, weight), it returns the ordered list of balance movements to apply:
  *
  *  - different product → undo the whole old weight, apply the whole new weight;
  *  - same product      → apply/undo only the signed magnitude of the change;
@@ -21,13 +21,13 @@ type DetailWeight = Pick<DetailBase, 'productId' | 'weight_kg'>
  * Side-effect free (no DB, no tx) so the branch decisions — product switch,
  * increase/decrease sign, the zero-diff no-op short-circuit, and the rounding
  * boundary — are unit-testable in isolation (audit Finding M7).
- * StockReconciliationService.applyDetailStockDelta is the thin executor that
+ * BalanceReconciliationService.applyDetailBalanceDelta is the thin executor that
  * runs these against the DB.
  */
-export function computeStockDeltas(
+export function computeBalanceDeltas(
   oldDetail: DetailWeight,
   newDetail: DetailWeight,
-): StockDelta[] {
+): BalanceDelta[] {
   const newWeight = roundWeightKg(newDetail.weight_kg)
 
   if (oldDetail.productId !== newDetail.productId) {

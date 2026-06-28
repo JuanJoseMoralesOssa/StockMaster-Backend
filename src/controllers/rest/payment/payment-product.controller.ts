@@ -17,20 +17,20 @@ import {
   requestBody,
 } from '@loopback/rest'
 import { Roles, requireRoles } from '../../../auth'
-import { Expense, Product } from '../../../models'
-import { ExpenseRepository } from '../../../repositories'
+import { Payment, Product } from '../../../models'
+import { PaymentRepository } from '../../../repositories'
 
 @requireRoles(Roles.OFFICE, Roles.ADMIN)
-export class ExpenseProductController {
+export class PaymentProductController {
   constructor(
-    @repository(ExpenseRepository)
-    protected expenseRepository: ExpenseRepository,
+    @repository(PaymentRepository)
+    protected paymentRepository: PaymentRepository,
   ) {}
 
-  @get('/expenses/{id}/products', {
+  @get('/payments/{id}/products', {
     responses: {
       '200': {
-        description: 'Array of Expense has many Product through ExpenseDetails',
+        description: 'Array of Payment has many Product through PaymentDetails',
         content: {
           'application/json': {
             schema: { type: 'array', items: getModelSchemaRef(Product) },
@@ -43,10 +43,10 @@ export class ExpenseProductController {
     @param.path.number('id') id: number,
     @param.query.object('filter') filter?: Filter<Product>,
   ): Promise<Product[]> {
-    return this.expenseRepository.products(id).find(filter)
+    return this.paymentRepository.products(id).find(filter)
   }
 
-  @post('/expenses/{id}/products', {
+  @post('/payments/{id}/products', {
     responses: {
       '200': {
         description: 'create a Product model instance',
@@ -55,12 +55,12 @@ export class ExpenseProductController {
     },
   })
   async create(
-    @param.path.number('id') _id: typeof Expense.prototype.id,
+    @param.path.number('id') _id: typeof Payment.prototype.id,
     @requestBody({
       content: {
         'application/json': {
           schema: getModelSchemaRef(Product, {
-            title: 'NewProductInExpense',
+            title: 'NewProductInPayment',
             exclude: ['id'],
           }),
         },
@@ -69,14 +69,14 @@ export class ExpenseProductController {
     _product: Omit<Product, 'id'>,
   ): Promise<Product> {
     throw new HttpErrors.MethodNotAllowed(
-      'Creating products through expenses is disabled for stock consistency. Use POST /expense-details with parentVersion.',
+      'Creating products through payments is disabled for balance consistency. Use POST /payment-details with parentVersion.',
     )
   }
 
-  @patch('/expenses/{id}/products', {
+  @patch('/payments/{id}/products', {
     responses: {
       '200': {
-        description: 'Expense.Product PATCH success count',
+        description: 'Payment.Product PATCH success count',
         content: { 'application/json': { schema: CountSchema } },
       },
     },
@@ -95,14 +95,14 @@ export class ExpenseProductController {
     _where?: Where<Product>,
   ): Promise<Count> {
     throw new HttpErrors.MethodNotAllowed(
-      'Updating products through expenses is disabled for stock consistency. Use PATCH /products/{id}; stock is managed by transaction details.',
+      'Updating products through payments is disabled for balance consistency. Use PATCH /products/{id}; balance is managed by transaction details.',
     )
   }
 
-  @del('/expenses/{id}/products', {
+  @del('/payments/{id}/products', {
     responses: {
       '200': {
-        description: 'Expense.Product DELETE success count',
+        description: 'Payment.Product DELETE success count',
         content: { 'application/json': { schema: CountSchema } },
       },
     },
@@ -113,7 +113,7 @@ export class ExpenseProductController {
     _where?: Where<Product>,
   ): Promise<Count> {
     throw new HttpErrors.MethodNotAllowed(
-      'Deleting products through expenses is disabled for stock consistency. Use DELETE /products/{id}.',
+      'Deleting products through payments is disabled for balance consistency. Use DELETE /products/{id}.',
     )
   }
 }

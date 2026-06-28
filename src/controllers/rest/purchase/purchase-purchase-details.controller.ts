@@ -108,7 +108,7 @@ export class PurchasePurchaseDetailsController {
     _where?: Where<PurchaseDetails>,
   ): Promise<Count> {
     throw new HttpErrors.MethodNotAllowed(
-      'Bulk update is disabled for stock consistency. Use PATCH /purchase-details/{id}.',
+      'Bulk update is disabled for balance consistency. Use PATCH /purchase-details/{id}.',
     )
   }
 
@@ -126,7 +126,7 @@ export class PurchasePurchaseDetailsController {
     _where?: Where<PurchaseDetails>,
   ): Promise<Count> {
     throw new HttpErrors.MethodNotAllowed(
-      'Nested detail deletion is disabled for stock consistency. Use DELETE /purchases/{id} to delete the whole purchase, or DELETE /purchase-details/{id} for one detail.',
+      'Nested detail deletion is disabled for balance consistency. Use DELETE /purchases/{id} to delete the whole purchase, or DELETE /purchase-details/{id} for one detail.',
     )
   }
 }

@@ -17,20 +17,20 @@ import {
   requestBody,
 } from '@loopback/rest'
 import { Roles, requireRoles } from '../../../auth'
-import { Expense, Person } from '../../../models'
-import { ExpenseRepository } from '../../../repositories'
+import { Payment, Person } from '../../../models'
+import { PaymentRepository } from '../../../repositories'
 
 @requireRoles(Roles.OFFICE, Roles.ADMIN)
-export class ExpensePersonController {
+export class PaymentPersonController {
   constructor(
-    @repository(ExpenseRepository)
-    protected expenseRepository: ExpenseRepository,
+    @repository(PaymentRepository)
+    protected paymentRepository: PaymentRepository,
   ) {}
 
-  @get('/expenses/{id}/people', {
+  @get('/payments/{id}/people', {
     responses: {
       '200': {
-        description: 'Array of Expense has many Person through ExpenseDetails',
+        description: 'Array of Payment has many Person through PaymentDetails',
         content: {
           'application/json': {
             schema: { type: 'array', items: getModelSchemaRef(Person) },
@@ -43,10 +43,10 @@ export class ExpensePersonController {
     @param.path.number('id') id: number,
     @param.query.object('filter') filter?: Filter<Person>,
   ): Promise<Person[]> {
-    return this.expenseRepository.people(id).find(filter)
+    return this.paymentRepository.people(id).find(filter)
   }
 
-  @post('/expenses/{id}/people', {
+  @post('/payments/{id}/people', {
     responses: {
       '200': {
         description: 'create a Person model instance',
@@ -55,12 +55,12 @@ export class ExpensePersonController {
     },
   })
   async create(
-    @param.path.number('id') _id: typeof Expense.prototype.id,
+    @param.path.number('id') _id: typeof Payment.prototype.id,
     @requestBody({
       content: {
         'application/json': {
           schema: getModelSchemaRef(Person, {
-            title: 'NewPersonInExpense',
+            title: 'NewPersonInPayment',
             exclude: ['id'],
           }),
         },
@@ -69,14 +69,14 @@ export class ExpensePersonController {
     _person: Omit<Person, 'id'>,
   ): Promise<Person> {
     throw new HttpErrors.MethodNotAllowed(
-      'Use POST /expenses/with-details to create expenses.',
+      'Use POST /payments/with-details to create payments.',
     )
   }
 
-  @patch('/expenses/{id}/people', {
+  @patch('/payments/{id}/people', {
     responses: {
       '200': {
-        description: 'Expense.Person PATCH success count',
+        description: 'Payment.Person PATCH success count',
         content: { 'application/json': { schema: CountSchema } },
       },
     },
@@ -95,14 +95,14 @@ export class ExpensePersonController {
     _where?: Where<Person>,
   ): Promise<Count> {
     throw new HttpErrors.MethodNotAllowed(
-      'Use PUT /expenses/with-details to update expenses.',
+      'Use PUT /payments/with-details to update payments.',
     )
   }
 
-  @del('/expenses/{id}/people', {
+  @del('/payments/{id}/people', {
     responses: {
       '200': {
-        description: 'Expense.Person DELETE success count',
+        description: 'Payment.Person DELETE success count',
         content: { 'application/json': { schema: CountSchema } },
       },
     },
@@ -113,7 +113,7 @@ export class ExpensePersonController {
     _where?: Where<Person>,
   ): Promise<Count> {
     throw new HttpErrors.MethodNotAllowed(
-      'Use DELETE /expenses/{id} to delete expenses.',
+      'Use DELETE /payments/{id} to delete payments.',
     )
   }
 }

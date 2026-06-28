@@ -31,9 +31,9 @@ const DASHBOARD_SUMMARY_SCHEMA = {
         totalWeight: { type: 'number' },
         totalTransactions: { type: 'number' },
         purchaseCount: { type: 'number' },
-        expenseCount: { type: 'number' },
+        paymentCount: { type: 'number' },
         totalPurchaseWeight: { type: 'number' },
-        totalExpenseWeight: { type: 'number' },
+        totalPaymentWeight: { type: 'number' },
         pendingWeight: { type: 'number' },
       },
     },
@@ -49,20 +49,20 @@ const DASHBOARD_SUMMARY_SCHEMA = {
 const INVENTORY_SUMMARY_SCHEMA = {
   type: 'object',
   properties: {
-    totalStock: { type: 'number' },
+    totalBalance: { type: 'number' },
     productCount: { type: 'number' },
-    inStockCount: { type: 'number' },
-    outOfStockCount: { type: 'number' },
-    lowStockCount: { type: 'number' },
-    lowStockThreshold: { type: 'number' },
-    lowStockProducts: {
+    inBalanceCount: { type: 'number' },
+    outOfBalanceCount: { type: 'number' },
+    lowBalanceCount: { type: 'number' },
+    lowBalanceThreshold: { type: 'number' },
+    lowBalanceProducts: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
           productId: { type: 'number' },
           productName: { type: 'string' },
-          stock: { type: 'number' },
+          balance: { type: 'number' },
         },
       },
     },
@@ -86,7 +86,7 @@ export class GeneralReportsController {
     @param.query.string('startDate') startDate: string,
     @param.query.string('endDate') endDate: string,
     @param.query.string('type')
-    type: 'purchases' | 'expenses' | 'both' = 'both',
+    type: 'purchases' | 'payments' | 'both' = 'both',
     @param.query.number('limit') limit: number = paginationConfig.DEFAULT_LIMIT,
   ): Promise<DashboardSummaryResponse> {
     return this.analyticsService.getDashboardSummary(
@@ -103,8 +103,8 @@ export class GeneralReportsController {
     content: { 'application/json': { schema: INVENTORY_SUMMARY_SCHEMA } },
   })
   async getInventorySummary(
-    @param.query.number('lowStockThreshold') lowStockThreshold: number = 10,
+    @param.query.number('lowBalanceThreshold') lowBalanceThreshold: number = 10,
   ): Promise<InventorySummaryResponse> {
-    return this.analyticsService.getInventorySummary(lowStockThreshold)
+    return this.analyticsService.getInventorySummary(lowBalanceThreshold)
   }
 }

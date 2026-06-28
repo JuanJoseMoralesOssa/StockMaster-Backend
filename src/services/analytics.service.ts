@@ -2,8 +2,8 @@ import { BindingScope, injectable } from '@loopback/core'
 import { repository } from '@loopback/repository'
 import { normalizeLimit } from '../config/pagination'
 import {
-  ExpenseDetailsRepository,
-  ExpenseRepository,
+  PaymentDetailsRepository,
+  PaymentRepository,
   PersonRepository,
   ProductRepository,
   PurchaseDetailsRepository,
@@ -38,10 +38,10 @@ type AggregatableTransaction = {
   person?: RelatedEntity
   product?: RelatedEntity
   purchase?: RelatedEntity
-  expense?: RelatedEntity
+  payment?: RelatedEntity
 }
 
-type TransactionTypeFilter = 'purchases' | 'expenses' | 'both'
+type TransactionTypeFilter = 'purchases' | 'payments' | 'both'
 
 type EntityAggregate = {
   id: number
@@ -62,13 +62,13 @@ export interface AnalyticsSummary {
   totalTransactions: number
   /** Number of purchase documents ("Compra") in the range. */
   purchaseCount: number
-  /** Number of expense documents ("Gasto") in the range. */
-  expenseCount: number
+  /** Number of payment documents ("Pago") in the range. */
+  paymentCount: number
   /** Total weight ordered (purchases / "Compra") in the range. */
   totalPurchaseWeight: number
-  /** Total weight paid/delivered (expenses / "Gasto") in the range. */
-  totalExpenseWeight: number
-  /** Outstanding weight: purchases minus expenses. */
+  /** Total weight paid/delivered (payments / "Pago") in the range. */
+  totalPaymentWeight: number
+  /** Outstanding weight: purchases minus payments. */
   pendingWeight: number
 }
 
@@ -82,22 +82,22 @@ export interface DashboardSummaryResponse {
   mostTransactedProducts: ProductAnalytics[]
 }
 
-export interface LowStockProduct {
+export interface LowBalanceProduct {
   productId: number
   productName: string
-  stock: number
+  balance: number
 }
 
 export interface InventorySummaryResponse {
-  /** Sum of current stock (kg) across all products. */
-  totalStock: number
+  /** Sum of current balance (kg) across all products. */
+  totalBalance: number
   productCount: number
-  inStockCount: number
-  outOfStockCount: number
-  /** Products with 0 < stock <= lowStockThreshold. */
-  lowStockCount: number
-  lowStockThreshold: number
-  lowStockProducts: LowStockProduct[]
+  inBalanceCount: number
+  outOfBalanceCount: number
+  /** Products with 0 < balance <= lowBalanceThreshold. */
+  lowBalanceCount: number
+  lowBalanceThreshold: number
+  lowBalanceProducts: LowBalanceProduct[]
 }
 
 @injectable({ scope: BindingScope.TRANSIENT })
@@ -105,12 +105,12 @@ export class AnalyticsService {
   constructor(
     @repository(PurchaseDetailsRepository)
     protected purchaseDetailsRepository: PurchaseDetailsRepository,
-    @repository(ExpenseDetailsRepository)
-    protected expenseDetailsRepository: ExpenseDetailsRepository,
+    @repository(PaymentDetailsRepository)
+    protected paymentDetailsRepository: PaymentDetailsRepository,
     @repository(PurchaseRepository)
     protected purchaseRepository: PurchaseRepository,
-    @repository(ExpenseRepository)
-    protected expenseRepository: ExpenseRepository,
+    @repository(PaymentRepository)
+    protected paymentRepository: PaymentRepository,
     @repository(PersonRepository)
     protected personRepository: PersonRepository,
     @repository(ProductRepository)
@@ -170,68 +170,68 @@ export class AnalyticsService {
   }
 
   /**
-   * Current inventory snapshot derived from the authoritative Product.stock
-   * field (kept in sync atomically by StockReconciliationService). This is a
+   * Current inventory snapshot derived from the authoritative Product.balance
+   * field (kept in sync atomically by BalanceReconciliationService). This is a
    * point-in-time value and intentionally NOT scoped by a date range.
    */
   async getInventorySummary(
-    lowStockThreshold: number = 10,
+    lowBalanceThreshold: number = 10,
   ): Promise<InventorySummaryResponse> {
     const threshold =
-      Number.isFinite(lowStockThreshold) && lowStockThreshold > 0
-        ? lowStockThreshold
+      Number.isFinite(lowBalanceThreshold) && lowBalanceThreshold > 0
+        ? lowBalanceThreshold
         : 0
 
     const products = await this.productRepository.find({
-      fields: ['id', 'name', 'stock'],
+      fields: ['id', 'name', 'balance'],
     })
 
-    let totalStock = 0
-    let inStockCount = 0
-    let outOfStockCount = 0
-    const lowStockProducts: LowStockProduct[] = []
+    let totalBalance = 0
+    let inBalanceCount = 0
+    let outOfBalanceCount = 0
+    const lowBalanceProducts: LowBalanceProduct[] = []
 
     for (const product of products) {
-      const stock = product.stock ?? 0
-      totalStock += stock
-      if (stock > 0) {
-        inStockCount += 1
-        if (threshold > 0 && stock <= threshold) {
-          lowStockProducts.push({
+      const balance = product.balance ?? 0
+      totalBalance += balance
+      if (balance > 0) {
+        inBalanceCount += 1
+        if (threshold > 0 && balance <= threshold) {
+          lowBalanceProducts.push({
             productId: product.id ?? 0,
             productName: product.name,
-            stock,
+            balance,
           })
         }
       } else {
-        outOfStockCount += 1
+        outOfBalanceCount += 1
       }
     }
 
-    lowStockProducts.sort((a, b) => a.stock - b.stock)
+    lowBalanceProducts.sort((a, b) => a.balance - b.balance)
 
     return {
-      totalStock,
+      totalBalance,
       productCount: products.length,
-      inStockCount,
-      outOfStockCount,
-      lowStockCount: lowStockProducts.length,
-      lowStockThreshold: threshold,
-      lowStockProducts,
+      inBalanceCount,
+      outOfBalanceCount,
+      lowBalanceCount: lowBalanceProducts.length,
+      lowBalanceThreshold: threshold,
+      lowBalanceProducts,
     }
   }
 
   private kindsFor(type: TransactionTypeFilter): TransactionKind[] {
     if (type === 'purchases') return [TransactionKind.PURCHASE]
-    if (type === 'expenses') return [TransactionKind.EXPENSE]
-    return [TransactionKind.PURCHASE, TransactionKind.EXPENSE]
+    if (type === 'payments') return [TransactionKind.PAYMENT]
+    return [TransactionKind.PURCHASE, TransactionKind.PAYMENT]
   }
 
   private reposFor(kind: TransactionKind): {
     parentRepo: ParentRepoLike
     detailRepo: DetailRepoLike
-    parentFk: 'purchaseId' | 'expenseId'
-    parentRelation: 'purchase' | 'expense'
+    parentFk: 'purchaseId' | 'paymentId'
+    parentRelation: 'purchase' | 'payment'
   } {
     const config = TRANSACTION_CONFIG[kind]
     // Config-driven lookup rather than an `if (kind === PURCHASE) … else`
@@ -245,9 +245,9 @@ export class AnalyticsService {
         parentRepo: this.purchaseRepository,
         detailRepo: this.purchaseDetailsRepository,
       },
-      [TransactionKind.EXPENSE]: {
-        parentRepo: this.expenseRepository,
-        detailRepo: this.expenseDetailsRepository,
+      [TransactionKind.PAYMENT]: {
+        parentRepo: this.paymentRepository,
+        detailRepo: this.paymentDetailsRepository,
       },
     }
     const { parentRepo, detailRepo } = reposByKind[kind]
@@ -312,18 +312,18 @@ export class AnalyticsService {
     productAnalytics: ProductAnalytics[]
     weightTotals: {
       purchaseWeight: number
-      expenseWeight: number
+      paymentWeight: number
       purchaseCount: number
-      expenseCount: number
+      paymentCount: number
     }
   }> {
     const supplierAgg = new Map<number, EntityAggregate>()
     const productAgg = new Map<number, EntityAggregate>()
     const weightTotals = {
       purchaseWeight: 0,
-      expenseWeight: 0,
+      paymentWeight: 0,
       purchaseCount: 0,
-      expenseCount: 0,
+      paymentCount: 0,
     }
 
     for (const kind of this.kindsFor(type)) {
@@ -343,7 +343,7 @@ export class AnalyticsService {
 
         // Supplier/product grouping also requires the parent document to have
         // resolved (matches the previous aggregateDetailsBy contract).
-        if (!transaction.purchase && !transaction.expense) continue
+        if (!transaction.purchase && !transaction.payment) continue
         this.accumulate(supplierAgg, transaction.person, weight, 'Proveedor')
         this.accumulate(productAgg, transaction.product, weight, 'Producto')
       }
@@ -352,8 +352,8 @@ export class AnalyticsService {
         weightTotals.purchaseCount = parentCount
         weightTotals.purchaseWeight = weightSum
       } else {
-        weightTotals.expenseCount = parentCount
-        weightTotals.expenseWeight = weightSum
+        weightTotals.paymentCount = parentCount
+        weightTotals.paymentWeight = weightSum
       }
     }
 
@@ -404,9 +404,9 @@ export class AnalyticsService {
     productAnalytics: ProductAnalytics[],
     weightTotals: {
       purchaseWeight: number
-      expenseWeight: number
+      paymentWeight: number
       purchaseCount: number
-      expenseCount: number
+      paymentCount: number
     },
   ): AnalyticsSummary {
     // Only reduce on ONE of the analytics arrays (e.g., products) to avoid double-counting
@@ -421,10 +421,10 @@ export class AnalyticsService {
         0,
       ),
       purchaseCount: weightTotals.purchaseCount,
-      expenseCount: weightTotals.expenseCount,
+      paymentCount: weightTotals.paymentCount,
       totalPurchaseWeight: weightTotals.purchaseWeight,
-      totalExpenseWeight: weightTotals.expenseWeight,
-      pendingWeight: weightTotals.purchaseWeight - weightTotals.expenseWeight,
+      totalPaymentWeight: weightTotals.paymentWeight,
+      pendingWeight: weightTotals.purchaseWeight - weightTotals.paymentWeight,
     }
   }
 

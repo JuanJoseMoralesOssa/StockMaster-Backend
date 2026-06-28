@@ -101,13 +101,13 @@ export interface AppWithClient {
 }
 
 /**
- * Best-effort cleanup for purchases/expenses. DELETE requires the current
+ * Best-effort cleanup for purchases/payments. DELETE requires the current
  * optimistic-lock version, so this fetches the row first and skips silently
  * if it is already gone.
  */
 export async function cleanupTransaction(
   client: Client,
-  basePath: '/purchases' | '/expenses',
+  basePath: '/purchases' | '/payments',
   id: number | undefined,
 ): Promise<void> {
   if (id == null) return

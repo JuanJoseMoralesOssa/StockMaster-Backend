@@ -58,7 +58,7 @@ describe('Purchase extraction', function () {
 
       const productRes = await client
         .post('/products')
-        .send({ name: `Pieles ${tag}`, stock: 0 })
+        .send({ name: `Pieles ${tag}`, balance: 0 })
         .expect(200)
       productId = productRes.body.id
 

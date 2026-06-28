@@ -11,7 +11,7 @@ export const USER_MESSAGES = {
     'La operación no pudo completarse por un conflicto temporal de concurrencia. Inténtalo de nuevo.',
 
   // Restricciones de la base de datos
-  INSUFFICIENT_STOCK: 'Stock insuficiente para completar la operación.',
+  INSUFFICIENT_BALANCE: 'Balance insuficiente para completar la operación.',
   DATA_CONSTRAINT: 'La operación viola una restricción de datos.',
   RELATED_RECORDS:
     'La operación no puede completarse porque existen registros relacionados.',
@@ -66,6 +66,6 @@ export function notFoundMessage(entity: string, id: number): string {
   return `${entity} con id ${id} no encontrado.`
 }
 
-export function productStockNotFoundMessage(productId: number): string {
-  return `No se puede conciliar el stock: el producto ${productId} no existe.`
+export function productBalanceNotFoundMessage(productId: number): string {
+  return `No se puede conciliar el balance: el producto ${productId} no existe.`
 }

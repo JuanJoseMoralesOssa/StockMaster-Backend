@@ -10,7 +10,7 @@ export type TransactionOptions = {
 }
 
 /**
- * The ambient execution context every detail/stock engine method needs, bundled
+ * The ambient execution context every detail/balance engine method needs, bundled
  * into one value so it is threaded as a single parameter instead of the old
  * 4-element (dataSource, transactionKind, options, actorId) clump (audit Finding
  * M3). Built once inside `runInTransaction` (where `options` exists) and passed
@@ -19,7 +19,7 @@ export type TransactionOptions = {
  *
  * `actorId` is the authenticated user stamped onto Kardex rows. It is resolved
  * at the request-scoped facade boundary and passed in EXPLICITLY, so the
- * low-level stock engine no longer reaches up into request/auth context to get
+ * low-level balance engine no longer reaches up into request/auth context to get
  * it (audit Finding M5).
  */
 export type TxScope = {
@@ -50,7 +50,7 @@ export type DetailBase = {
 
 /**
  * Request shapes accepted by the per-kind `with-details` facade methods. Shared
- * by the purchase and expense facades (and structurally identical for both)
+ * by the purchase and payment facades (and structurally identical for both)
  * instead of being re-declared per kind (audit duplicate-DTO finding).
  */
 export type WithDetailsCreateInput = {

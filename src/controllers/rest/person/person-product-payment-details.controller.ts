@@ -21,15 +21,15 @@ import { Person, Product } from '../../../models'
 import { PersonRepository } from '../../../repositories'
 
 @requireRoles(Roles.OFFICE, Roles.ADMIN)
-export class PersonProductExpenseDetailsController {
+export class PersonProductPaymentDetailsController {
   constructor(
     @repository(PersonRepository) protected personRepository: PersonRepository,
   ) {}
 
-  @get('/people/{id}/products-expense-details', {
+  @get('/people/{id}/products-payment-details', {
     responses: {
       '200': {
-        description: 'Array of Person has many Product through ExpenseDetails',
+        description: 'Array of Person has many Product through PaymentDetails',
         content: {
           'application/json': {
             schema: { type: 'array', items: getModelSchemaRef(Product) },
@@ -42,10 +42,10 @@ export class PersonProductExpenseDetailsController {
     @param.path.number('id') id: number,
     @param.query.object('filter') filter?: Filter<Product>,
   ): Promise<Product[]> {
-    return this.personRepository.products_expense_details(id).find(filter)
+    return this.personRepository.products_payment_details(id).find(filter)
   }
 
-  @post('/people/{id}/products-expense-details', {
+  @post('/people/{id}/products-payment-details', {
     responses: {
       '200': {
         description: 'create a Product model instance',
@@ -68,11 +68,11 @@ export class PersonProductExpenseDetailsController {
     _product: Omit<Product, 'id'>,
   ): Promise<Product> {
     throw new HttpErrors.MethodNotAllowed(
-      'Use POST /expenses/with-details to create expenses.',
+      'Use POST /payments/with-details to create payments.',
     )
   }
 
-  @patch('/people/{id}/products-expense-details', {
+  @patch('/people/{id}/products-payment-details', {
     responses: {
       '200': {
         description: 'Person.Product PATCH success count',
@@ -94,11 +94,11 @@ export class PersonProductExpenseDetailsController {
     _where?: Where<Product>,
   ): Promise<Count> {
     throw new HttpErrors.MethodNotAllowed(
-      'Use PUT /expenses/with-details to update expenses.',
+      'Use PUT /payments/with-details to update payments.',
     )
   }
 
-  @del('/people/{id}/products-expense-details', {
+  @del('/people/{id}/products-payment-details', {
     responses: {
       '200': {
         description: 'Person.Product DELETE success count',
@@ -112,7 +112,7 @@ export class PersonProductExpenseDetailsController {
     _where?: Where<Product>,
   ): Promise<Count> {
     throw new HttpErrors.MethodNotAllowed(
-      'Use DELETE /expenses/{id} to delete expenses.',
+      'Use DELETE /payments/{id} to delete payments.',
     )
   }
 }

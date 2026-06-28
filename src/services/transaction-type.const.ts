@@ -2,15 +2,15 @@ import { KardexOperation } from '../models'
 import { TransactionKind } from './transaction-kind.enum'
 import { DetailBase } from './transaction.types'
 
-export type StockMutationMode = 'apply' | 'undo'
+export type BalanceMutationMode = 'apply' | 'undo'
 
 export interface TransactionTypeConfig {
   relationName: string
-  parentTable: 'purchase' | 'expense'
-  detailTable: 'purchasedetails' | 'expensedetails'
-  parentFk: 'purchaseId' | 'expenseId'
-  stockDirection: 1 | -1
-  kardexOperations: Record<StockMutationMode, KardexOperation>
+  parentTable: 'purchase' | 'payment'
+  detailTable: 'purchasedetails' | 'paymentdetails'
+  parentFk: 'purchaseId' | 'paymentId'
+  balanceDirection: 1 | -1
+  kardexOperations: Record<BalanceMutationMode, KardexOperation>
 }
 
 export const TRANSACTION_CONFIG: Record<
@@ -22,35 +22,35 @@ export const TRANSACTION_CONFIG: Record<
     parentTable: 'purchase',
     detailTable: 'purchasedetails',
     parentFk: 'purchaseId',
-    stockDirection: 1,
+    balanceDirection: 1,
     kardexOperations: {
       apply: KardexOperation.PurchaseApply,
       undo: KardexOperation.PurchaseUndo,
     },
   },
-  [TransactionKind.EXPENSE]: {
-    relationName: 'expense_details',
-    parentTable: 'expense',
-    detailTable: 'expensedetails',
-    parentFk: 'expenseId',
-    stockDirection: -1,
+  [TransactionKind.PAYMENT]: {
+    relationName: 'payment_details',
+    parentTable: 'payment',
+    detailTable: 'paymentdetails',
+    parentFk: 'paymentId',
+    balanceDirection: -1,
     kardexOperations: {
-      apply: KardexOperation.ExpenseApply,
-      undo: KardexOperation.ExpenseUndo,
+      apply: KardexOperation.PaymentApply,
+      undo: KardexOperation.PaymentUndo,
     },
   },
 }
 
 /**
- * Sign matrix for stock mutations: a purchase applies stock in (+) and undoes
- * out (-); an expense is the mirror image. Pure function so the
+ * Sign matrix for balance mutations: a purchase applies balance in (+) and undoes
+ * out (-); a payment is the mirror image. Pure function so the
  * highest-consequence decision in the system is unit-testable in isolation.
  */
-export function getStockOperator(
+export function getBalanceOperator(
   transactionKind: TransactionKind,
-  mode: StockMutationMode,
+  mode: BalanceMutationMode,
 ): '+' | '-' {
-  const direction = TRANSACTION_CONFIG[transactionKind].stockDirection
+  const direction = TRANSACTION_CONFIG[transactionKind].balanceDirection
   const signedDirection = mode === 'apply' ? direction : -direction
   return signedDirection > 0 ? '+' : '-'
 }
@@ -58,7 +58,7 @@ export function getStockOperator(
 /** Kardex operation code for a kind × mode combination, driven by config. */
 export function getKardexOperation(
   transactionKind: TransactionKind,
-  mode: StockMutationMode,
+  mode: BalanceMutationMode,
 ): KardexOperation {
   return TRANSACTION_CONFIG[transactionKind].kardexOperations[mode]
 }
@@ -85,5 +85,5 @@ export const DETAIL_COLUMNS = {
 
 export const TRANSACTION_TYPE_LABEL = {
   [TransactionKind.PURCHASE]: 'Compra',
-  [TransactionKind.EXPENSE]: 'Gasto',
+  [TransactionKind.PAYMENT]: 'Pago',
 } as const

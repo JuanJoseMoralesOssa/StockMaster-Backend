@@ -23,8 +23,25 @@ import {
   normalizePagination,
   paginationConfig,
 } from '../../../config/pagination'
-import { Kardex, Pagination } from '../../../models'
-import { KardexRepository } from '../../../repositories'
+import {
+  PaymentDetails,
+  Kardex,
+  Pagination,
+  Person,
+  PurchaseDetails,
+} from '../../../models'
+import {
+  PaymentDetailsRepository,
+  KardexRepository,
+  PurchaseDetailsRepository,
+} from '../../../repositories'
+
+/**
+ * Plain Kardex row (as serialized by `toJSON`) augmented with the supplier
+ * resolved from its source detail line. Not the model class — these are plain
+ * objects, so the Entity methods are intentionally absent.
+ */
+type KardexWithSupplier = Record<string, unknown> & { supplierName?: string }
 
 // Kardex: lectura para Oficina y Admin (Operador sin acceso). Las mutaciones
 // directas están bloqueadas (MethodNotAllowed); el kardex lo genera el sistema.
@@ -33,7 +50,76 @@ export class KardexController {
   constructor(
     @repository(KardexRepository)
     public kardexRepository: KardexRepository,
+    @repository(PurchaseDetailsRepository)
+    protected purchaseDetailsRepository: PurchaseDetailsRepository,
+    @repository(PaymentDetailsRepository)
+    protected paymentDetailsRepository: PaymentDetailsRepository,
   ) {}
+
+  /**
+   * Attaches the supplier name to each Kardex row. The Kardex has no person
+   * relation — provenance is `sourceKind` + `sourceDetailId` — so resolve it by
+   * batching the detail-line lookups (one query per kind, `inq` on the ids) and
+   * reading `person.name`. Manual adjustments / opening balances have no source,
+   * so they simply get `supplierName: undefined`. Returns plain objects (not
+   * model instances) so the extra field survives strict-model serialization.
+   */
+  private async withSuppliers(
+    kardexes: Kardex[],
+  ): Promise<KardexWithSupplier[]> {
+    const idsByKind = (kind: 'purchase' | 'payment'): number[] => [
+      ...new Set(
+        kardexes
+          .filter(k => k.sourceKind === kind && k.sourceDetailId != null)
+          .map(k => k.sourceDetailId as number),
+      ),
+    ]
+    const purchaseDetailIds = idsByKind('purchase')
+    const paymentDetailIds = idsByKind('payment')
+
+    const [purchaseDetails, paymentDetails] = await Promise.all([
+      purchaseDetailIds.length > 0
+        ? this.purchaseDetailsRepository.find({
+            where: { id: { inq: purchaseDetailIds } },
+            include: [{ relation: 'person' }],
+          })
+        : Promise.resolve([]),
+      paymentDetailIds.length > 0
+        ? this.paymentDetailsRepository.find({
+            where: { id: { inq: paymentDetailIds } },
+            include: [{ relation: 'person' }],
+          })
+        : Promise.resolve([]),
+    ])
+
+    const supplierByKey = new Map<string, string>()
+    const indexDetails = (
+      kind: 'purchase' | 'payment',
+      details: Array<(PurchaseDetails | PaymentDetails) & { person?: Person }>,
+    ): void => {
+      for (const detail of details) {
+        if (detail.id != null && detail.person?.name) {
+          supplierByKey.set(`${kind}:${detail.id}`, detail.person.name)
+        }
+      }
+    }
+    indexDetails(
+      'purchase',
+      purchaseDetails as Array<PurchaseDetails & { person?: Person }>,
+    )
+    indexDetails(
+      'payment',
+      paymentDetails as Array<PaymentDetails & { person?: Person }>,
+    )
+
+    return kardexes.map(kardex => ({
+      ...(kardex.toJSON() as Record<string, unknown>),
+      supplierName:
+        kardex.sourceKind && kardex.sourceDetailId != null
+          ? supplierByKey.get(`${kardex.sourceKind}:${kardex.sourceDetailId}`)
+          : undefined,
+    }))
+  }
 
   @post('/kardexes')
   @response(200, {
@@ -95,7 +181,7 @@ export class KardexController {
     const count = await this.kardexRepository.count(filter?.where)
     return new Pagination<Kardex>({
       count: count.count,
-      data: kardexes,
+      data: (await this.withSuppliers(kardexes)) as unknown as Kardex[],
       page: pagination.page,
       limit: pagination.limit,
     })
@@ -185,7 +271,7 @@ export class KardexController {
 
     return new Pagination<Kardex>({
       count: countResult.count,
-      data,
+      data: (await this.withSuppliers(data)) as unknown as Kardex[],
       page: pagination.page,
       limit: pagination.limit,
     })

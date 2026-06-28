@@ -21,7 +21,7 @@ import { Kardex, Product } from '../../../models'
 import { ProductRepository } from '../../../repositories'
 
 // Kardex vía producto: solo lectura. Las mutaciones están bloqueadas; el
-// kardex lo genera el sistema a través de las operaciones de compra/gasto.
+// kardex lo genera el sistema a través de las operaciones de compra/pago.
 @requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class ProductKardexController {
   constructor(

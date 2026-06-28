@@ -70,7 +70,7 @@ export class PurchaseProductController {
     _product: Omit<Product, 'id'>,
   ): Promise<Product> {
     throw new HttpErrors.MethodNotAllowed(
-      'Creating products through purchases is disabled for stock consistency. Use POST /purchase-details with parentVersion.',
+      'Creating products through purchases is disabled for balance consistency. Use POST /purchase-details with parentVersion.',
     )
   }
 
@@ -96,7 +96,7 @@ export class PurchaseProductController {
     _where?: Where<Product>,
   ): Promise<Count> {
     throw new HttpErrors.MethodNotAllowed(
-      'Updating products through purchases is disabled for stock consistency. Use PATCH /products/{id}; stock is managed by transaction details.',
+      'Updating products through purchases is disabled for balance consistency. Use PATCH /products/{id}; balance is managed by transaction details.',
     )
   }
 
@@ -114,7 +114,7 @@ export class PurchaseProductController {
     _where?: Where<Product>,
   ): Promise<Count> {
     throw new HttpErrors.MethodNotAllowed(
-      'Deleting products through purchases is disabled for stock consistency. Use DELETE /products/{id}.',
+      'Deleting products through purchases is disabled for balance consistency. Use DELETE /products/{id}.',
     )
   }
 }

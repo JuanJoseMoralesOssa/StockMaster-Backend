@@ -7,8 +7,8 @@ import {
 } from '@loopback/repository'
 import { PostgresDataSource } from '../datasources'
 import {
-  Expense,
-  ExpenseDetails,
+  Payment,
+  PaymentDetails,
   Kardex,
   Person,
   Product,
@@ -16,8 +16,8 @@ import {
   Purchase,
   PurchaseDetails,
 } from '../models'
-import { ExpenseDetailsRepository } from './expense-details.repository'
-import { ExpenseRepository } from './expense.repository'
+import { PaymentDetailsRepository } from './payment-details.repository'
+import { PaymentRepository } from './payment.repository'
 import { KardexRepository } from './kardex.repository'
 import { PersonRepository } from './person.repository'
 import { PurchaseDetailsRepository } from './purchase-details.repository'
@@ -28,10 +28,10 @@ export class ProductRepository extends DefaultCrudRepository<
   typeof Product.prototype.id,
   ProductRelations
 > {
-  public readonly people_expense_details: HasManyThroughRepositoryFactory<
+  public readonly people_payment_details: HasManyThroughRepositoryFactory<
     Person,
     typeof Person.prototype.id,
-    ExpenseDetails,
+    PaymentDetails,
     typeof Product.prototype.id
   >
 
@@ -54,17 +54,17 @@ export class ProductRepository extends DefaultCrudRepository<
     typeof Product.prototype.id
   >
 
-  public readonly expenses: HasManyThroughRepositoryFactory<
-    Expense,
-    typeof Expense.prototype.id,
-    ExpenseDetails,
+  public readonly payments: HasManyThroughRepositoryFactory<
+    Payment,
+    typeof Payment.prototype.id,
+    PaymentDetails,
     typeof Product.prototype.id
   >
 
   constructor(
     @inject('datasources.postgres') dataSource: PostgresDataSource,
-    @repository.getter('ExpenseDetailsRepository')
-    protected expenseDetailsRepositoryGetter: Getter<ExpenseDetailsRepository>,
+    @repository.getter('PaymentDetailsRepository')
+    protected paymentDetailsRepositoryGetter: Getter<PaymentDetailsRepository>,
     @repository.getter('PersonRepository')
     protected personRepositoryGetter: Getter<PersonRepository>,
     @repository.getter('PurchaseDetailsRepository')
@@ -73,16 +73,16 @@ export class ProductRepository extends DefaultCrudRepository<
     protected kardexRepositoryGetter: Getter<KardexRepository>,
     @repository.getter('PurchaseRepository')
     protected purchaseRepositoryGetter: Getter<PurchaseRepository>,
-    @repository.getter('ExpenseRepository')
-    protected expenseRepositoryGetter: Getter<ExpenseRepository>,
+    @repository.getter('PaymentRepository')
+    protected paymentRepositoryGetter: Getter<PaymentRepository>,
   ) {
     super(Product, dataSource)
-    this.expenses = this.createHasManyThroughRepositoryFactoryFor(
-      'expenses',
-      expenseRepositoryGetter,
-      expenseDetailsRepositoryGetter,
+    this.payments = this.createHasManyThroughRepositoryFactoryFor(
+      'payments',
+      paymentRepositoryGetter,
+      paymentDetailsRepositoryGetter,
     )
-    this.registerInclusionResolver('expenses', this.expenses.inclusionResolver)
+    this.registerInclusionResolver('payments', this.payments.inclusionResolver)
     this.purchases = this.createHasManyThroughRepositoryFactoryFor(
       'purchases',
       purchaseRepositoryGetter,
@@ -107,14 +107,14 @@ export class ProductRepository extends DefaultCrudRepository<
       'people_purchase_details',
       this.people_purchase_details.inclusionResolver,
     )
-    this.people_expense_details = this.createHasManyThroughRepositoryFactoryFor(
-      'people_expense_details',
+    this.people_payment_details = this.createHasManyThroughRepositoryFactoryFor(
+      'people_payment_details',
       personRepositoryGetter,
-      expenseDetailsRepositoryGetter,
+      paymentDetailsRepositoryGetter,
     )
     this.registerInclusionResolver(
-      'people_expense_details',
-      this.people_expense_details.inclusionResolver,
+      'people_payment_details',
+      this.people_payment_details.inclusionResolver,
     )
   }
 }

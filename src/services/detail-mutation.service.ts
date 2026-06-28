@@ -11,7 +11,7 @@ import { assertDetailValid } from './detail-validation.utils'
 import { DetailReconciliationService } from './detail-reconciliation.service'
 import { requireVersion } from './optimistic-lock.utils'
 import { runInTransaction } from './transaction-execution.utils'
-import { StockReconciliationService } from './stock-reconciliation.service'
+import { BalanceReconciliationService } from './balance-reconciliation.service'
 import { TransactionDetailsSqlHelper } from './transaction-details-sql.helper'
 import { TransactionKind } from './transaction-kind.enum'
 import { TRANSACTION_CONFIG } from './transaction-type.const'
@@ -20,8 +20,8 @@ import { roundWeightKg } from './weight.utils'
 @injectable({ scope: BindingScope.TRANSIENT })
 export class DetailMutationService {
   constructor(
-    @service(StockReconciliationService)
-    private readonly stockReconciliationService: StockReconciliationService,
+    @service(BalanceReconciliationService)
+    private readonly balanceReconciliationService: BalanceReconciliationService,
     @service(DetailReconciliationService)
     private readonly detailReconciliationService: DetailReconciliationService,
   ) {}
@@ -48,9 +48,9 @@ export class DetailMutationService {
       await this.bumpParentVersion(scope, parentId, parentVersion)
 
       const detailsRelation = detailsRelationFactory(parentId)
-      // Single source of truth for "adjust stock → create detail → backfill
+      // Single source of truth for "adjust balance → create detail → backfill
       // Kardex provenance" — shared with the bulk reconciler so the ordering
-      // rule (stock 404 must beat the FK 409) lives in one place.
+      // rule (balance 404 must beat the FK 409) lives in one place.
       return this.detailReconciliationService.applyCreation(
         scope,
         newDetail,
@@ -94,7 +94,7 @@ export class DetailMutationService {
       const newProductId = updatedDetail.productId ?? oldDetail.productId
       const oldProductId = oldDetail.productId
 
-      await this.stockReconciliationService.applyDetailStockDelta(
+      await this.balanceReconciliationService.applyDetailBalanceDelta(
         scope,
         {
           old: { productId: oldProductId, weight_kg: oldWeight },
@@ -129,7 +129,7 @@ export class DetailMutationService {
       const parentId = this.resolveParentId(detail, transactionKind)
       await this.bumpParentVersion(scope, parentId, parentVersion)
 
-      await this.stockReconciliationService.adjustStock(
+      await this.balanceReconciliationService.adjustBalance(
         scope,
         detail.productId,
         detail.weight_kg,

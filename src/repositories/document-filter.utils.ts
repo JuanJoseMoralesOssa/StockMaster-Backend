@@ -15,10 +15,10 @@ type FilterableRepo<T> = {
 }
 
 /**
- * Shared filtering logic for paginated document queries (expense / purchase).
+ * Shared filtering logic for paginated document queries (payment / purchase).
  *
  * @param parentRepo  - the WithTotal repository (has .find, .count)
- * @param detailRelationName  - e.g. 'expense_details' or 'purchase_details'
+ * @param detailRelationName  - e.g. 'payment_details' or 'purchase_details'
  * @param getMatchingParentIds  - resolves the parent IDs that match person/product filters
  * @param params  - filter/pagination query params
  */

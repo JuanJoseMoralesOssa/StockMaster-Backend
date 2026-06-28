@@ -38,11 +38,11 @@ describe('Details reports and analytics', function () {
     let p1: number | undefined
     let p2: number | undefined
     let purchaseId: number | undefined
-    let expenseId: number | undefined
+    let paymentId: number | undefined
 
     // Self-healing: a previously crashed/timed-out run can leave documents in
     // this reserved range, which would skew the exact-count assertions below.
-    async function purgeRange(basePath: '/purchases' | '/expenses') {
+    async function purgeRange(basePath: '/purchases' | '/payments') {
       const res = await client
         .get(`${basePath}/filtered`)
         .query({ startDate, endDate, page: 1, limit: 100 })
@@ -52,7 +52,7 @@ describe('Details reports and analytics', function () {
       }
     }
     await purgeRange('/purchases')
-    await purgeRange('/expenses')
+    await purgeRange('/payments')
 
     try {
       personId = (
@@ -64,13 +64,13 @@ describe('Details reports and analytics', function () {
       p1 = (
         await client
           .post('/products')
-          .send({ name: `Product-${tag}-1`, stock: 100 })
+          .send({ name: `Product-${tag}-1`, balance: 100 })
           .expect(200)
       ).body.id
       p2 = (
         await client
           .post('/products')
-          .send({ name: `Product-${tag}-2`, stock: 100 })
+          .send({ name: `Product-${tag}-2`, balance: 100 })
           .expect(200)
       ).body.id
 
@@ -87,12 +87,12 @@ describe('Details reports and analytics', function () {
           .expect(200)
       ).body.id
 
-      expenseId = (
+      paymentId = (
         await client
-          .post('/expenses/with-details')
+          .post('/payments/with-details')
           .send({
             date: endDate,
-            expenseDetails: [{ weight_kg: 5, productId: p1, personId }],
+            paymentDetails: [{ weight_kg: 5, productId: p1, personId }],
           })
           .expect(200)
       ).body.id
@@ -108,9 +108,9 @@ describe('Details reports and analytics', function () {
         totalWeight: 35,
         totalTransactions: 3,
         purchaseCount: 1,
-        expenseCount: 1,
+        paymentCount: 1,
         totalPurchaseWeight: 30,
-        totalExpenseWeight: 5,
+        totalPaymentWeight: 5,
         pendingWeight: 25,
       })
 
@@ -130,9 +130,9 @@ describe('Details reports and analytics', function () {
 
       expect(drill.body).to.have.length(2)
       expect(drill.body[0]).to.containDeep({ weight_kg: 10, type: 'Compra' })
-      expect(drill.body[1]).to.containDeep({ weight_kg: 5, type: 'Gasto' })
+      expect(drill.body[1]).to.containDeep({ weight_kg: 5, type: 'Pago' })
     } finally {
-      await cleanupTransaction(client, '/expenses', expenseId)
+      await cleanupTransaction(client, '/payments', paymentId)
       await cleanupTransaction(client, '/purchases', purchaseId)
       if (p1) await client.del(`/products/${p1}`).catch(() => undefined)
       if (p2) await client.del(`/products/${p2}`).catch(() => undefined)

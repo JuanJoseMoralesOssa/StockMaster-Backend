@@ -3,7 +3,7 @@ import { App } from '../..'
 import { cleanupTransaction, setupApplication } from './test-helper'
 
 // KardexOperation.OpeningBalance — the audit row written when a product is
-// created with non-zero stock. Filtered out of movement assertions.
+// created with non-zero balance. Filtered out of movement assertions.
 const KARDEX_OPENING_BALANCE = 5
 
 describe('ServerSideReconciliation Flow', function () {
@@ -29,17 +29,17 @@ describe('ServerSideReconciliation Flow', function () {
     return res.body.id
   }
 
-  async function createProduct(tag: string, stock: number): Promise<number> {
+  async function createProduct(tag: string, balance: number): Promise<number> {
     const res = await client
       .post('/products')
-      .send({ name: `Product-${tag}`, stock })
+      .send({ name: `Product-${tag}`, balance })
       .expect(200)
     return res.body.id
   }
 
-  async function getStock(productId: number): Promise<number> {
+  async function getBalance(productId: number): Promise<number> {
     const res = await client.get(`/products/${productId}`).expect(200)
-    return Number(res.body.stock ?? 0)
+    return Number(res.body.balance ?? 0)
   }
 
   async function countPurchasesByDate(date: string): Promise<number> {
@@ -102,8 +102,8 @@ describe('ServerSideReconciliation Flow', function () {
       /modificado por otro usuario/i,
     )
 
-    // Verify stock did not change from rollback/abort
-    expect(await getStock(productId)).to.equal(110) // 100 + 10
+    // Verify balance did not change from rollback/abort
+    expect(await getBalance(productId)).to.equal(110) // 100 + 10
   })
 
   it('preserves version on idempotent NO-OP updates', async () => {
@@ -112,32 +112,32 @@ describe('ServerSideReconciliation Flow', function () {
     const productId = await createProduct(tag, 100)
 
     const createRes = await client
-      .post('/expenses/with-details')
+      .post('/payments/with-details')
       .send({
         date: '2026-03-02',
-        expenseDetails: [{ weight_kg: 5, productId, personId }],
+        paymentDetails: [{ weight_kg: 5, productId, personId }],
       })
       .expect(200)
 
     const aggregate = createRes.body
     expect(aggregate.version).to.equal(1)
-    const detailId = aggregate.expense_details[0].id
+    const detailId = aggregate.payment_details[0].id
 
     // Send exact same data
     const updateRes = await client
-      .put('/expenses/with-details')
+      .put('/payments/with-details')
       .send({
         id: aggregate.id,
         version: 1,
         date: '2026-03-02',
-        expenseDetails: [{ id: detailId, weight_kg: 5, productId, personId }],
+        paymentDetails: [{ id: detailId, weight_kg: 5, productId, personId }],
       })
       .expect(200)
 
     // Version should STILL be 1
     expect(updateRes.body.version).to.equal(1)
-    // Stock remains the same
-    expect(await getStock(productId)).to.equal(95)
+    // Balance remains the same
+    expect(await getBalance(productId)).to.equal(95)
   })
 
   it('rejects stale aggregate update after a single-detail patch', async () => {
@@ -179,10 +179,10 @@ describe('ServerSideReconciliation Flow', function () {
       })
       .expect(409)
 
-    expect(await getStock(productId)).to.equal(115)
+    expect(await getBalance(productId)).to.equal(115)
   })
 
-  it('rejects negative single-detail weights without changing stock', async () => {
+  it('rejects negative single-detail weights without changing balance', async () => {
     const tag = `negative-weight-${Date.now()}`
     const personId = await createPerson(tag)
     const productId = await createProduct(tag, 100)
@@ -203,7 +203,7 @@ describe('ServerSideReconciliation Flow', function () {
       .send({ weight_kg: -5, productId, personId })
       .expect(422)
 
-    expect(await getStock(productId)).to.equal(110)
+    expect(await getBalance(productId)).to.equal(110)
   })
 
   it('rejects foreign detail.id with 403 Forbidden', async () => {
@@ -270,10 +270,10 @@ describe('ServerSideReconciliation Flow', function () {
     const success = responses.find(res => res.status === 200)
     const finalWeight = Number(success?.body.purchase_details[0].weight_kg)
     expect([15, 20]).to.containEql(finalWeight)
-    expect(await getStock(productId)).to.equal(100 + finalWeight)
+    expect(await getBalance(productId)).to.equal(100 + finalWeight)
   })
 
-  it('rejects stale delete versions without changing stock', async () => {
+  it('rejects stale delete versions without changing balance', async () => {
     const tag = `delete-version-${Date.now()}`
     const personId = await createPerson(tag)
     const productId = await createProduct(tag, 100)
@@ -291,7 +291,7 @@ describe('ServerSideReconciliation Flow', function () {
       purchaseId = createRes.body.id
       const detailId = createRes.body.purchase_details[0].id
       expect(createRes.body.version).to.equal(1)
-      expect(await getStock(productId)).to.equal(110)
+      expect(await getBalance(productId)).to.equal(110)
 
       await client
         .patch(`/purchase-details/${detailId}`)
@@ -304,7 +304,7 @@ describe('ServerSideReconciliation Flow', function () {
         .query({ version: 1 })
         .expect(409)
 
-      expect(await getStock(productId)).to.equal(115)
+      expect(await getBalance(productId)).to.equal(115)
       await client.get(`/purchases/${purchaseId}`).expect(200)
 
       await client
@@ -313,7 +313,7 @@ describe('ServerSideReconciliation Flow', function () {
         .expect(204)
 
       purchaseId = undefined
-      expect(await getStock(productId)).to.equal(100)
+      expect(await getBalance(productId)).to.equal(100)
     } finally {
       if (purchaseId) {
         await client.del(`/purchases/${purchaseId}`).catch(() => undefined)
@@ -323,7 +323,7 @@ describe('ServerSideReconciliation Flow', function () {
     }
   })
 
-  it('rolls back purchase creation when a later detail cannot reconcile stock', async () => {
+  it('rolls back purchase creation when a later detail cannot reconcile balance', async () => {
     const tag = `rollback-${Date.now()}`
     const date = '2026-03-09'
     const personId = await createPerson(tag)
@@ -344,7 +344,7 @@ describe('ServerSideReconciliation Flow', function () {
 
     expect(await countPurchasesByDate(date)).to.equal(beforePurchaseCount)
     expect(await countKardexByProduct(productId)).to.equal(beforeKardexCount)
-    expect(await getStock(productId)).to.equal(100)
+    expect(await getBalance(productId)).to.equal(100)
   })
 
   it('rejects empty details array with 400 Bad Request', async () => {
@@ -388,9 +388,9 @@ describe('ServerSideReconciliation Flow', function () {
     expect(aggregate.version).to.equal(1)
     const detailId_P1 = aggregate.purchase_details[0].id
 
-    // Verify initial stock
-    expect(await getStock(p1)).to.equal(110)
-    expect(await getStock(p2)).to.equal(100)
+    // Verify initial balance
+    expect(await getBalance(p1)).to.equal(110)
+    expect(await getBalance(p2)).to.equal(100)
 
     // Update: edit p1 to 15kg, add p2 (20kg)
     const updateRes = await client
@@ -413,9 +413,9 @@ describe('ServerSideReconciliation Flow', function () {
     expect(agg2.version).to.equal(2)
     expect(agg2.purchase_details.length).to.equal(2)
 
-    // Verify updated stock
-    expect(await getStock(p1)).to.equal(115) // +5 delta
-    expect(await getStock(p2)).to.equal(120) // +20 new
+    // Verify updated balance
+    expect(await getBalance(p1)).to.equal(115) // +5 delta
+    expect(await getBalance(p2)).to.equal(120) // +20 new
 
     // Map new details
     const d2 = agg2.purchase_details.find(
@@ -437,9 +437,9 @@ describe('ServerSideReconciliation Flow', function () {
     expect(agg3.version).to.equal(3)
     expect(agg3.purchase_details.length).to.equal(1)
 
-    // Verify deleted/updated stock
-    expect(await getStock(p1)).to.equal(100) // Restored back to base
-    expect(await getStock(p2)).to.equal(105) // Down from 120 to 105
+    // Verify deleted/updated balance
+    expect(await getBalance(p1)).to.equal(100) // Restored back to base
+    expect(await getBalance(p2)).to.equal(105) // Down from 120 to 105
   })
 
   it('rejects DELETE without a version with 400 and changes nothing', async () => {
@@ -458,13 +458,13 @@ describe('ServerSideReconciliation Flow', function () {
         .expect(200)
 
       purchaseId = createRes.body.id
-      expect(await getStock(productId)).to.equal(110)
+      expect(await getBalance(productId)).to.equal(110)
 
       // The optimistic-lock token is mandatory on delete: a stale client
       // must not be able to wipe out another user's concurrent edit.
       await client.delete(`/purchases/${purchaseId}`).expect(400)
 
-      expect(await getStock(productId)).to.equal(110)
+      expect(await getBalance(productId)).to.equal(110)
       await client.get(`/purchases/${purchaseId}`).expect(200)
     } finally {
       await cleanupTransaction(client, '/purchases', purchaseId)
@@ -491,7 +491,7 @@ describe('ServerSideReconciliation Flow', function () {
       purchaseId = createRes.body.id
       const detailId = createRes.body.purchase_details[0].id
       const kardexBefore = await countKardexByProduct(productId)
-      expect(await getStock(productId)).to.equal(110)
+      expect(await getBalance(productId)).to.equal(110)
 
       // The update phase order is delete → update → create, so the valid
       // weight change applies first and the nonexistent product fails later.
@@ -509,7 +509,7 @@ describe('ServerSideReconciliation Flow', function () {
         .expect(404)
 
       // Nothing from the partially-applied update may survive the rollback.
-      expect(await getStock(productId)).to.equal(110)
+      expect(await getBalance(productId)).to.equal(110)
       expect(await countKardexByProduct(productId)).to.equal(kardexBefore)
 
       const includeDetails = encodeURIComponent(
@@ -563,7 +563,7 @@ describe('ServerSideReconciliation Flow', function () {
       const winner = responses.find(res => res.status === 200)
       const finalWeight = Number(winner?.body.weight_kg)
       expect([15, 20]).to.containEql(finalWeight)
-      expect(await getStock(productId)).to.equal(100 + finalWeight)
+      expect(await getBalance(productId)).to.equal(100 + finalWeight)
     } finally {
       await cleanupTransaction(client, '/purchases', purchaseId)
       await client.del(`/products/${productId}`).catch(() => undefined)
@@ -571,7 +571,7 @@ describe('ServerSideReconciliation Flow', function () {
     }
   })
 
-  it('writes one kardex row per stock movement across the with-details lifecycle', async () => {
+  it('writes one kardex row per balance movement across the with-details lifecycle', async () => {
     const tag = `kardex-lifecycle-${Date.now()}`
     const personId = await createPerson(tag)
     const p1 = await createProduct(tag + '1', 100)
@@ -672,7 +672,7 @@ describe('ServerSideReconciliation Flow', function () {
     }
   })
 
-  it('restores old product stock and applies new product stock when a detail changes product', async () => {
+  it('restores old product balance and applies new product balance when a detail changes product', async () => {
     const tag = `switch-product-${Date.now()}`
     const personId = await createPerson(tag)
     const p1 = await createProduct(tag + '1', 100)
@@ -688,8 +688,8 @@ describe('ServerSideReconciliation Flow', function () {
 
     const aggregate = createRes.body
     const detailId = aggregate.purchase_details[0].id
-    expect(await getStock(p1)).to.equal(110)
-    expect(await getStock(p2)).to.equal(100)
+    expect(await getBalance(p1)).to.equal(110)
+    expect(await getBalance(p2)).to.equal(100)
 
     await client
       .put('/purchases/with-details')
@@ -703,7 +703,7 @@ describe('ServerSideReconciliation Flow', function () {
       })
       .expect(200)
 
-    expect(await getStock(p1)).to.equal(100)
-    expect(await getStock(p2)).to.equal(110)
+    expect(await getBalance(p1)).to.equal(100)
+    expect(await getBalance(p2)).to.equal(110)
   })
 })

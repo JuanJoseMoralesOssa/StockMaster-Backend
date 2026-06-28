@@ -2,8 +2,8 @@ import { BindingScope, injectable } from '@loopback/core'
 import { repository } from '@loopback/repository'
 import { ResourceNotFoundError } from '../errors'
 import {
-  Expense,
-  ExpenseDetails,
+  Payment,
+  PaymentDetails,
   Person,
   Purchase,
   PurchaseDetails,
@@ -12,8 +12,8 @@ import {
   TransactionDetailProduct,
 } from '../models'
 import {
-  ExpenseDetailsRepository,
-  ExpenseRepository,
+  PaymentDetailsRepository,
+  PaymentRepository,
   PersonRepository,
   ProductRepository,
   PurchaseDetailsRepository,
@@ -29,8 +29,8 @@ type PurchaseDetailWithRelations = PurchaseDetails & {
   person?: Pick<Person, 'name'>
 }
 
-type ExpenseDetailWithRelations = ExpenseDetails & {
-  expense?: Pick<Expense, 'date'>
+type PaymentDetailWithRelations = PaymentDetails & {
+  payment?: Pick<Payment, 'date'>
   person?: Pick<Person, 'name'>
 }
 
@@ -39,16 +39,16 @@ export class TransactionQueryService {
   constructor(
     @repository(PurchaseDetailsRepository)
     protected purchaseDetailsRepository: PurchaseDetailsRepository,
-    @repository(ExpenseDetailsRepository)
-    protected expenseDetailsRepository: ExpenseDetailsRepository,
+    @repository(PaymentDetailsRepository)
+    protected paymentDetailsRepository: PaymentDetailsRepository,
     @repository(PersonRepository)
     protected personRepository: PersonRepository,
     @repository(ProductRepository)
     protected productRepository: ProductRepository,
     @repository(PurchaseRepository)
     protected purchaseRepository: PurchaseRepository,
-    @repository(ExpenseRepository)
-    protected expenseRepository: ExpenseRepository,
+    @repository(PaymentRepository)
+    protected paymentRepository: PaymentRepository,
   ) {}
 
   async getPersonProductTransactions(
@@ -64,7 +64,7 @@ export class TransactionQueryService {
       between: [startDate, endDate],
     }
 
-    // Buscar persona con sus compras y gastos
+    // Buscar persona con sus compras y pagos
     const person = await this.personRepository.findOne({
       where: { id: personId },
       include: [
@@ -83,12 +83,12 @@ export class TransactionQueryService {
           },
         },
         {
-          relation: 'expenses',
+          relation: 'payments',
           scope: {
             where: { date: dateFilter },
             include: [
               {
-                relation: 'expense_details',
+                relation: 'payment_details',
                 scope: {
                   where: { productId },
                 },
@@ -127,21 +127,21 @@ export class TransactionQueryService {
             })) ?? [],
       ) || []
 
-    // Extraer detalles de gastos
-    const expenseTransactions =
-      person.expenses?.flatMap(
-        (expense: Expense) =>
-          expense.expense_details
-            ?.filter((detail: ExpenseDetails) => detail.productId === productId)
-            .map((detail: ExpenseDetails) => ({
-              date: expense.date,
+    // Extraer detalles de pagos
+    const paymentTransactions =
+      person.payments?.flatMap(
+        (payment: Payment) =>
+          payment.payment_details
+            ?.filter((detail: PaymentDetails) => detail.productId === productId)
+            .map((detail: PaymentDetails) => ({
+              date: payment.date,
               weight_kg: detail.weight_kg,
-              type: TRANSACTION_TYPE_LABEL[TransactionKind.EXPENSE],
+              type: TRANSACTION_TYPE_LABEL[TransactionKind.PAYMENT],
             })) || [],
       ) || []
 
     // Combinar y ordenar por fecha
-    return [...purchaseTransactions, ...expenseTransactions].sort(
+    return [...purchaseTransactions, ...paymentTransactions].sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
     )
   }
@@ -155,22 +155,22 @@ export class TransactionQueryService {
 
     await this.ensureProductExists(productId)
 
-    const [purchaseIds, expenseIds] = await Promise.all([
+    const [purchaseIds, paymentIds] = await Promise.all([
       this.getPurchaseIdsInRange(startDate, endDate),
-      this.getExpenseIdsInRange(startDate, endDate),
+      this.getPaymentIdsInRange(startDate, endDate),
     ])
 
-    const [purchaseDetails, expenseDetails] = await Promise.all([
+    const [purchaseDetails, paymentDetails] = await Promise.all([
       purchaseIds.length > 0
         ? this.purchaseDetailsRepository.find({
             where: { productId, purchaseId: { inq: purchaseIds } },
             include: [{ relation: 'purchase' }, { relation: 'person' }],
           })
         : Promise.resolve([]),
-      expenseIds.length > 0
-        ? this.expenseDetailsRepository.find({
-            where: { productId, expenseId: { inq: expenseIds } },
-            include: [{ relation: 'expense' }, { relation: 'person' }],
+      paymentIds.length > 0
+        ? this.paymentDetailsRepository.find({
+            where: { productId, paymentId: { inq: paymentIds } },
+            include: [{ relation: 'payment' }, { relation: 'person' }],
           })
         : Promise.resolve([]),
     ])
@@ -178,8 +178,8 @@ export class TransactionQueryService {
     const transactions: TransactionDetailProduct[] = []
     const purchaseDetailsWithRelations =
       purchaseDetails as PurchaseDetailWithRelations[]
-    const expenseDetailsWithRelations =
-      expenseDetails as ExpenseDetailWithRelations[]
+    const paymentDetailsWithRelations =
+      paymentDetails as PaymentDetailWithRelations[]
 
     for (const detail of purchaseDetailsWithRelations) {
       if (detail.purchase && detail.weight_kg) {
@@ -193,12 +193,12 @@ export class TransactionQueryService {
       }
     }
 
-    for (const detail of expenseDetailsWithRelations) {
-      if (detail.expense && detail.weight_kg) {
+    for (const detail of paymentDetailsWithRelations) {
+      if (detail.payment && detail.weight_kg) {
         transactions.push({
-          date: detail.expense.date,
+          date: detail.payment.date,
           weight_kg: detail.weight_kg,
-          type: TRANSACTION_TYPE_LABEL[TransactionKind.EXPENSE],
+          type: TRANSACTION_TYPE_LABEL[TransactionKind.PAYMENT],
           personId: detail.personId,
           personName: detail.person?.name,
         })
@@ -219,22 +219,22 @@ export class TransactionQueryService {
 
     await this.ensurePersonExists(personId)
 
-    const [purchaseIds, expenseIds] = await Promise.all([
+    const [purchaseIds, paymentIds] = await Promise.all([
       this.getPurchaseIdsInRange(startDate, endDate),
-      this.getExpenseIdsInRange(startDate, endDate),
+      this.getPaymentIdsInRange(startDate, endDate),
     ])
 
-    const [purchaseDetails, expenseDetails] = await Promise.all([
+    const [purchaseDetails, paymentDetails] = await Promise.all([
       purchaseIds.length > 0
         ? this.purchaseDetailsRepository.find({
             where: { personId, purchaseId: { inq: purchaseIds } },
             include: [{ relation: 'purchase' }, { relation: 'product' }],
           })
         : Promise.resolve([]),
-      expenseIds.length > 0
-        ? this.expenseDetailsRepository.find({
-            where: { personId, expenseId: { inq: expenseIds } },
-            include: [{ relation: 'expense' }, { relation: 'product' }],
+      paymentIds.length > 0
+        ? this.paymentDetailsRepository.find({
+            where: { personId, paymentId: { inq: paymentIds } },
+            include: [{ relation: 'payment' }, { relation: 'product' }],
           })
         : Promise.resolve([]),
     ])
@@ -242,8 +242,8 @@ export class TransactionQueryService {
     const transactions: TransactionDetailPerson[] = []
     const purchaseDetailsWithRelations =
       purchaseDetails as PurchaseDetailWithRelations[]
-    const expenseDetailsWithRelations =
-      expenseDetails as ExpenseDetailWithRelations[]
+    const paymentDetailsWithRelations =
+      paymentDetails as PaymentDetailWithRelations[]
 
     for (const detail of purchaseDetailsWithRelations) {
       if (detail.purchase && detail.weight_kg) {
@@ -256,12 +256,12 @@ export class TransactionQueryService {
       }
     }
 
-    for (const detail of expenseDetailsWithRelations) {
-      if (detail.expense && detail.weight_kg) {
+    for (const detail of paymentDetailsWithRelations) {
+      if (detail.payment && detail.weight_kg) {
         transactions.push({
-          date: detail.expense.date,
+          date: detail.payment.date,
           weight_kg: detail.weight_kg,
-          type: TRANSACTION_TYPE_LABEL[TransactionKind.EXPENSE],
+          type: TRANSACTION_TYPE_LABEL[TransactionKind.PAYMENT],
           productId: detail.productId,
         })
       }
@@ -297,10 +297,10 @@ export class TransactionQueryService {
     return findParentIdsInRange(this.purchaseRepository, startDate, endDate)
   }
 
-  private getExpenseIdsInRange(
+  private getPaymentIdsInRange(
     startDate: string,
     endDate: string,
   ): Promise<number[]> {
-    return findParentIdsInRange(this.expenseRepository, startDate, endDate)
+    return findParentIdsInRange(this.paymentRepository, startDate, endDate)
   }
 }

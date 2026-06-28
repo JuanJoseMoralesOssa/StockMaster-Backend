@@ -1,4 +1,4 @@
 export enum TransactionKind {
   PURCHASE = 'purchase',
-  EXPENSE = 'expense',
+  PAYMENT = 'payment',
 }

@@ -42,7 +42,7 @@ describe('Role authorization', function () {
       .expect(403)
 
     await rawClient
-      .get('/expenses/999999/products')
+      .get('/payments/999999/products')
       .set('Authorization', `Bearer ${makeToken(Roles.OPERATOR)}`)
       .expect(403)
   })

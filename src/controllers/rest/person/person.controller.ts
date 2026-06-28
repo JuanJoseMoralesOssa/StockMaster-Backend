@@ -25,7 +25,7 @@ import {
 } from '../../../config/pagination'
 import { Pagination, Person } from '../../../models'
 import {
-  ExpenseDetailsRepository,
+  PaymentDetailsRepository,
   PersonRepository,
   PurchaseDetailsRepository,
 } from '../../../repositories'
@@ -36,8 +36,8 @@ export class PersonController {
   constructor(
     @repository(PersonRepository)
     public personRepository: PersonRepository,
-    @repository(ExpenseDetailsRepository)
-    public expenseDetailsRepository: ExpenseDetailsRepository,
+    @repository(PaymentDetailsRepository)
+    public paymentDetailsRepository: PaymentDetailsRepository,
     @repository(PurchaseDetailsRepository)
     public purchaseDetailsRepository: PurchaseDetailsRepository,
   ) {}
@@ -276,13 +276,13 @@ export class PersonController {
       throw new HttpErrors.NotFound(`Person with id ${id} not found`)
     }
 
-    const [expenseDetailsCount, purchaseDetailsCount] = await Promise.all([
-      this.expenseDetailsRepository.count({ personId: id }),
+    const [paymentDetailsCount, purchaseDetailsCount] = await Promise.all([
+      this.paymentDetailsRepository.count({ personId: id }),
       this.purchaseDetailsRepository.count({ personId: id }),
     ])
 
     const totalReferences =
-      expenseDetailsCount.count + purchaseDetailsCount.count
+      paymentDetailsCount.count + purchaseDetailsCount.count
 
     if (totalReferences > 0) {
       throw new HttpErrors.Conflict(

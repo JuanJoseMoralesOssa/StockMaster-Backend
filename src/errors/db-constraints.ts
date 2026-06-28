@@ -5,7 +5,7 @@
  * one constant so a rename cannot silently break the mapping.
  */
 export const DB_CONSTRAINTS = {
-  PRODUCT_STOCK_MIN: 'chk_product_stock_min',
+  PRODUCT_BALANCE_MIN: 'chk_product_balance_min',
 } as const
 
 /** PostgreSQL error codes the application maps to specific HTTP statuses. */

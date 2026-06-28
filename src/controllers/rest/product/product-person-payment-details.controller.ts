@@ -17,23 +17,23 @@ import {
   requestBody,
 } from '@loopback/rest'
 import { Roles, requireRoles } from '../../../auth'
-import { Expense, Product } from '../../../models'
+import { Person, Product } from '../../../models'
 import { ProductRepository } from '../../../repositories'
 
 @requireRoles(Roles.OFFICE, Roles.ADMIN)
-export class ProductExpenseController {
+export class ProductPersonPaymentDetailsController {
   constructor(
     @repository(ProductRepository)
     protected productRepository: ProductRepository,
   ) {}
 
-  @get('/products/{id}/expenses', {
+  @get('/products/{id}/people-payment-details', {
     responses: {
       '200': {
-        description: 'Array of Product has many Expense through ExpenseDetails',
+        description: 'Array of Product has many Person through PaymentDetails',
         content: {
           'application/json': {
-            schema: { type: 'array', items: getModelSchemaRef(Expense) },
+            schema: { type: 'array', items: getModelSchemaRef(Person) },
           },
         },
       },
@@ -41,16 +41,16 @@ export class ProductExpenseController {
   })
   async find(
     @param.path.number('id') id: number,
-    @param.query.object('filter') filter?: Filter<Expense>,
-  ): Promise<Expense[]> {
-    return this.productRepository.expenses(id).find(filter)
+    @param.query.object('filter') filter?: Filter<Person>,
+  ): Promise<Person[]> {
+    return this.productRepository.people_payment_details(id).find(filter)
   }
 
-  @post('/products/{id}/expenses', {
+  @post('/products/{id}/people-payment-details', {
     responses: {
       '200': {
-        description: 'create a Expense model instance',
-        content: { 'application/json': { schema: getModelSchemaRef(Expense) } },
+        description: 'create a Person model instance',
+        content: { 'application/json': { schema: getModelSchemaRef(Person) } },
       },
     },
   })
@@ -59,24 +59,24 @@ export class ProductExpenseController {
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(Expense, {
-            title: 'NewExpenseInProduct',
+          schema: getModelSchemaRef(Person, {
+            title: 'NewPersonInProduct',
             exclude: ['id'],
           }),
         },
       },
     })
-    _expense: Omit<Expense, 'id'>,
-  ): Promise<Expense> {
+    _person: Omit<Person, 'id'>,
+  ): Promise<Person> {
     throw new HttpErrors.MethodNotAllowed(
-      'Use POST /expenses/with-details to create expenses.',
+      'Use POST /payments/with-details to create payments.',
     )
   }
 
-  @patch('/products/{id}/expenses', {
+  @patch('/products/{id}/people-payment-details', {
     responses: {
       '200': {
-        description: 'Product.Expense PATCH success count',
+        description: 'Product.Person PATCH success count',
         content: { 'application/json': { schema: CountSchema } },
       },
     },
@@ -86,34 +86,34 @@ export class ProductExpenseController {
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(Expense, { partial: true }),
+          schema: getModelSchemaRef(Person, { partial: true }),
         },
       },
     })
-    _expense: Partial<Expense>,
-    @param.query.object('where', getWhereSchemaFor(Expense))
-    _where?: Where<Expense>,
+    _person: Partial<Person>,
+    @param.query.object('where', getWhereSchemaFor(Person))
+    _where?: Where<Person>,
   ): Promise<Count> {
     throw new HttpErrors.MethodNotAllowed(
-      'Use PUT /expenses/with-details to update expenses.',
+      'Use PUT /payments/with-details to update payments.',
     )
   }
 
-  @del('/products/{id}/expenses', {
+  @del('/products/{id}/people-payment-details', {
     responses: {
       '200': {
-        description: 'Product.Expense DELETE success count',
+        description: 'Product.Person DELETE success count',
         content: { 'application/json': { schema: CountSchema } },
       },
     },
   })
   async delete(
     @param.path.number('id') _id: number,
-    @param.query.object('where', getWhereSchemaFor(Expense))
-    _where?: Where<Expense>,
+    @param.query.object('where', getWhereSchemaFor(Person))
+    _where?: Where<Person>,
   ): Promise<Count> {
     throw new HttpErrors.MethodNotAllowed(
-      'Use DELETE /expenses/{id} to delete expenses.',
+      'Use DELETE /payments/{id} to delete payments.',
     )
   }
 }

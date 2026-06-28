@@ -3,14 +3,14 @@ import { KardexOperation } from '../../models'
 import { TransactionKind } from '../../services/transaction-kind.enum'
 import {
   getKardexOperation,
-  getStockOperator,
+  getBalanceOperator,
 } from '../../services/transaction-type.const'
 
 /**
  * Table tests for the sign matrix — the highest-consequence decision in the
- * system. A flipped sign here silently corrupts every stock balance.
+ * system. A flipped sign here silently corrupts every balance balance.
  */
-describe('getStockOperator()', () => {
+describe('getBalanceOperator()', () => {
   const cases: Array<{
     kind: TransactionKind
     mode: 'apply' | 'undo'
@@ -18,13 +18,13 @@ describe('getStockOperator()', () => {
   }> = [
     { kind: TransactionKind.PURCHASE, mode: 'apply', expected: '+' },
     { kind: TransactionKind.PURCHASE, mode: 'undo', expected: '-' },
-    { kind: TransactionKind.EXPENSE, mode: 'apply', expected: '-' },
-    { kind: TransactionKind.EXPENSE, mode: 'undo', expected: '+' },
+    { kind: TransactionKind.PAYMENT, mode: 'apply', expected: '-' },
+    { kind: TransactionKind.PAYMENT, mode: 'undo', expected: '+' },
   ]
 
   for (const { kind, mode, expected } of cases) {
     it(`returns '${expected}' for ${kind} ${mode}`, () => {
-      expect(getStockOperator(kind, mode)).to.equal(expected)
+      expect(getBalanceOperator(kind, mode)).to.equal(expected)
     })
   }
 })
@@ -46,14 +46,14 @@ describe('getKardexOperation()', () => {
       expected: KardexOperation.PurchaseUndo,
     },
     {
-      kind: TransactionKind.EXPENSE,
+      kind: TransactionKind.PAYMENT,
       mode: 'apply',
-      expected: KardexOperation.ExpenseApply,
+      expected: KardexOperation.PaymentApply,
     },
     {
-      kind: TransactionKind.EXPENSE,
+      kind: TransactionKind.PAYMENT,
       mode: 'undo',
-      expected: KardexOperation.ExpenseUndo,
+      expected: KardexOperation.PaymentUndo,
     },
   ]
 

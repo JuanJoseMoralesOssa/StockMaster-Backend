@@ -31,7 +31,7 @@ import { singleDetailReplaceSchema } from '../detail-schemas'
 export class PurchaseDetailsController {
   constructor(
     // Read-only surface: detail WRITES must go through PurchaseTransactionService
-    // so stock + Kardex stay consistent. Narrowing the type makes a stray
+    // so balance + Kardex stay consistent. Narrowing the type makes a stray
     // repository.create/updateById/deleteById a compile error (audit Finding M6).
     @repository(PurchaseDetailsRepository)
     public purchaseDetailsRepository: Pick<
@@ -123,7 +123,7 @@ export class PurchaseDetailsController {
     @param.where(PurchaseDetails) where?: Where<PurchaseDetails>,
   ): Promise<Count> {
     throw new HttpErrors.MethodNotAllowed(
-      'Bulk update is disabled for stock consistency. Use PATCH /purchase-details/{id}.',
+      'Bulk update is disabled for balance consistency. Use PATCH /purchase-details/{id}.',
     )
   }
 

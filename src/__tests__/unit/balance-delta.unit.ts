@@ -1,9 +1,9 @@
 import { expect } from '@loopback/testlab'
-import { computeStockDeltas } from '../../services/stock-delta.utils'
+import { computeBalanceDeltas } from '../../services/balance-delta.utils'
 
-describe('computeStockDeltas', () => {
+describe('computeBalanceDeltas', () => {
   it('applies the positive magnitude when the same product gains weight', () => {
-    const deltas = computeStockDeltas(
+    const deltas = computeBalanceDeltas(
       { productId: 1, weight_kg: 10 },
       { productId: 1, weight_kg: 15 },
     )
@@ -11,7 +11,7 @@ describe('computeStockDeltas', () => {
   })
 
   it('undoes the positive magnitude when the same product loses weight', () => {
-    const deltas = computeStockDeltas(
+    const deltas = computeBalanceDeltas(
       { productId: 1, weight_kg: 15 },
       { productId: 1, weight_kg: 10 },
     )
@@ -19,7 +19,7 @@ describe('computeStockDeltas', () => {
   })
 
   it('returns no movements for an exact no-op', () => {
-    const deltas = computeStockDeltas(
+    const deltas = computeBalanceDeltas(
       { productId: 1, weight_kg: 10 },
       { productId: 1, weight_kg: 10 },
     )
@@ -27,8 +27,8 @@ describe('computeStockDeltas', () => {
   })
 
   it('treats a sub-milligram change (rounds to 0) as a no-op', () => {
-    // 0.0004 kg rounds to 0 at 3-decimal precision → no stock movement.
-    const deltas = computeStockDeltas(
+    // 0.0004 kg rounds to 0 at 3-decimal precision → no balance movement.
+    const deltas = computeBalanceDeltas(
       { productId: 1, weight_kg: 10 },
       { productId: 1, weight_kg: 10.0004 },
     )
@@ -37,7 +37,7 @@ describe('computeStockDeltas', () => {
 
   it('applies a rounding-boundary change just above the threshold', () => {
     // 0.0006 kg rounds up to 0.001 → a real apply.
-    const deltas = computeStockDeltas(
+    const deltas = computeBalanceDeltas(
       { productId: 1, weight_kg: 10 },
       { productId: 1, weight_kg: 10.0006 },
     )
@@ -45,7 +45,7 @@ describe('computeStockDeltas', () => {
   })
 
   it('undoes the whole old weight and applies the whole new weight on a product switch', () => {
-    const deltas = computeStockDeltas(
+    const deltas = computeBalanceDeltas(
       { productId: 1, weight_kg: 10 },
       { productId: 2, weight_kg: 20 },
     )
@@ -56,7 +56,7 @@ describe('computeStockDeltas', () => {
   })
 
   it('switches product even when the weight is unchanged', () => {
-    const deltas = computeStockDeltas(
+    const deltas = computeBalanceDeltas(
       { productId: 1, weight_kg: 7.5 },
       { productId: 3, weight_kg: 7.5 },
     )

@@ -4,7 +4,7 @@ import { SchemaObject } from '@loopback/rest'
  * Strictly-positive weight constraint for `requestBody` validation, shared by
  * the `with-details` and single-detail PUT schemas so a non-positive weight is
  * rejected at the schema layer with a consistent 422 (matching the
- * `PurchaseDetails`/`ExpenseDetails` model schema). See audit Finding 5.
+ * `PurchaseDetails`/`PaymentDetails` model schema). See audit Finding 5.
  *
  * LoopBack validates request bodies with AJV in JSON-Schema draft-07 mode,
  * where `exclusiveMinimum` is a NUMBER. The OpenAPI 3.0 `SchemaObject` type
@@ -20,7 +20,7 @@ export const POSITIVE_WEIGHT_SCHEMA: SchemaObject = {
 /**
  * Request-body schemas for the composite `with-details` and single-detail
  * endpoints, parametrized by the per-kind property names. Shared by the purchase
- * and expense controllers so the wire contract (and the positive-weight rule)
+ * and payment controllers so the wire contract (and the positive-weight rule)
  * has ONE source per shape instead of four hand-copied inline blobs that have
  * already drifted once (audit mirror-controllers finding).
  */

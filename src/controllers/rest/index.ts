@@ -1,5 +1,5 @@
-/** Expense Controllers */
-export * from './expense'
+/** Payment Controllers */
+export * from './payment'
 
 /** Kardex Controllers */
 export * from './kardex'
@@ -19,5 +19,5 @@ export * from './user'
 /** Purchase Details Controllers */
 export * from './purchase-details'
 
-/** Expense Details Controllers */
-export * from './expense-details'
+/** Payment Details Controllers */
+export * from './payment-details'

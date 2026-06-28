@@ -4,14 +4,21 @@ import { Product } from './product.model'
 export enum KardexOperation {
   PurchaseApply = 1,
   PurchaseUndo = 2,
-  ExpenseApply = 3,
-  ExpenseUndo = 4,
+  PaymentApply = 3,
+  PaymentUndo = 4,
   /**
-   * Opening balance recorded when a product is created with non-zero stock.
-   * Without it the Kardex could not reconstruct current stock from its
+   * Opening balance recorded when a product is created with non-zero balance.
+   * Without it the Kardex could not reconstruct current balance from its
    * movements (sum of inputs − outputs would miss the starting quantity).
    */
   OpeningBalance = 5,
+  /**
+   * Manual balance adjustment ("ajuste de inventario"): a correction made by a
+   * user to reconcile the system balance with a physical count, not derived from a
+   * purchase/payment. Written through BalanceReconciliationService so Product.balance
+   * and this row stay consistent. Carries a `note` (the reason) and no source*.
+   */
+  Manual = 6,
 }
 
 @model()
@@ -59,14 +66,14 @@ export class Kardex extends Entity {
   // --- Provenance: which document/line caused the movement, and who did it.
   // Nullable because historical rows predate these columns.
 
-  /** 'purchase' | 'expense' — kind of the source document. */
+  /** 'purchase' | 'payment' — kind of the source document. */
   @property({
     type: 'string',
-    jsonSchema: { enum: ['purchase', 'expense'] },
+    jsonSchema: { enum: ['purchase', 'payment'] },
   })
   sourceKind?: string
 
-  /** Id of the source purchase/expense document. */
+  /** Id of the source purchase/payment document. */
   @property({
     type: 'number',
   })
@@ -83,6 +90,16 @@ export class Kardex extends Entity {
     type: 'number',
   })
   userId?: number
+
+  /**
+   * Free-text reason for a manual adjustment (operation = Manual). Null for
+   * system-generated rows (purchase/payment/opening). Lets the audit trail
+   * explain why a balance correction was made (e.g. 'conteo físico', 'merma').
+   */
+  @property({
+    type: 'string',
+  })
+  note?: string
 
   constructor(data?: Partial<Kardex>) {
     super(data)

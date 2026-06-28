@@ -22,7 +22,7 @@ const PURCHASE_INCLUDE = { include: ['purchase_details'] }
  * purchase repositories once, so controllers never wire infrastructure
  * (dataSource, relation factories, TransactionKind, the acting user) themselves.
  * It also resolves the authenticated user id here — the request-scoped boundary
- * — and passes it into the engines so the low-level stock service stays free of
+ * — and passes it into the engines so the low-level balance service stays free of
  * request/auth context (audit Finding M5).
  */
 @injectable({ scope: BindingScope.TRANSIENT })

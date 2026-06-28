@@ -25,65 +25,65 @@ import {
   paginationConfig,
 } from '../../../config/pagination'
 import {
-  Expense,
-  ExpenseWithTotal,
+  Payment,
+  PaymentWithTotal,
   Pagination,
   TransactionDetailRequestDTO,
 } from '../../../models'
 import {
-  ExpenseRepository,
-  ExpenseWithTotalRepository,
+  PaymentRepository,
+  PaymentWithTotalRepository,
 } from '../../../repositories'
-import { ExpenseTransactionService } from '../../../services'
+import { PaymentTransactionService } from '../../../services'
 import { validateDate } from '../../../services/date-validation.utils'
 import {
   withDetailsCreateSchema,
   withDetailsUpdateSchema,
 } from '../detail-schemas'
 
-// Gastos: lectura y mutaciones para Oficina y Admin.
+// Pagos: lectura y mutaciones para Oficina y Admin.
 @requireRoles(Roles.OFFICE, Roles.ADMIN)
-export class ExpenseController {
+export class PaymentController {
   constructor(
-    @repository(ExpenseRepository)
-    public expenseRepository: ExpenseRepository,
-    @repository(ExpenseWithTotalRepository)
-    public expenseWithTotalRepository: ExpenseWithTotalRepository,
-    @service(ExpenseTransactionService)
-    public expenseTransactionService: ExpenseTransactionService,
+    @repository(PaymentRepository)
+    public paymentRepository: PaymentRepository,
+    @repository(PaymentWithTotalRepository)
+    public paymentWithTotalRepository: PaymentWithTotalRepository,
+    @service(PaymentTransactionService)
+    public paymentTransactionService: PaymentTransactionService,
   ) {}
 
-  @post('/expenses')
+  @post('/payments')
   @response(200, {
-    description: 'Expense model instance',
+    description: 'Payment model instance',
     content: {
-      'application/json': { schema: getModelSchemaRef(ExpenseWithTotal) },
+      'application/json': { schema: getModelSchemaRef(PaymentWithTotal) },
     },
   })
   async create(
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(Expense, {
-            title: 'NewExpense',
+          schema: getModelSchemaRef(Payment, {
+            title: 'NewPayment',
             exclude: ['id', 'version'],
           }),
         },
       },
     })
-    _expense: Omit<Expense, 'id'>,
-  ): Promise<ExpenseWithTotal> {
+    _payment: Omit<Payment, 'id'>,
+  ): Promise<PaymentWithTotal> {
     throw new HttpErrors.MethodNotAllowed(
-      'Creating expenses without details is disabled. Use POST /expenses/with-details.',
+      'Creating payments without details is disabled. Use POST /payments/with-details.',
     )
   }
 
-  @post('/expenses/with-details')
+  @post('/payments/with-details')
   @response(200, {
-    description: 'Expense created with details',
+    description: 'Payment created with details',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(ExpenseWithTotal, { includeRelations: true }),
+        schema: getModelSchemaRef(PaymentWithTotal, { includeRelations: true }),
       },
     },
   })
@@ -91,35 +91,35 @@ export class ExpenseController {
     @requestBody({
       content: {
         'application/json': {
-          schema: withDetailsCreateSchema('expenseDetails'),
+          schema: withDetailsCreateSchema('paymentDetails'),
         },
       },
     })
-    expense: {
+    payment: {
       date: string
-      expenseDetails?: TransactionDetailRequestDTO[]
+      paymentDetails?: TransactionDetailRequestDTO[]
     },
-  ): Promise<ExpenseWithTotal> {
+  ): Promise<PaymentWithTotal> {
     // The facade performs the write AND the canonical WithTotal re-read, so the
     // controller no longer needs to know the read twin or its include set.
-    return this.expenseTransactionService.createWithDetails({
-      date: expense.date,
-      details: expense.expenseDetails,
+    return this.paymentTransactionService.createWithDetails({
+      date: payment.date,
+      details: payment.paymentDetails,
     })
   }
 
-  @get('/expenses/count')
+  @get('/payments/count')
   @response(200, {
-    description: 'Expense model count',
+    description: 'Payment model count',
     content: { 'application/json': { schema: CountSchema } },
   })
-  async count(@param.where(Expense) where?: Where<Expense>): Promise<Count> {
-    return this.expenseRepository.count(where)
+  async count(@param.where(Payment) where?: Where<Payment>): Promise<Count> {
+    return this.paymentRepository.count(where)
   }
 
-  @get('/expenses')
+  @get('/payments')
   @response(200, {
-    description: 'Paginated list of Expense model instances',
+    description: 'Paginated list of Payment model instances',
     content: {
       'application/json': {
         schema: {
@@ -128,7 +128,7 @@ export class ExpenseController {
             count: { type: 'number' },
             data: {
               type: 'array',
-              items: getModelSchemaRef(ExpenseWithTotal, {
+              items: getModelSchemaRef(PaymentWithTotal, {
                 includeRelations: true,
               }),
             },
@@ -143,70 +143,70 @@ export class ExpenseController {
     },
   })
   async find(
-    @param.filter(ExpenseWithTotal) filter?: Filter<ExpenseWithTotal>,
+    @param.filter(PaymentWithTotal) filter?: Filter<PaymentWithTotal>,
     @param.query.number('page') page: number = paginationConfig.DEFAULT_PAGE,
     @param.query.number('limit') limit: number = paginationConfig.DEFAULT_LIMIT,
-  ): Promise<Pagination<ExpenseWithTotal>> {
+  ): Promise<Pagination<PaymentWithTotal>> {
     const pagination = normalizePagination(page, limit)
-    const expenses = await this.expenseWithTotalRepository.find({
+    const payments = await this.paymentWithTotalRepository.find({
       ...filter,
-      include: filter?.include ?? ['expense_details'],
+      include: filter?.include ?? ['payment_details'],
       skip: pagination.skip,
       limit: pagination.limit,
     })
-    const count = await this.expenseWithTotalRepository.count(filter?.where)
-    return new Pagination<ExpenseWithTotal>({
+    const count = await this.paymentWithTotalRepository.count(filter?.where)
+    return new Pagination<PaymentWithTotal>({
       count: count.count,
-      data: expenses,
+      data: payments,
       page: pagination.page,
       limit: pagination.limit,
     })
   }
 
-  @patch('/expenses')
+  @patch('/payments')
   @response(200, {
-    description: 'Expense PATCH success count',
+    description: 'Payment PATCH success count',
     content: { 'application/json': { schema: CountSchema } },
   })
   async updateAll(
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(Expense, { partial: true }),
+          schema: getModelSchemaRef(Payment, { partial: true }),
         },
       },
     })
-    _expense: Expense,
-    @param.where(Expense) _where?: Where<Expense>,
+    _payment: Payment,
+    @param.where(Payment) _where?: Where<Payment>,
   ): Promise<Count> {
     throw new HttpErrors.MethodNotAllowed(
-      'Bulk expense updates are disabled. Use PUT /expenses/with-details.',
+      'Bulk payment updates are disabled. Use PUT /payments/with-details.',
     )
   }
 
-  @get('/expenses/{id}')
+  @get('/payments/{id}')
   @response(200, {
-    description: 'Expense model instance',
+    description: 'Payment model instance',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(ExpenseWithTotal, { includeRelations: true }),
+        schema: getModelSchemaRef(PaymentWithTotal, { includeRelations: true }),
       },
     },
   })
   async findById(
     @param.path.number('id') id: number,
-    @param.filter(ExpenseWithTotal, { exclude: 'where' })
-    filter?: FilterExcludingWhere<ExpenseWithTotal>,
-  ): Promise<ExpenseWithTotal> {
-    return this.expenseWithTotalRepository.findById(id, filter)
+    @param.filter(PaymentWithTotal, { exclude: 'where' })
+    filter?: FilterExcludingWhere<PaymentWithTotal>,
+  ): Promise<PaymentWithTotal> {
+    return this.paymentWithTotalRepository.findById(id, filter)
   }
 
-  @patch('/expenses/{id}')
+  @patch('/payments/{id}')
   @response(200, {
-    description: 'Expense PATCH success',
+    description: 'Payment PATCH success',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(ExpenseWithTotal, { includeRelations: true }),
+        schema: getModelSchemaRef(PaymentWithTotal, { includeRelations: true }),
       },
     },
   })
@@ -215,23 +215,23 @@ export class ExpenseController {
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(Expense, { partial: true }),
+          schema: getModelSchemaRef(Payment, { partial: true }),
         },
       },
     })
-    _expense: Partial<Expense>,
-  ): Promise<ExpenseWithTotal> {
+    _payment: Partial<Payment>,
+  ): Promise<PaymentWithTotal> {
     throw new HttpErrors.MethodNotAllowed(
-      'Direct expense updates are disabled (they bypass optimistic locking). Use PUT /expenses/with-details.',
+      'Direct payment updates are disabled (they bypass optimistic locking). Use PUT /payments/with-details.',
     )
   }
 
-  @put('/expenses/{id}')
+  @put('/payments/{id}')
   @response(200, {
-    description: 'Expense PUT success',
+    description: 'Payment PUT success',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(ExpenseWithTotal, { includeRelations: true }),
+        schema: getModelSchemaRef(PaymentWithTotal, { includeRelations: true }),
       },
     },
   })
@@ -240,26 +240,26 @@ export class ExpenseController {
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(Expense, {
-            title: 'ExpenseReplace',
+          schema: getModelSchemaRef(Payment, {
+            title: 'PaymentReplace',
             exclude: ['id', 'version'],
           }),
         },
       },
     })
-    _expense: Omit<Expense, 'id'>,
-  ): Promise<ExpenseWithTotal> {
+    _payment: Omit<Payment, 'id'>,
+  ): Promise<PaymentWithTotal> {
     throw new HttpErrors.MethodNotAllowed(
-      'Replacing expenses is disabled. Use PUT /expenses/with-details.',
+      'Replacing payments is disabled. Use PUT /payments/with-details.',
     )
   }
 
-  @put('/expenses/with-details')
+  @put('/payments/with-details')
   @response(200, {
-    description: 'Expense updated with details',
+    description: 'Payment updated with details',
     content: {
       'application/json': {
-        schema: getModelSchemaRef(ExpenseWithTotal, { includeRelations: true }),
+        schema: getModelSchemaRef(PaymentWithTotal, { includeRelations: true }),
       },
     },
   })
@@ -267,28 +267,28 @@ export class ExpenseController {
     @requestBody({
       content: {
         'application/json': {
-          schema: withDetailsUpdateSchema('expenseDetails'),
+          schema: withDetailsUpdateSchema('paymentDetails'),
         },
       },
     })
-    expenseData: {
+    paymentData: {
       id: number
       version: number
       date?: string
-      expenseDetails?: TransactionDetailRequestDTO[]
+      paymentDetails?: TransactionDetailRequestDTO[]
     },
-  ): Promise<ExpenseWithTotal> {
-    return this.expenseTransactionService.updateWithDetails({
-      id: expenseData.id,
-      version: expenseData.version,
-      date: expenseData.date,
-      details: expenseData.expenseDetails,
+  ): Promise<PaymentWithTotal> {
+    return this.paymentTransactionService.updateWithDetails({
+      id: paymentData.id,
+      version: paymentData.version,
+      date: paymentData.date,
+      details: paymentData.paymentDetails,
     })
   }
 
-  @del('/expenses/{id}')
+  @del('/payments/{id}')
   @response(204, {
-    description: 'Expense DELETE success',
+    description: 'Payment DELETE success',
   })
   async deleteById(
     @param.path.number('id') id: number,
@@ -296,12 +296,12 @@ export class ExpenseController {
     // protección de bloqueo optimista que las actualizaciones.
     @param.query.number('version', { required: true }) version: number,
   ): Promise<void> {
-    await this.expenseTransactionService.deleteWithDetails(id, version)
+    await this.paymentTransactionService.deleteWithDetails(id, version)
   }
 
-  @get('/expenses/filtered')
+  @get('/payments/filtered')
   @response(200, {
-    description: 'Array of filtered Expense model instances with pagination',
+    description: 'Array of filtered Payment model instances with pagination',
     content: {
       'application/json': {
         schema: {
@@ -310,7 +310,7 @@ export class ExpenseController {
             count: { type: 'number' },
             data: {
               type: 'array',
-              items: getModelSchemaRef(ExpenseWithTotal, {
+              items: getModelSchemaRef(PaymentWithTotal, {
                 includeRelations: true,
               }),
             },
@@ -321,20 +321,20 @@ export class ExpenseController {
       },
     },
   })
-  async getFilteredExpenses(
+  async getFilteredPayments(
     @param.query.string('startDate') startDate?: string,
     @param.query.string('endDate') endDate?: string,
     @param.query.number('personId') personId?: number,
     @param.query.number('productId') productId?: number,
     @param.query.number('page') page: number = paginationConfig.DEFAULT_PAGE,
     @param.query.number('limit') limit: number = paginationConfig.DEFAULT_LIMIT,
-  ): Promise<Pagination<ExpenseWithTotal>> {
+  ): Promise<Pagination<PaymentWithTotal>> {
     const pagination = normalizePagination(page, limit)
     if (startDate) validateDate(startDate)
     if (endDate) validateDate(endDate)
 
     const { data, count } =
-      await this.expenseWithTotalRepository.findFilteredExpenses(
+      await this.paymentWithTotalRepository.findFilteredPayments(
         startDate,
         endDate,
         personId,
@@ -343,7 +343,7 @@ export class ExpenseController {
         pagination.limit,
       )
 
-    return new Pagination<ExpenseWithTotal>({
+    return new Pagination<PaymentWithTotal>({
       count,
       data,
       page: pagination.page,

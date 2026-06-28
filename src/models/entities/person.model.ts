@@ -1,6 +1,6 @@
 import { Entity, hasMany, model, property } from '@loopback/repository'
-import { ExpenseDetails } from './expense-details.model'
-import { Expense } from './expense.model'
+import { PaymentDetails } from './payment-details.model'
+import { Payment } from './payment.model'
 import { Product } from './product.model'
 import { PurchaseDetails } from './purchase-details.model'
 import { Purchase } from './purchase.model'
@@ -20,14 +20,14 @@ export class Person extends Entity {
   })
   name: string
 
-  @hasMany(() => Product, { through: { model: () => ExpenseDetails } })
-  products_expense_details: Product[]
+  @hasMany(() => Product, { through: { model: () => PaymentDetails } })
+  products_payment_details: Product[]
 
   @hasMany(() => Product, { through: { model: () => PurchaseDetails } })
   products_purchase_details: Product[]
 
-  @hasMany(() => Expense, { through: { model: () => ExpenseDetails } })
-  expenses: Expense[]
+  @hasMany(() => Payment, { through: { model: () => PaymentDetails } })
+  payments: Payment[]
 
   @hasMany(() => Purchase, { through: { model: () => PurchaseDetails } })
   purchases: Purchase[]
