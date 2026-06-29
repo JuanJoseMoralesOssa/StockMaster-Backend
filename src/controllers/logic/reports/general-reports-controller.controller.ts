@@ -6,6 +6,10 @@ import {
   AnalyticsService,
   DashboardSummaryResponse,
   InventorySummaryResponse,
+  PendingByProduct,
+  PendingBySupplier,
+  PendingTrendInterval,
+  PendingTrendPoint,
 } from '../../../services/analytics.service'
 
 const ANALYTICS_ITEM_SCHEMA = {
@@ -16,7 +20,49 @@ const ANALYTICS_ITEM_SCHEMA = {
     productId: { type: 'number' },
     productName: { type: 'string' },
     totalWeight: { type: 'number' },
+    purchaseWeight: { type: 'number' },
+    paymentWeight: { type: 'number' },
     transactionCount: { type: 'number' },
+  },
+} as const
+
+const PENDING_TREND_SCHEMA = {
+  type: 'array',
+  items: {
+    type: 'object',
+    properties: {
+      period: { type: 'string' },
+      purchased: { type: 'number' },
+      paid: { type: 'number' },
+      pending: { type: 'number' },
+    },
+  },
+} as const
+
+const PENDING_BY_SUPPLIER_SCHEMA = {
+  type: 'array',
+  items: {
+    type: 'object',
+    properties: {
+      personId: { type: 'number' },
+      personName: { type: 'string' },
+      purchased: { type: 'number' },
+      paid: { type: 'number' },
+      pending: { type: 'number' },
+    },
+  },
+} as const
+
+const PENDING_BY_PRODUCT_SCHEMA = {
+  type: 'array',
+  items: {
+    type: 'object',
+    properties: {
+      productId: { type: 'number' },
+      productName: { type: 'string' },
+      balance: { type: 'number' },
+      pendingSince: { type: 'string', nullable: true },
+    },
   },
 } as const
 
@@ -106,5 +152,41 @@ export class GeneralReportsController {
     @param.query.number('lowBalanceThreshold') lowBalanceThreshold: number = 10,
   ): Promise<InventorySummaryResponse> {
     return this.analyticsService.getInventorySummary(lowBalanceThreshold)
+  }
+
+  @get('/analytics/pending-trend')
+  @response(200, {
+    description: 'Pending balance (compras − pagos) over time, absolute',
+    content: { 'application/json': { schema: PENDING_TREND_SCHEMA } },
+  })
+  async getPendingTrend(
+    @param.query.string('startDate') startDate: string,
+    @param.query.string('endDate') endDate: string,
+    @param.query.string('interval')
+    interval: PendingTrendInterval = 'day',
+  ): Promise<PendingTrendPoint[]> {
+    return this.analyticsService.getPendingTrend(startDate, endDate, interval)
+  }
+
+  @get('/analytics/pending-by-supplier')
+  @response(200, {
+    description: 'Outstanding pending (bought − paid) per supplier',
+    content: { 'application/json': { schema: PENDING_BY_SUPPLIER_SCHEMA } },
+  })
+  async getPendingBySupplier(
+    @param.query.number('limit') limit: number = paginationConfig.DEFAULT_LIMIT,
+  ): Promise<PendingBySupplier[]> {
+    return this.analyticsService.getPendingBySupplier(normalizeLimit(limit))
+  }
+
+  @get('/analytics/pending-by-product')
+  @response(200, {
+    description: 'Products with pending balance + how long it has been pending',
+    content: { 'application/json': { schema: PENDING_BY_PRODUCT_SCHEMA } },
+  })
+  async getPendingByProduct(
+    @param.query.number('limit') limit: number = paginationConfig.DEFAULT_LIMIT,
+  ): Promise<PendingByProduct[]> {
+    return this.analyticsService.getPendingByProduct(normalizeLimit(limit))
   }
 }
