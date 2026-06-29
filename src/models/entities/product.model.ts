@@ -23,6 +23,13 @@ export class Product extends Entity {
 
   @property({
     type: 'number',
+    // Balance accumulates fractional kg (see roundWeightKg). MUST stay numeric:
+    // an integer column rejects decimal balances with PG error 22P02.
+    postgresql: {
+      dataType: 'numeric',
+      dataPrecision: 14,
+      dataScale: 3,
+    },
   })
   balance?: number
 

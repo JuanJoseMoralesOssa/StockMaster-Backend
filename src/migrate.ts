@@ -127,6 +127,62 @@ END $$;
   await ds.execute(`DROP VIEW IF EXISTS expense_with_total;`)
 }
 
+/**
+ * Widens the inventory quantity columns from the legacy `integer` type to
+ * `numeric(14,3)` so fractional kilogram weights can be stored. The domain works
+ * in kg with gram precision (see `roundWeightKg`), but the original stock/weight
+ * schema typed these columns as integer. The rename (stock→balance) preserved
+ * the integer type, so any real weighed value like 107.999 made PostgreSQL
+ * reject the write with `invalid input syntax for type integer` (error 22P02)
+ * the moment it reached the detail/balance/kardex write.
+ *
+ * Runs BEFORE migrateSchema so the columns already match the numeric model
+ * metadata and migrateSchema's `alter` pass leaves them alone. Each ALTER is
+ * guarded by the column's CURRENT type, so the step is idempotent (a no-op once
+ * converted) and safe on a fresh --rebuild DB — there the columns do not exist
+ * yet, the guards never fire, and migrateSchema creates them numeric from the
+ * model metadata.
+ *
+ * The `*_with_total` views read `weight_kg`, and PostgreSQL refuses to alter a
+ * column a view depends on, so both views are dropped first; ensureTotalViews
+ * recreates them at the end of the migration. (14,3 gives ~1e11 of headroom,
+ * comfortably above the old int4 range, so the conversion is lossless.)
+ */
+async function widenInventoryNumericColumns(app: App): Promise<void> {
+  const ds = (await app.get('datasources.postgres')) as {
+    execute: (sql: string) => Promise<unknown>
+  }
+
+  await ds.execute(`DROP VIEW IF EXISTS payment_with_total;`)
+  await ds.execute(`DROP VIEW IF EXISTS purchase_with_total;`)
+
+  const targets = [
+    { table: 'product', column: 'balance' },
+    { table: 'paymentdetails', column: 'weight_kg' },
+    { table: 'purchasedetails', column: 'weight_kg' },
+    { table: 'kardex', column: 'input' },
+    { table: 'kardex', column: 'output' },
+    { table: 'kardex', column: 'balance' },
+  ]
+
+  for (const { table, column } of targets) {
+    await ds.execute(`
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = '${table}'
+      AND column_name = '${column}'
+      AND data_type = 'integer'
+  ) THEN
+    ALTER TABLE ${table}
+      ALTER COLUMN ${column} TYPE numeric(14,3) USING ${column}::numeric(14,3);
+  END IF;
+END $$;
+    `)
+  }
+}
+
 async function ensureInventoryForeignKeys(app: App): Promise<void> {
   const dataSource = (await app.get('datasources.postgres')) as {
     execute: (sql: string) => Promise<unknown>
@@ -334,6 +390,11 @@ export async function migrate(args: string[]) {
   // and orphaning data. Skipped implicitly on a --rebuild (drop) run since the
   // guards are no-ops once the tables are dropped/recreated.
   await renameLegacySchema(app)
+
+  // Convert the integer quantity columns to numeric BEFORE migrateSchema so the
+  // schema matches the numeric model metadata (otherwise decimal kg weights fail
+  // with PG error 22P02). No-op once converted / on a fresh --rebuild DB.
+  await widenInventoryNumericColumns(app)
 
   await app.migrateSchema({
     existingSchema,

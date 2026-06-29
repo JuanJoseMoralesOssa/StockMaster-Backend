@@ -36,21 +36,38 @@ export class Kardex extends Entity {
   })
   date: string
 
+  // input/output/balance track fractional kg movements (see roundWeightKg).
+  // MUST stay numeric: an integer column rejects decimal weights with PG 22P02.
   @property({
     type: 'number',
     required: true,
+    postgresql: {
+      dataType: 'numeric',
+      dataPrecision: 14,
+      dataScale: 3,
+    },
   })
   input: number
 
   @property({
     type: 'number',
     required: true,
+    postgresql: {
+      dataType: 'numeric',
+      dataPrecision: 14,
+      dataScale: 3,
+    },
   })
   output: number
 
   @property({
     type: 'number',
     required: true,
+    postgresql: {
+      dataType: 'numeric',
+      dataPrecision: 14,
+      dataScale: 3,
+    },
   })
   balance: number
 
