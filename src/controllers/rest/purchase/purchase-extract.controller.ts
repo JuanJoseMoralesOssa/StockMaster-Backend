@@ -10,9 +10,12 @@ import {
 } from '@loopback/rest'
 import multer from 'multer'
 import { Roles, requireRoles } from '../../../auth'
+import {
+  ExtractionResult,
+  FormExtractionService,
+} from '../../../modules/form-extraction'
+import { PRODUCT_FIELDS } from '../../../modules/form-extraction/form-spec'
 import { PersonRepository, ProductRepository } from '../../../repositories'
-import { ExtractionResult, FormExtractionService } from '../../../services'
-import { PRODUCT_FIELDS } from '../../../services/form-spec'
 
 const upload = multer({
   storage: multer.memoryStorage(),

@@ -1,5 +1,5 @@
 import { expect } from '@loopback/testlab'
-import { computeBalanceDeltas } from '../../services/balance-delta.utils'
+import { computeBalanceDeltas } from '../../modules/transactions/balance-delta.utils'
 
 describe('computeBalanceDeltas', () => {
   it('applies the positive magnitude when the same product gains weight', () => {

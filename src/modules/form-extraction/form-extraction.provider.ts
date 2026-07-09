@@ -13,12 +13,12 @@
 // tests, and quota state is instance-scoped rather than a module global.
 
 import { RawExtractionFields } from './form-extraction.normalizer'
-import { GeminiQuotaTracker } from './gemini-quota-tracker'
+import { GeminiQuotaTracker } from './gemini/gemini-quota-tracker'
 import {
   estimateGeminiRequestTokens,
   GeminiTransport,
   RetryableGeminiError,
-} from './gemini-transport'
+} from './gemini/gemini-transport'
 
 /**
  * Failure category a provider exposes to the (provider-agnostic) orchestrator.
@@ -53,6 +53,8 @@ export interface FormVisionProvider {
 
 export const FORM_VISION_PROVIDER_BINDING = 'services.FormVisionProvider'
 
+const DEFAULT_PROVIDER_CHAIN = ['gemini', 'ollama', 'ocrspace', 'groq']
+
 // User-facing messages for the Gemini provider. They live here (not in the
 // agnostic FormExtractionService) because only this layer is allowed to know it
 // is Gemini and to name Gemini-specific config such as GEMINI_VISION_MODEL.
@@ -73,11 +75,19 @@ const DEFAULT_GEMINI_TIMEOUT_MS = 8000
 const DEFAULT_GEMINI_TOTAL_TIMEOUT_MS = 26000
 const DEFAULT_GEMINI_MEDIA_RESOLUTION = 'MEDIA_RESOLUTION_HIGH'
 const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash'
+// Ordered by likelihood of being available under load: 3.1-flash-lite first
+// (highest local RPD), then the 3.x preview, then the sunsetting 2.5 pair, and
+// finally the multimodal Gemma 4 models as a last resort. Gemma 4 accepts image
+// input and honors responseMimeType/responseSchema on the Gemini API, so it is a
+// valid vision fallback; keep it LAST because it is the least battle-tested in
+// this pipeline. Kept in sync with .env.example and .env.deployment.example.
 const DEFAULT_GEMINI_FALLBACK_MODELS = [
   'gemini-3.1-flash-lite',
   'gemini-3-flash-preview',
   'gemini-2.5-flash-lite',
   'gemini-2.5-flash',
+  'gemma-4-31b-it',
+  'gemma-4-26b-a4b-it',
 ]
 
 function getGeminiTimeoutMs(): number {
@@ -242,10 +252,75 @@ export class GeminiFormVisionProvider implements FormVisionProvider {
   }
 }
 
+export class FallbackFormVisionProvider implements FormVisionProvider {
+  readonly name: string
+
+  constructor(private readonly providers: FormVisionProvider[]) {
+    if (providers.length === 0) {
+      throw new Error('At least one form vision provider is required')
+    }
+    this.name = providers.map(provider => provider.name).join('->')
+  }
+
+  async readForm(
+    imageBuffer: Buffer,
+    mimeType: string,
+  ): Promise<RawExtractionFields> {
+    let lastError: unknown
+
+    for (const provider of this.providers) {
+      try {
+        return await provider.readForm(imageBuffer, mimeType)
+      } catch (error) {
+        lastError = error
+        const reason = error instanceof Error ? error.message : String(error)
+        console.warn('[purchase-extract] provider fallback', {
+          failedProvider: provider.name,
+          remainingProviders:
+            this.providers.length - this.providers.indexOf(provider) - 1,
+          reason,
+        })
+      }
+    }
+
+    if (lastError instanceof VisionProviderError) {
+      throw lastError
+    }
+    throw new VisionProviderError(
+      'unprocessable',
+      'No se pudo leer el formulario con los proveedores de visión configurados. Intenta de nuevo.',
+    )
+  }
+}
+
 /** Select the vision provider from env (default: gemini). */
 export function createFormVisionProvider(): FormVisionProvider {
   const choice = (process.env.FORM_VISION_PROVIDER ?? 'gemini').toLowerCase()
+  if (choice === 'chain') {
+    const configuredChain =
+      process.env.FORM_VISION_PROVIDER_CHAIN?.split(',') ??
+      DEFAULT_PROVIDER_CHAIN
+    const providers = configuredChain
+      .map(provider => provider.trim().toLowerCase())
+      .filter(Boolean)
+      .map(createSingleFormVisionProvider)
+    return new FallbackFormVisionProvider(providers)
+  }
+  return createSingleFormVisionProvider(choice)
+}
+
+function createSingleFormVisionProvider(choice: string): FormVisionProvider {
   switch (choice) {
+    case 'ocrspace':
+      return new (require('./providers/ocrspace-form-vision.provider').OcrSpaceFormVisionProvider)()
+    case 'ollama':
+      // Lazy require avoids a load-time cycle and keeps optional providers
+      // outside the default Gemini path.
+      return new (require('./providers/ollama-form-vision.provider').OllamaFormVisionProvider)()
+    case 'groq':
+      // Lazy require avoids a load-time cycle: groq-form-vision.provider imports
+      // VisionProviderError/FormVisionProvider from this module.
+      return new (require('./providers/groq-form-vision.provider').GroqFormVisionProvider)()
     case 'gemini':
     default:
       return new GeminiFormVisionProvider()

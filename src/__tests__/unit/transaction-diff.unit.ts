@@ -1,6 +1,6 @@
 import { expect } from '@loopback/testlab'
 import { ForeignDetailError } from '../../errors'
-import { computeDetailsDiff } from '../../services/transaction-diff.utils'
+import { computeDetailsDiff } from '../../modules/transactions/transaction-diff.utils'
 
 type Detail = {
   id?: number

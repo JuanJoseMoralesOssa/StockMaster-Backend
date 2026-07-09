@@ -1,4 +1,4 @@
-import { ForeignDetailError } from '../errors'
+import { ForeignDetailError } from '../../errors'
 
 export type DetailDiff<
   D extends {

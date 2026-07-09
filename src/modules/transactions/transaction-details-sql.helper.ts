@@ -1,4 +1,4 @@
-import { transactionNotFoundError, versionConflictError } from '../errors'
+import { transactionNotFoundError, versionConflictError } from '../../errors'
 import {
   DataSourceWithTransactions,
   TransactionOptions,

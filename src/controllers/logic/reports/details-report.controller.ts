@@ -6,7 +6,7 @@ import {
   TransactionDetailProduct,
   TransactionDetailPerson,
 } from '../../../models'
-import { TransactionQueryService } from '../../../services/transaction-query.service'
+import { TransactionQueryService } from '../../../modules/transactions/transaction-query.service'
 
 // Reportes detallados del dashboard: solo Oficina y Admin
 @requireRoles(Roles.OFFICE, Roles.ADMIN)

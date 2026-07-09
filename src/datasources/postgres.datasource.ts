@@ -1,6 +1,7 @@
 import { inject, lifeCycleObserver, LifeCycleObserver } from '@loopback/core'
 import { juggler } from '@loopback/repository'
 import net from 'net'
+import pg from 'pg'
 import { databaseConfig } from '../config/database'
 
 // Node >= 20 races IPv6/IPv4 connections ("Happy Eyeballs") with a 250ms
@@ -13,6 +14,15 @@ if (typeof net.setDefaultAutoSelectFamilyAttemptTimeout === 'function') {
     Number(process.env.NET_FAMILY_ATTEMPT_TIMEOUT_MS ?? 3000),
   )
 }
+
+// node-postgres returns `numeric` columns as STRINGS ('50.000') to avoid
+// precision loss on arbitrary-precision values. Our numeric columns are all
+// numeric(14,3) weights/balances — comfortably exact in float64 — and the
+// string form breaks the API contract (models declare `number`) and the strict
+// comparison in computeDetailsDiff, which then treats every idempotent PUT as
+// a change (spurious version bump + kardex rewrite). Parse them as floats
+// globally; the connector shares this hoisted pg instance.
+pg.types.setTypeParser(pg.types.builtins.NUMERIC, parseFloat)
 
 const config = {
   name: 'postgres',

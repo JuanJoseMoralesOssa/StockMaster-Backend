@@ -1,4 +1,4 @@
-import { versionRequiredError } from '../errors'
+import { versionRequiredError } from '../../errors'
 
 /**
  * Validates the optimistic-lock token (version / parentVersion) that every

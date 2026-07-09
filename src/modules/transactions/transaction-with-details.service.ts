@@ -1,6 +1,6 @@
 import { BindingScope, injectable, service } from '@loopback/core'
-import { USER_MESSAGES, ValidationError } from '../errors'
-import { validateDate as validateTransactionDate } from './date-validation.utils'
+import { USER_MESSAGES, ValidationError } from '../../errors'
+import { validateDate as validateTransactionDate } from '../../services/date-validation.utils'
 import { assertDetailsValid } from './detail-validation.utils'
 import { DetailReconciliationService } from './detail-reconciliation.service'
 import { requireVersion } from './optimistic-lock.utils'

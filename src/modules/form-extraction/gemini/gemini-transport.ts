@@ -4,8 +4,8 @@
 // that orchestration lives in GeminiFormVisionProvider. Splitting it out keeps
 // each concern independently testable (audit Finding 7).
 
-import { RawExtractionFields } from './form-extraction.normalizer'
-import { PRODUCT_FIELDS, ProductField } from './form-spec'
+import { RawExtractionFields } from '../form-extraction.normalizer'
+import { PRODUCT_FIELDS, ProductField } from '../form-spec'
 
 const SUPPORTED_MIME = [
   'image/jpeg',
@@ -218,14 +218,80 @@ function extractJsonText(response: GeminiGenerateContentResponse): string {
   return text
 }
 
+const INVALID_JSON_MESSAGE = 'Gemini returned invalid extraction JSON'
+
+function coerceNumeric(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim() !== '') {
+    // A degraded model may emit "50,5" (Colombian decimal comma) as a string.
+    const parsed = Number(value.trim().replace(',', '.'))
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return null
+}
+
+function coerceText(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed === '' ? null : trimmed
+}
+
+function clamp01(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  return Math.min(1, Math.max(0, value))
+}
+
+/**
+ * Post-parse type guard. The responseSchema usually guarantees the shape, but a
+ * degraded model can still emit strings in numeric fields, junk types, or
+ * confidences out of range. Salvage what coerces cleanly and null the rest so
+ * the normalizer never sees a mistyped value; a missing confidence falls back
+ * to the normalizer's 0.5 default, which flags the field for review.
+ */
+export function sanitizeRawExtraction(value: unknown): RawExtractionFields {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error(INVALID_JSON_MESSAGE)
+  }
+  const record = value as Record<string, unknown>
+  const rawConfidences =
+    typeof record.fieldConfidences === 'object' &&
+    record.fieldConfidences !== null
+      ? (record.fieldConfidences as Record<string, unknown>)
+      : {}
+
+  const fieldConfidences = Object.fromEntries(
+    ['fecha', 'librasTotal', 'recibiDelSr', ...PRODUCT_FIELDS]
+      .map(field => [field, clamp01(rawConfidences[field])] as const)
+      .filter(([, confidence]) => confidence !== undefined),
+  ) as RawExtractionFields['fieldConfidences']
+
+  const productValues = Object.fromEntries(
+    PRODUCT_FIELDS.map(field => [field, coerceNumeric(record[field])]),
+  ) as Record<ProductField, number | null>
+
+  return {
+    fecha: coerceText(record.fecha),
+    librasTotal: coerceNumeric(record.librasTotal),
+    recibiDelSr: coerceText(record.recibiDelSr),
+    fieldConfidences,
+    ...productValues,
+  }
+}
+
 function parseExtractionJson(text: string): RawExtractionFields {
+  let parsed: unknown
   try {
-    return JSON.parse(text) as RawExtractionFields
+    parsed = JSON.parse(text)
   } catch {
     const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
-    if (!fenced) throw new Error('Gemini returned invalid extraction JSON')
-    return JSON.parse(fenced[1]) as RawExtractionFields
+    if (!fenced) throw new Error(INVALID_JSON_MESSAGE)
+    try {
+      parsed = JSON.parse(fenced[1])
+    } catch {
+      throw new Error(INVALID_JSON_MESSAGE)
+    }
   }
+  return sanitizeRawExtraction(parsed)
 }
 
 function parseGeminiResponse(

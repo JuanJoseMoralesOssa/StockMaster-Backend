@@ -19,7 +19,18 @@ import { MySequence } from './sequence'
 import {
   createFormVisionProvider,
   FORM_VISION_PROVIDER_BINDING,
-} from './services/form-extraction.provider'
+} from './modules/form-extraction/form-extraction.provider'
+import { FormExtractionService } from './modules/form-extraction/form-extraction.service'
+import {
+  BalanceReconciliationService,
+  DetailMutationService,
+  DetailReconciliationService,
+  PaymentTransactionService,
+  PurchaseTransactionService,
+  TransactionQueryService,
+  TransactionWithDetailsService,
+} from './modules/transactions'
+import { TransactionDetailsSqlHelper } from './modules/transactions/transaction-details-sql.helper'
 
 export { ApplicationConfig }
 
@@ -130,6 +141,15 @@ export class App extends BootMixin(
     this.bind(FORM_VISION_PROVIDER_BINDING)
       .toDynamicValue(() => createFormVisionProvider())
       .inScope(BindingScope.SINGLETON)
+    this.service(FormExtractionService)
+    this.service(BalanceReconciliationService)
+    this.service(DetailMutationService)
+    this.service(DetailReconciliationService)
+    this.service(PaymentTransactionService)
+    this.service(PurchaseTransactionService)
+    this.service(TransactionDetailsSqlHelper)
+    this.service(TransactionQueryService)
+    this.service(TransactionWithDetailsService)
 
     // Seguro por defecto: TODOS los endpoints exigen un JWT válido, salvo los
     // marcados con `@authenticate.skip()` (sign-in, health, ping). Las rutas con

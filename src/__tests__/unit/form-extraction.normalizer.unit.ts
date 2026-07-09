@@ -8,7 +8,7 @@ import {
   normalizeForMatch,
   parseDate,
   supplierMatchScore,
-} from '../../services/form-extraction.normalizer'
+} from '../../modules/form-extraction/form-extraction.normalizer'
 
 const PEOPLE = [
   { id: 1, name: 'Juan Pérez' },
@@ -198,6 +198,69 @@ describe('form-extraction normalizer', () => {
       expect(result.reviewReasons).to.containEql(
         'No se detectaron valores de productos',
       )
+    })
+
+    // B17: a degraded model response without fieldConfidences must not crash;
+    // every detail defaults to 0.5 confidence, which is below the 0.7
+    // threshold and therefore flags the field for review.
+    it('defaults missing fieldConfidences to 0.5 and flags review', () => {
+      const raw = {
+        ...rawFields({
+          pieles: 100,
+          librasTotal: 100,
+          recibiDelSr: 'Juan Pérez',
+        }),
+        fieldConfidences: undefined,
+      } as unknown as RawExtractionFields
+      const result = normalize(raw, PEOPLE, PRODUCTS)
+
+      const piel = result.details[0]
+      expect(piel.confidence).to.equal(0.5)
+      expect(piel.needsReview).to.be.true()
+      expect(result.librasTotal.confidence).to.equal(0.5)
+      expect(result.reviewReasons).to.containEql(
+        'Campo Pieles con baja confianza',
+      )
+      expect(result.needsReview).to.be.true()
+    })
+
+    // B18: documents CURRENT behaviour — a future date parses with confidence
+    // 0.95 and no review flag. Whether it SHOULD flag review is a pending
+    // product decision (plan de validación, Anexo §3); update this test if
+    // that decision lands.
+    it('accepts a future date without flagging review (current behaviour)', () => {
+      const r = parseDate('01/12/2099')
+      expect(r.value).to.equal('2099-12-01')
+      expect(r.confidence).to.equal(0.95)
+      expect(r.needsReview).to.be.false()
+    })
+
+    // B20: empty catalogues (fresh database) must degrade to review reasons,
+    // never crash or invent ids.
+    it('degrades gracefully when the people/product catalogues are empty', () => {
+      const raw = rawFields({
+        pieles: 100,
+        hueso: 5,
+        recibiDelSr: 'Juan Pérez',
+      })
+      const result = normalize(raw, [], [])
+
+      expect(result.supplier.personId).to.be.undefined()
+      expect(result.supplier.candidates).to.be.empty()
+      expect(result.supplier.needsReview).to.be.true()
+      for (const detail of result.details) {
+        expect(detail.productId).to.be.undefined()
+      }
+      expect(result.reviewReasons).to.containEql(
+        'Proveedor no identificado con confianza',
+      )
+      expect(result.reviewReasons).to.containEql(
+        'Producto Pieles no encontrado en el catálogo',
+      )
+      expect(result.reviewReasons).to.containEql(
+        'Producto Hueso no encontrado en el catálogo',
+      )
+      expect(result.needsReview).to.be.true()
     })
   })
 })

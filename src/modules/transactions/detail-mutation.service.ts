@@ -1,5 +1,5 @@
 import { BindingScope, injectable, service } from '@loopback/core'
-import { USER_MESSAGES, ValidationError } from '../errors'
+import { USER_MESSAGES, ValidationError } from '../../errors'
 import {
   DataSourceWithTransactions,
   DetailBase,

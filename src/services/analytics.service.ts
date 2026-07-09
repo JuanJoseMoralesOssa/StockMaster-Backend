@@ -10,9 +10,12 @@ import {
   PurchaseRepository,
 } from '../repositories'
 import { validateDateRange } from './date-validation.utils'
-import { TransactionKind } from './transaction-kind.enum'
-import { TRANSACTION_CONFIG } from './transaction-type.const'
-import { findParentIdsInRange, ParentRepoLike } from './transaction-range.utils'
+import { TransactionKind } from '../modules/transactions/transaction-kind.enum'
+import {
+  findParentIdsInRange,
+  ParentRepoLike,
+} from '../modules/transactions/transaction-range.utils'
+import { TRANSACTION_CONFIG } from '../modules/transactions/transaction-type.const'
 
 export interface SupplierAnalytics {
   personId: number

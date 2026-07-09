@@ -1,10 +1,10 @@
 import { expect } from '@loopback/testlab'
 import { KardexOperation } from '../../models'
-import { TransactionKind } from '../../services/transaction-kind.enum'
+import { TransactionKind } from '../../modules/transactions/transaction-kind.enum'
 import {
   getKardexOperation,
   getBalanceOperator,
-} from '../../services/transaction-type.const'
+} from '../../modules/transactions/transaction-type.const'
 
 /**
  * Table tests for the sign matrix — the highest-consequence decision in the

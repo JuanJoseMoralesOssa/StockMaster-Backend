@@ -1,4 +1,4 @@
-import { KardexOperation } from '../models'
+import { KardexOperation } from '../../models'
 import { TransactionKind } from './transaction-kind.enum'
 import { DetailBase } from './transaction.types'
 

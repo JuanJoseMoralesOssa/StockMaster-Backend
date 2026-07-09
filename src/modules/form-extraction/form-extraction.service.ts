@@ -4,7 +4,7 @@ import {
   RateLimitedError,
   TimeoutError,
   UnprocessableError,
-} from '../errors'
+} from '../../errors'
 import { ExtractionResult, normalize } from './form-extraction.normalizer'
 import {
   FORM_VISION_PROVIDER_BINDING,

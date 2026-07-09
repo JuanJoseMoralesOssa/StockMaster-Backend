@@ -1,8 +1,8 @@
 import { BindingScope, injectable } from '@loopback/core'
 import { repository } from '@loopback/repository'
-import { productBalanceNotFoundError, ValidationError } from '../errors'
-import { KardexRepository } from '../repositories'
-import { Kardex, KardexOperation } from '../models'
+import { productBalanceNotFoundError, ValidationError } from '../../errors'
+import { KardexRepository } from '../../repositories'
+import { Kardex, KardexOperation } from '../../models'
 import { computeBalanceDeltas } from './balance-delta.utils'
 import { extractRows } from './transaction-execution.utils'
 import {

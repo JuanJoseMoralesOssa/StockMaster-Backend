@@ -1,6 +1,6 @@
 import { BindingScope, injectable } from '@loopback/core'
 import { repository } from '@loopback/repository'
-import { ResourceNotFoundError } from '../errors'
+import { ResourceNotFoundError } from '../../errors'
 import {
   Payment,
   PaymentDetails,
@@ -10,7 +10,7 @@ import {
   TransactionDetailPerson,
   TransactionDetailPersonProduct,
   TransactionDetailProduct,
-} from '../models'
+} from '../../models'
 import {
   PaymentDetailsRepository,
   PaymentRepository,
@@ -18,8 +18,8 @@ import {
   ProductRepository,
   PurchaseDetailsRepository,
   PurchaseRepository,
-} from '../repositories'
-import { validateDateRange } from './date-validation.utils'
+} from '../../repositories'
+import { validateDateRange } from '../../services/date-validation.utils'
 import { TransactionKind } from './transaction-kind.enum'
 import { findParentIdsInRange } from './transaction-range.utils'
 import { TRANSACTION_TYPE_LABEL } from './transaction-type.const'

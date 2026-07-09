@@ -1,5 +1,12 @@
 import { expect } from '@loopback/testlab'
-import { GeminiFormVisionProvider } from '../../services/form-extraction.provider'
+import {
+  FallbackFormVisionProvider,
+  FormVisionProvider,
+  GeminiFormVisionProvider,
+  createFormVisionProvider,
+  VisionProviderError,
+} from '../../modules/form-extraction/form-extraction.provider'
+import { RawExtractionFields } from '../../modules/form-extraction/form-extraction.normalizer'
 
 describe('GeminiFormVisionProvider', () => {
   const originalFetch = globalThis.fetch
@@ -279,5 +286,146 @@ describe('GeminiFormVisionProvider', () => {
     expect(requestedUrls).to.have.length(2)
     expect(requestedUrls[0]).to.containEql('gemini-3.5-flash')
     expect(requestedUrls[1]).to.containEql('gemini-3-flash-preview')
+  })
+
+  // B14: parseExtractionJson's fence fallback recovers a fenced payload…
+  it('recovers extraction JSON wrapped in markdown fences', async () => {
+    process.env.GEMINI_API_KEY = 'test-key'
+
+    const payload = JSON.stringify({
+      fecha: '14/12/2025',
+      librasTotal: null,
+      pieles: 100,
+      sebo: null,
+      hueso: null,
+      recibiDelSr: 'Juan',
+      fieldConfidences: {
+        fecha: 0.95,
+        librasTotal: 0,
+        pieles: 0.99,
+        sebo: 0,
+        hueso: 0,
+        recibiDelSr: 0.9,
+      },
+    })
+
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [{ text: '```json\n' + payload + '\n```' }],
+              },
+            },
+          ],
+        }),
+        { status: 200 },
+      )) as typeof fetch
+
+    const result = await new GeminiFormVisionProvider().readForm(
+      Buffer.from('image'),
+      'image/jpeg',
+    )
+
+    expect(result.pieles).to.equal(100)
+    expect(result.recibiDelSr).to.equal('Juan')
+  })
+
+  // …and truly malformed JSON becomes a typed unprocessable failure (→ 422).
+  it('classifies malformed extraction JSON as unprocessable', async () => {
+    process.env.GEMINI_API_KEY = 'test-key'
+
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          candidates: [
+            { content: { parts: [{ text: 'esto no es JSON { fecha:' }] } },
+          ],
+        }),
+        { status: 200 },
+      )) as typeof fetch
+
+    const error = await new GeminiFormVisionProvider()
+      .readForm(Buffer.from('image'), 'image/jpeg')
+      .then(
+        () => undefined,
+        (reason: unknown) => reason,
+      )
+
+    expect(error).to.be.instanceOf(VisionProviderError)
+    expect((error as VisionProviderError).kind).to.equal('unprocessable')
+    expect((error as VisionProviderError).message).to.match(
+      /JSON de extracción válido/,
+    )
+  })
+})
+
+describe('FallbackFormVisionProvider', () => {
+  const raw: RawExtractionFields = {
+    fecha: null,
+    librasTotal: null,
+    pieles: 100,
+    sebo: null,
+    hueso: null,
+    recibiDelSr: 'Juan',
+    fieldConfidences: {
+      fecha: 0,
+      librasTotal: 0,
+      pieles: 0.99,
+      sebo: 0,
+      hueso: 0,
+      recibiDelSr: 0.9,
+    },
+  }
+
+  class StubProvider implements FormVisionProvider {
+    calls = 0
+
+    constructor(
+      readonly name: string,
+      private readonly result: RawExtractionFields | VisionProviderError,
+    ) {}
+
+    async readForm(): Promise<RawExtractionFields> {
+      this.calls += 1
+      if (this.result instanceof VisionProviderError) throw this.result
+      return this.result
+    }
+  }
+
+  it('tries the next provider when the primary provider fails', async () => {
+    const primary = new StubProvider(
+      'gemini',
+      new VisionProviderError('rate_limited', 'Gemini ocupado'),
+    )
+    const fallback = new StubProvider('ollama', raw)
+
+    const result = await new FallbackFormVisionProvider([
+      primary,
+      fallback,
+    ]).readForm(Buffer.from('image'), 'image/jpeg')
+
+    expect(result.pieles).to.equal(100)
+    expect(primary.calls).to.equal(1)
+    expect(fallback.calls).to.equal(1)
+  })
+
+  it('uses the configured provider chain order', () => {
+    const originalProvider = process.env.FORM_VISION_PROVIDER
+    const originalChain = process.env.FORM_VISION_PROVIDER_CHAIN
+
+    process.env.FORM_VISION_PROVIDER = 'chain'
+    process.env.FORM_VISION_PROVIDER_CHAIN = 'gemini,ollama,ocrspace,groq'
+
+    const provider = createFormVisionProvider()
+
+    expect(provider.name).to.equal('gemini->ollama->ocrspace->groq')
+
+    if (originalProvider === undefined) delete process.env.FORM_VISION_PROVIDER
+    else process.env.FORM_VISION_PROVIDER = originalProvider
+    if (originalChain === undefined)
+      delete process.env.FORM_VISION_PROVIDER_CHAIN
+    else process.env.FORM_VISION_PROVIDER_CHAIN = originalChain
   })
 })

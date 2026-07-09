@@ -16,12 +16,15 @@ import {
 import {
   ManualAdjustmentMode,
   BalanceReconciliationService,
-} from './balance-reconciliation.service'
-import { extractRows, runInTransaction } from './transaction-execution.utils'
+} from '../modules/transactions/balance-reconciliation.service'
+import {
+  extractRows,
+  runInTransaction,
+} from '../modules/transactions/transaction-execution.utils'
 import {
   DataSourceWithTransactions,
   TransactionOptions,
-} from './transaction.types'
+} from '../modules/transactions/transaction.types'
 
 /**
  * Owns product creation/deletion so the Kardex stays consistent with the

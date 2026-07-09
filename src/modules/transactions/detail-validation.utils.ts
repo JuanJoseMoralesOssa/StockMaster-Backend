@@ -1,4 +1,4 @@
-import { USER_MESSAGES, ValidationError } from '../errors'
+import { USER_MESSAGES, ValidationError } from '../../errors'
 import { DetailBase } from './transaction.types'
 
 /**

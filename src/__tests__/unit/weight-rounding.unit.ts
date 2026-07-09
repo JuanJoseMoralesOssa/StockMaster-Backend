@@ -1,5 +1,5 @@
 import { expect } from '@loopback/testlab'
-import { roundWeightKg } from '../../services/weight.utils'
+import { roundWeightKg } from '../../modules/transactions/weight.utils'
 
 describe('roundWeightKg (unit)', () => {
   it('redondea a 3 decimales', () => {

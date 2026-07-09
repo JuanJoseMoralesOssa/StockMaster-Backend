@@ -3,7 +3,8 @@ import { App } from '../..'
 import {
   FORM_VISION_PROVIDER_BINDING,
   FormVisionProvider,
-} from '../../services/form-extraction.provider'
+  GeminiFormVisionProvider,
+} from '../../modules/form-extraction/form-extraction.provider'
 import { setupApplication } from './test-helper'
 
 describe('Purchase extraction', function () {
@@ -12,10 +13,11 @@ describe('Purchase extraction', function () {
 
   let app: App
   let client: Client
+  let rawClient: Client
   const providerName = `Proveedor Extract ${Date.now()}`
 
   before('setupApplication', async () => {
-    ;({ app, client } = await setupApplication())
+    ;({ app, client, rawClient } = await setupApplication())
     // bind() replaces the existing FormVisionProvider binding with the stub.
     app.bind(FORM_VISION_PROVIDER_BINDING).to({
       name: 'stub',
@@ -82,7 +84,10 @@ describe('Purchase extraction', function () {
         needsReview: false,
       })
       expect(res.body.details[0].productId).to.be.Number()
-      expect(String(res.body.details[0].productName)).to.match(/pieles/i)
+      // The shared live catalogue may already contain a product named "Piel",
+      // which legitimately wins the alias match over this test's own
+      // "Pieles <tag>" row — assert the alias family, not an exact name.
+      expect(String(res.body.details[0].productName)).to.match(/piel/i)
     } finally {
       if (productId) {
         await client.del(`/products/${productId}`).catch(() => undefined)
@@ -169,6 +174,32 @@ describe('Purchase extraction', function () {
       })
       .expect(400)
   })
+
+  // B13: multer's fileSize limit (15 MB) must reject oversized uploads with
+  // 400 before the vision provider is ever called.
+  it('rejects images larger than 15 MB with 400', async () => {
+    const oversized = Buffer.alloc(15 * 1024 * 1024 + 1, 1)
+    const res = await client
+      .post('/purchases/extract')
+      .attach('image', oversized, {
+        filename: 'huge-form.jpg',
+        contentType: 'image/jpeg',
+      })
+      .expect(400)
+
+    expect(res.body.error.message).to.containEql('File too large')
+  })
+
+  // B19 (la mitad 403/operator ya vive en auth-roles.acceptance.ts).
+  it('rejects requests without a JWT with 401', async () => {
+    await rawClient
+      .post('/purchases/extract')
+      .attach('image', Buffer.from('unauthenticated'), {
+        filename: 'form.jpg',
+        contentType: 'image/jpeg',
+      })
+      .expect(401)
+  })
 })
 
 describe('Purchase extraction rate limit', function () {
@@ -243,5 +274,105 @@ describe('Purchase extraction rate limit', function () {
       .expect(429)
 
     expect(res.body.error.message).to.containEql('por minuto')
+  })
+})
+
+// End-to-end failure mapping of the REAL Gemini fallback chain: the provider
+// binding is the actual GeminiFormVisionProvider and only globalThis.fetch is
+// stubbed, so these exercise transport → chain → VisionProviderError →
+// DomainError → HTTP status. (Plan de validación B14/B15/B16.)
+describe('Purchase extraction upstream failures', function () {
+  // eslint-disable-next-line @typescript-eslint/no-invalid-this
+  this.timeout(30000)
+
+  let app: App
+  let client: Client
+  const originalFetch = globalThis.fetch
+  const originalEnv = {
+    apiKey: process.env.GEMINI_API_KEY,
+    model: process.env.GEMINI_VISION_MODEL,
+    fallbacks: process.env.GEMINI_VISION_FALLBACK_MODELS,
+  }
+
+  before('setupApplication', async () => {
+    ;({ app, client } = await setupApplication())
+    process.env.GEMINI_API_KEY = 'test-key'
+    // Short two-model chain keeps the exhausted-chain tests fast.
+    process.env.GEMINI_VISION_MODEL = 'gemini-3.5-flash'
+    process.env.GEMINI_VISION_FALLBACK_MODELS = 'gemini-3-flash-preview'
+  })
+
+  beforeEach(() => {
+    // Fresh provider instance per test: quota windows start clean.
+    app.bind(FORM_VISION_PROVIDER_BINDING).to(new GeminiFormVisionProvider())
+  })
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+  })
+
+  after(async () => {
+    const restore = (key: string, value: string | undefined) => {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+    restore('GEMINI_API_KEY', originalEnv.apiKey)
+    restore('GEMINI_VISION_MODEL', originalEnv.model)
+    restore('GEMINI_VISION_FALLBACK_MODELS', originalEnv.fallbacks)
+    await app.stop()
+  })
+
+  const postImage = (tag: string) =>
+    client.post('/purchases/extract').attach('image', Buffer.from(tag), {
+      filename: `${tag}.jpg`,
+      contentType: 'image/jpeg',
+    })
+
+  // B15: every model in the chain times out → 408 with the Spanish message.
+  it('returns 408 when the whole Gemini chain times out', async () => {
+    globalThis.fetch = (async () => {
+      const error = new Error('aborted')
+      error.name = 'AbortError'
+      throw error
+    }) as typeof fetch
+
+    const res = await postImage('chain-timeout').expect(408)
+    expect(res.body.error.message).to.containEql('tardó demasiado')
+  })
+
+  // B16: every model reports exhausted quota → 429 with the Spanish message
+  // (distinct from the endpoint's own per-IP limiter message).
+  it('returns 429 when the whole Gemini chain is out of quota', async () => {
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          error: { message: 'RESOURCE_EXHAUSTED: quota exceeded' },
+        }),
+        { status: 429, statusText: 'Too Many Requests' },
+      )) as typeof fetch
+
+    const res = await postImage('chain-quota').expect(429)
+    expect(res.body.error.message).to.containEql('ocupado temporalmente')
+  })
+
+  // B14: Gemini answers 200 but with unusable JSON → 422, no fallback retry.
+  it('returns 422 when Gemini responds with malformed extraction JSON', async () => {
+    let fetchCalls = 0
+    globalThis.fetch = (async () => {
+      fetchCalls += 1
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            { content: { parts: [{ text: 'esto no es JSON { fecha:' }] } },
+          ],
+        }),
+        { status: 200 },
+      )
+    }) as typeof fetch
+
+    const res = await postImage('malformed-json').expect(422)
+    expect(res.body.error.message).to.containEql('JSON de extracción válido')
+    // A parse failure is NOT retryable: the chain must not burn more quota.
+    expect(fetchCalls).to.equal(1)
   })
 })

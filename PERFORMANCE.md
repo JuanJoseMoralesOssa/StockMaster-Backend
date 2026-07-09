@@ -18,7 +18,7 @@ volume per requested date range, on every dashboard request:
 | `AnalyticsService.getProductAnalytics` | Same pattern with `product` relations — a second full fetch of the same detail rows. |
 | `AnalyticsService.getWeightTotalsByType` | A **third** fetch of the same detail rows (only `weight_kg`) to total purchases vs. expenses. |
 | `AnalyticsService.getInventorySummary` | Loads every product row to compute totals/low-stock in JS (smaller risk; product count grows slowly). |
-| `TransactionQueryService.getPersonProductTransactions` / `getProductTransactions` / `getPersonTransactions` (`src/services/transaction-query.service.ts`) | Load a person/product with deeply included purchases+expenses+details and flatten/aggregate in JS. |
+| `TransactionQueryService.getPersonProductTransactions` / `getProductTransactions` / `getPersonTransactions` (`src/modules/transactions/transaction-query.service.ts`) | Load a person/product with deeply included purchases+expenses+details and flatten/aggregate in JS. |
 
 Net effect for one `GET /analytics/dashboard-summary` call: the same detail
 rows are pulled from PostgreSQL **three times**, hydrated into LoopBack

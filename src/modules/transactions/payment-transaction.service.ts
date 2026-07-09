@@ -1,12 +1,12 @@
 import { BindingScope, inject, injectable, service } from '@loopback/core'
 import { repository } from '@loopback/repository'
 import { SecurityBindings, UserProfile } from '@loopback/security'
-import { Purchase, PurchaseDetails, PurchaseWithTotal } from '../models'
+import { Payment, PaymentDetails, PaymentWithTotal } from '../../models'
 import {
-  PurchaseDetailsRepository,
-  PurchaseRepository,
-  PurchaseWithTotalRepository,
-} from '../repositories'
+  PaymentDetailsRepository,
+  PaymentRepository,
+  PaymentWithTotalRepository,
+} from '../../repositories'
 import { DetailMutationService } from './detail-mutation.service'
 import { TransactionKind } from './transaction-kind.enum'
 import {
@@ -15,29 +15,29 @@ import {
 } from './transaction.types'
 import { TransactionWithDetailsService } from './transaction-with-details.service'
 
-const PURCHASE_INCLUDE = { include: ['purchase_details'] }
+const PAYMENT_INCLUDE = { include: ['payment_details'] }
 
 /**
  * Per-kind facade: binds the generic transaction/detail engines to the
- * purchase repositories once, so controllers never wire infrastructure
+ * payment repositories once, so controllers never wire infrastructure
  * (dataSource, relation factories, TransactionKind, the acting user) themselves.
  * It also resolves the authenticated user id here — the request-scoped boundary
  * — and passes it into the engines so the low-level balance service stays free of
  * request/auth context (audit Finding M5).
  */
 @injectable({ scope: BindingScope.TRANSIENT })
-export class PurchaseTransactionService {
+export class PaymentTransactionService {
   constructor(
     @service(TransactionWithDetailsService)
     private readonly transactionWithDetailsService: TransactionWithDetailsService,
     @service(DetailMutationService)
     private readonly detailMutationService: DetailMutationService,
-    @repository(PurchaseRepository)
-    private readonly purchaseRepository: PurchaseRepository,
-    @repository(PurchaseDetailsRepository)
-    private readonly purchaseDetailsRepository: PurchaseDetailsRepository,
-    @repository(PurchaseWithTotalRepository)
-    private readonly purchaseWithTotalRepository: PurchaseWithTotalRepository,
+    @repository(PaymentRepository)
+    private readonly paymentRepository: PaymentRepository,
+    @repository(PaymentDetailsRepository)
+    private readonly paymentDetailsRepository: PaymentDetailsRepository,
+    @repository(PaymentWithTotalRepository)
+    private readonly paymentWithTotalRepository: PaymentWithTotalRepository,
     @inject(SecurityBindings.USER, { optional: true })
     private readonly currentUser?: UserProfile,
   ) {}
@@ -47,72 +47,72 @@ export class PurchaseTransactionService {
     return Number.isFinite(id) ? id : undefined
   }
 
-  /** Creates the purchase + details atomically and returns the canonical view. */
+  /** Creates the payment + details atomically and returns the canonical view. */
   async createWithDetails(
     input: WithDetailsCreateInput,
-  ): Promise<PurchaseWithTotal> {
+  ): Promise<PaymentWithTotal> {
     const id = await this.transactionWithDetailsService.createWithDetails<
-      Purchase,
-      PurchaseDetails
+      Payment,
+      PaymentDetails
     >(
       {
         date: input.date,
-        details: input.details as PurchaseDetails[] | undefined,
+        details: input.details as PaymentDetails[] | undefined,
       },
-      this.purchaseRepository,
-      purchaseId => this.purchaseRepository.purchase_details(purchaseId),
-      TransactionKind.PURCHASE,
+      this.paymentRepository,
+      paymentId => this.paymentRepository.payment_details(paymentId),
+      TransactionKind.PAYMENT,
       this.actorId(),
     )
-    return this.purchaseWithTotalRepository.findById(id, PURCHASE_INCLUDE)
+    return this.paymentWithTotalRepository.findById(id, PAYMENT_INCLUDE)
   }
 
   async updateWithDetails(
     input: WithDetailsUpdateInput,
-  ): Promise<PurchaseWithTotal> {
+  ): Promise<PaymentWithTotal> {
     await this.transactionWithDetailsService.updateWithDetails<
-      Purchase,
-      PurchaseDetails
+      Payment,
+      PaymentDetails
     >(
       {
         id: input.id,
         version: input.version,
         date: input.date,
-        details: input.details as PurchaseDetails[] | undefined,
+        details: input.details as PaymentDetails[] | undefined,
       },
-      this.purchaseRepository,
-      purchaseId => this.purchaseRepository.purchase_details(purchaseId),
-      TransactionKind.PURCHASE,
+      this.paymentRepository,
+      paymentId => this.paymentRepository.payment_details(paymentId),
+      TransactionKind.PAYMENT,
       this.actorId(),
     )
-    return this.purchaseWithTotalRepository.findById(input.id, PURCHASE_INCLUDE)
+    return this.paymentWithTotalRepository.findById(input.id, PAYMENT_INCLUDE)
   }
 
   async deleteWithDetails(id: number, version?: number): Promise<void> {
     await this.transactionWithDetailsService.deleteWithDetails<
-      Purchase,
-      PurchaseDetails
+      Payment,
+      PaymentDetails
     >(
       id,
       version,
-      this.purchaseRepository,
-      purchaseId => this.purchaseRepository.purchase_details(purchaseId),
-      TransactionKind.PURCHASE,
+      this.paymentRepository,
+      paymentId => this.paymentRepository.payment_details(paymentId),
+      TransactionKind.PAYMENT,
       this.actorId(),
     )
   }
 
   async createDetail(
-    purchaseId: number,
-    detail: Partial<PurchaseDetails>,
+    paymentId: number,
+    detail: Partial<PaymentDetails>,
     parentVersion?: number,
-  ): Promise<PurchaseDetails> {
+  ): Promise<PaymentDetails> {
     return this.detailMutationService.createSingleDetail(
-      purchaseId,
+      paymentId,
       detail,
-      id => this.purchaseRepository.purchase_details(id),
-      this.purchaseRepository.dataSource,
-      TransactionKind.PURCHASE,
+      id => this.paymentRepository.payment_details(id),
+      this.paymentRepository.dataSource,
+      TransactionKind.PAYMENT,
       parentVersion,
       this.actorId(),
     )
@@ -120,14 +120,14 @@ export class PurchaseTransactionService {
 
   async updateDetail(
     id: number,
-    detail: Partial<PurchaseDetails>,
+    detail: Partial<PaymentDetails>,
     parentVersion?: number,
-  ): Promise<PurchaseDetails> {
+  ): Promise<PaymentDetails> {
     return this.detailMutationService.updateSingleDetail(
       id,
       detail,
-      this.purchaseDetailsRepository,
-      TransactionKind.PURCHASE,
+      this.paymentDetailsRepository,
+      TransactionKind.PAYMENT,
       parentVersion,
       this.actorId(),
     )
@@ -136,8 +136,8 @@ export class PurchaseTransactionService {
   async deleteDetail(id: number, parentVersion?: number): Promise<void> {
     await this.detailMutationService.deleteSingleDetail(
       id,
-      this.purchaseDetailsRepository,
-      TransactionKind.PURCHASE,
+      this.paymentDetailsRepository,
+      TransactionKind.PAYMENT,
       parentVersion,
       this.actorId(),
     )
