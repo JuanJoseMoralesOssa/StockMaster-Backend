@@ -1,6 +1,7 @@
-// Pure domain logic for normalising a scanned J.A.A.G form into a purchase prefill.
+﻿// Pure domain logic for normalising a scanned J.A.A.G form into a purchase prefill.
 // Kept free of any I/O (no LLM/Google dependency) so it can be unit-tested directly.
 
+import { roundWeight } from '../../domain/weight'
 import {
   PRODUCT_ALIASES,
   PRODUCT_FIELD_LABELS,
@@ -200,11 +201,6 @@ export function matchProduct(
 const FIELD_MAP: Array<{ field: ProductField; label: string }> =
   PRODUCT_FIELDS.map(field => ({ field, label: PRODUCT_FIELD_LABELS[field] }))
 
-/** Round to 3 decimals (kg precision). */
-function round3(n: number): number {
-  return Math.round(n * 1000) / 1000
-}
-
 /**
  * Convert the raw extracted fields plus the catalogues into a normalised prefill,
  * with per-field confidence, supplier/product matching, lb→kg, and a soft total check.
@@ -240,7 +236,7 @@ export function normalize(
       productId: product?.id,
       productName: product?.name ?? label,
       weightLb: valueLb,
-      weightKg: round3(valueLb * LB_TO_KG),
+      weightKg: roundWeight(valueLb * LB_TO_KG),
       confidence,
       needsReview,
     })
@@ -255,7 +251,7 @@ export function normalize(
       formTotalLb == null ||
       Math.abs(formTotalLb - sumLb) <= sumLb * TOTAL_TOLERANCE,
     formTotalLb,
-    sumLb: round3(sumLb),
+    sumLb: roundWeight(sumLb),
   }
   if (!totalWeightCheck.passed) {
     reviewReasons.push(

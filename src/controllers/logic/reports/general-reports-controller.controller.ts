@@ -3,14 +3,15 @@ import { get, param, response } from '@loopback/rest'
 import { Roles, requireRoles } from '../../../auth'
 import { normalizeLimit, paginationConfig } from '../../../config/pagination'
 import {
-  AnalyticsService,
   DashboardSummaryResponse,
   InventorySummaryResponse,
   PendingByProduct,
   PendingBySupplier,
   PendingTrendInterval,
   PendingTrendPoint,
-} from '../../../services/analytics.service'
+  TransactionTypeFilter,
+} from '../../../models'
+import { AnalyticsService } from '../../../services/analytics.service'
 
 const ANALYTICS_ITEM_SCHEMA = {
   type: 'object',
@@ -132,7 +133,7 @@ export class GeneralReportsController {
     @param.query.string('startDate') startDate: string,
     @param.query.string('endDate') endDate: string,
     @param.query.string('type')
-    type: 'purchases' | 'payments' | 'both' = 'both',
+    type: TransactionTypeFilter = 'both',
     @param.query.number('limit') limit: number = paginationConfig.DEFAULT_LIMIT,
   ): Promise<DashboardSummaryResponse> {
     return this.analyticsService.getDashboardSummary(

@@ -40,6 +40,7 @@ import {
   withDetailsCreateSchema,
   withDetailsUpdateSchema,
 } from '../detail-schemas'
+import { paginatedSchema } from '../pagination-schema'
 
 // Pagos: lectura y mutaciones para Oficina y Admin.
 @requireRoles(Roles.OFFICE, Roles.ADMIN)
@@ -121,25 +122,7 @@ export class PaymentController {
   @response(200, {
     description: 'Paginated list of Payment model instances',
     content: {
-      'application/json': {
-        schema: {
-          type: 'object',
-          properties: {
-            count: { type: 'number' },
-            data: {
-              type: 'array',
-              items: getModelSchemaRef(PaymentWithTotal, {
-                includeRelations: true,
-              }),
-            },
-            page: { type: 'number' },
-            limit: { type: 'number' },
-            totalPages: { type: 'number' },
-            hasNext: { type: 'boolean' },
-            hasPrevious: { type: 'boolean' },
-          },
-        },
-      },
+      'application/json': { schema: paginatedSchema(PaymentWithTotal) },
     },
   })
   async find(
@@ -303,22 +286,7 @@ export class PaymentController {
   @response(200, {
     description: 'Array of filtered Payment model instances with pagination',
     content: {
-      'application/json': {
-        schema: {
-          type: 'object',
-          properties: {
-            count: { type: 'number' },
-            data: {
-              type: 'array',
-              items: getModelSchemaRef(PaymentWithTotal, {
-                includeRelations: true,
-              }),
-            },
-            page: { type: 'number' },
-            limit: { type: 'number' },
-          },
-        },
-      },
+      'application/json': { schema: paginatedSchema(PaymentWithTotal) },
     },
   })
   async getFilteredPayments(

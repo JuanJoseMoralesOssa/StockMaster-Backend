@@ -15,6 +15,8 @@
 import { RawExtractionFields } from './form-extraction.normalizer'
 import { GeminiQuotaTracker } from './gemini/gemini-quota-tracker'
 import {
+  ClientAbortedError,
+  consumedRemoteQuota,
   estimateGeminiRequestTokens,
   GeminiTransport,
   RetryableGeminiError,
@@ -27,7 +29,11 @@ import {
  * error vocabulary, so a second provider does not have to reword Gemini's
  * strings to be classified correctly (audit Finding M2).
  */
-export type VisionErrorKind = 'timeout' | 'rate_limited' | 'unprocessable'
+export type VisionErrorKind =
+  | 'timeout'
+  | 'rate_limited'
+  | 'unprocessable'
+  | 'client_aborted'
 
 /** Typed failure thrown by a FormVisionProvider; carries an end-user message. */
 export class VisionProviderError extends Error {
@@ -47,8 +53,16 @@ export interface FormVisionProvider {
    * Read the handwritten fields off a form image. On failure it throws a
    * {@link VisionProviderError} whose `kind` the orchestrator maps to an HTTP
    * status — provider-specific error classification stays behind this seam.
+   *
+   * @param clientSignal aborts the read when the HTTP client hangs up. Honouring
+   * it is what stops a provider from billing model calls whose answer nobody is
+   * left to read (audit Finding H5).
    */
-  readForm(imageBuffer: Buffer, mimeType: string): Promise<RawExtractionFields>
+  readForm(
+    imageBuffer: Buffer,
+    mimeType: string,
+    clientSignal?: AbortSignal,
+  ): Promise<RawExtractionFields>
 }
 
 export const FORM_VISION_PROVIDER_BINDING = 'services.FormVisionProvider'
@@ -68,6 +82,9 @@ const GEMINI_PARSE_MESSAGE =
   'El servicio de visión respondió, pero no devolvió un JSON de extracción válido. Intenta de nuevo o revisa el modelo configurado.'
 const GEMINI_GENERIC_MESSAGE =
   'No se pudo leer el formulario con el servicio de visión. Intenta de nuevo.'
+// Nobody is listening when this one is produced (the client already hung up);
+// it exists so the failure is CLASSIFIED rather than logged as a mystery error.
+const GEMINI_ABORTED_MESSAGE = 'La lectura del formulario fue cancelada.'
 
 // Operational guards, not Google-documented latency targets. Keep them
 // configurable and use the per-attempt logs below to tune with real traffic.
@@ -139,6 +156,7 @@ export class GeminiFormVisionProvider implements FormVisionProvider {
   async readForm(
     imageBuffer: Buffer,
     mimeType: string,
+    clientSignal?: AbortSignal,
   ): Promise<RawExtractionFields> {
     const models = getGeminiModelChain()
     const mediaResolution = getGeminiMediaResolution()
@@ -148,6 +166,9 @@ export class GeminiFormVisionProvider implements FormVisionProvider {
     const totalTimeoutMs = getGeminiTotalTimeoutMs()
     const deadline = startedAt + totalTimeoutMs
     let lastRetryableError: RetryableGeminiError | undefined
+    // One logical extraction can bill several model calls. Counting them is the
+    // only way to read cost PER TASK instead of per request (audit Finding H3).
+    let billedAttempts = 0
 
     console.info('[purchase-extract] Gemini extraction start', {
       models,
@@ -175,24 +196,44 @@ export class GeminiFormVisionProvider implements FormVisionProvider {
           throw new RetryableGeminiError(reservation.reason)
         }
         reserved = true
-        const result = await this.transport.requestModel(
+        billedAttempts += 1
+        const { fields, usage } = await this.transport.requestModel(
           model,
           imageBuffer,
           mimeType,
           mediaResolution,
           Math.min(perModelTimeoutMs, remainingTimeoutMs),
+          clientSignal,
         )
+        // Swap the pre-flight guess for what Gemini says it actually billed.
+        this.quota.settle(model, estimatedTokens, usage.totalTokens)
         console.info('[purchase-extract] Gemini model succeeded', {
           model,
           durationMs: Date.now() - attemptStartedAt,
           totalDurationMs: Date.now() - startedAt,
+          // Cost of the whole task, not of this call: `billedAttempts` counts
+          // every model the chain paid for before this one answered.
+          billedAttempts,
+          estimatedTokens,
+          usage,
         })
-        return result
+        return fields
       } catch (error) {
-        // This model's attempt failed, so the reservation never consumed real
-        // remote quota — refund it before falling through to the next model.
-        if (reserved) {
+        // Refund ONLY what never reached Gemini. A dispatched attempt (timeout,
+        // 429, bad answer) already counted against the remote RPM/RPD, so
+        // handing the budget back here would only invite remote 429s later.
+        if (reserved && !consumedRemoteQuota(error)) {
+          billedAttempts -= 1
           this.quota.release(model, estimatedTokens)
+        }
+        if (error instanceof ClientAbortedError) {
+          console.info('[purchase-extract] client hung up; chain stopped', {
+            model,
+            billedAttempts,
+            remainingModels: models.length - models.indexOf(model) - 1,
+            totalDurationMs: Date.now() - startedAt,
+          })
+          throw this.toVisionError(error)
         }
         if (!(error instanceof RetryableGeminiError)) {
           console.warn('[purchase-extract] Gemini model failed', {
@@ -200,6 +241,7 @@ export class GeminiFormVisionProvider implements FormVisionProvider {
             durationMs: Date.now() - attemptStartedAt,
             totalDurationMs: Date.now() - startedAt,
             retryable: false,
+            billedAttempts,
             reason: error instanceof Error ? error.message : String(error),
           })
           throw this.toVisionError(error)
@@ -210,11 +252,17 @@ export class GeminiFormVisionProvider implements FormVisionProvider {
           remainingModels: models.length - models.indexOf(model) - 1,
           durationMs: Date.now() - attemptStartedAt,
           totalDurationMs: Date.now() - startedAt,
+          billedAttempts,
           reason: error.message,
         })
       }
     }
 
+    console.warn('[purchase-extract] Gemini chain exhausted', {
+      models,
+      billedAttempts,
+      totalDurationMs: Date.now() - startedAt,
+    })
     throw this.toVisionError(
       lastRetryableError ?? new Error('Gemini extraction failed'),
     )
@@ -227,6 +275,9 @@ export class GeminiFormVisionProvider implements FormVisionProvider {
    */
   private toVisionError(error: unknown): VisionProviderError {
     if (error instanceof VisionProviderError) return error
+    if (error instanceof ClientAbortedError) {
+      return new VisionProviderError('client_aborted', GEMINI_ABORTED_MESSAGE)
+    }
     if (error instanceof RetryableGeminiError) {
       return error.retryKind === 'timeout'
         ? new VisionProviderError('timeout', GEMINI_TIMEOUT_MESSAGE)
@@ -265,13 +316,22 @@ export class FallbackFormVisionProvider implements FormVisionProvider {
   async readForm(
     imageBuffer: Buffer,
     mimeType: string,
+    clientSignal?: AbortSignal,
   ): Promise<RawExtractionFields> {
     let lastError: unknown
 
     for (const provider of this.providers) {
       try {
-        return await provider.readForm(imageBuffer, mimeType)
+        return await provider.readForm(imageBuffer, mimeType, clientSignal)
       } catch (error) {
+        // A client hang-up is not a provider defect: falling through would bill
+        // the next provider for an answer nobody will read.
+        if (
+          error instanceof VisionProviderError &&
+          error.kind === 'client_aborted'
+        ) {
+          throw error
+        }
         lastError = error
         const reason = error instanceof Error ? error.message : String(error)
         console.warn('[purchase-extract] provider fallback', {

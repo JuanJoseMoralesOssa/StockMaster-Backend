@@ -1,6 +1,6 @@
-import { BalanceMutationMode } from './transaction-type.const'
+﻿import { BalanceMutationMode } from './transaction-type.const'
 import { DetailBase } from './transaction.types'
-import { roundWeightKg } from './weight.utils'
+import { roundWeight } from '../../domain/weight'
 
 export interface BalanceDelta {
   productId: number
@@ -28,7 +28,7 @@ export function computeBalanceDeltas(
   oldDetail: DetailWeight,
   newDetail: DetailWeight,
 ): BalanceDelta[] {
-  const newWeight = roundWeightKg(newDetail.weight_kg)
+  const newWeight = roundWeight(newDetail.weight_kg)
 
   if (oldDetail.productId !== newDetail.productId) {
     return [
@@ -41,7 +41,7 @@ export function computeBalanceDeltas(
     ]
   }
 
-  const diff = roundWeightKg(newWeight - oldDetail.weight_kg)
+  const diff = roundWeight(newWeight - oldDetail.weight_kg)
   if (diff === 0) return []
   return [
     {

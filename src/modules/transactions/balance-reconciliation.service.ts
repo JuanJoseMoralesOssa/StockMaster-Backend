@@ -1,4 +1,4 @@
-import { BindingScope, injectable } from '@loopback/core'
+﻿import { BindingScope, injectable } from '@loopback/core'
 import { repository } from '@loopback/repository'
 import { productBalanceNotFoundError, ValidationError } from '../../errors'
 import { KardexRepository } from '../../repositories'
@@ -16,7 +16,7 @@ import {
   TransactionContext,
   TxScope,
 } from './transaction.types'
-import { roundWeightKg } from './weight.utils'
+import { roundWeight } from '../../domain/weight'
 
 /** How a manual adjustment expresses the target: an absolute count or a +/- delta. */
 export type ManualAdjustmentMode = 'set' | 'delta'
@@ -83,7 +83,7 @@ export class BalanceReconciliationService {
     tx: TransactionContext,
     actorId?: number,
   ): Promise<void> {
-    const opening = roundWeightKg(openingBalance)
+    const opening = roundWeight(openingBalance)
     if (!Number.isFinite(opening) || opening <= 0) return
 
     await this.kardexRepository.create(
@@ -132,17 +132,17 @@ export class BalanceReconciliationService {
       throw productBalanceNotFoundError(productId)
     }
 
-    const current = roundWeightKg(
+    const current = roundWeight(
       Number((lockedRows[0] as { balance?: unknown }).balance ?? 0),
     )
-    const target = roundWeightKg(mode === 'set' ? value : current + value)
+    const target = roundWeight(mode === 'set' ? value : current + value)
     if (!Number.isFinite(target) || target < 0) {
       throw new ValidationError(
         'El ajuste dejaría el balance en un valor negativo',
       )
     }
 
-    const delta = roundWeightKg(target - current)
+    const delta = roundWeight(target - current)
     if (delta === 0) {
       throw new ValidationError('El ajuste no cambia el balance actual')
     }

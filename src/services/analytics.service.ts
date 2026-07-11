@@ -1,51 +1,46 @@
 import { BindingScope, injectable } from '@loopback/core'
 import { repository } from '@loopback/repository'
 import { normalizeLimit } from '../config/pagination'
+import { toFiniteNumber } from '../domain/coercion'
+import {
+  AnalyticsSummary,
+  DashboardSummaryResponse,
+  InventorySummaryResponse,
+  LowBalanceProduct,
+  PendingByProduct,
+  PendingBySupplier,
+  PendingTrendInterval,
+  PendingTrendPoint,
+  ProductAnalytics,
+  SupplierAnalytics,
+  TransactionTypeFilter,
+  WeightTotals,
+} from '../models'
 import {
   PaymentDetailsRepository,
   PaymentRepository,
+  PendingAnalyticsRepository,
   PersonRepository,
   ProductRepository,
   PurchaseDetailsRepository,
   PurchaseRepository,
 } from '../repositories'
-import { validateDateRange } from './date-validation.utils'
 import { TransactionKind } from '../modules/transactions/transaction-kind.enum'
 import {
   findParentIdsInRange,
   ParentRepoLike,
 } from '../modules/transactions/transaction-range.utils'
 import { TRANSACTION_CONFIG } from '../modules/transactions/transaction-type.const'
+import { validateDateRange } from './date-validation.utils'
+import {
+  accumulateEntity,
+  EntityAggregate,
+  RelatedEntity,
+  topByTransactionCount,
+  topByWeight,
+} from './analytics.utils'
 
-export interface SupplierAnalytics {
-  personId: number
-  personName: string
-  /** Combined purchase + payment weight (kept for sorting/back-compat). */
-  totalWeight: number
-  /** Weight bought from this supplier (entradas / "Compra"). */
-  purchaseWeight: number
-  /** Weight paid to this supplier (salidas / "Pago"). */
-  paymentWeight: number
-  transactionCount: number
-}
-
-export interface ProductAnalytics {
-  productId: number
-  productName: string
-  /** Combined purchase + payment weight (kept for sorting/back-compat). */
-  totalWeight: number
-  /** Weight bought of this product (entradas / "Compra"). */
-  purchaseWeight: number
-  /** Weight paid of this product (salidas / "Pago"). */
-  paymentWeight: number
-  transactionCount: number
-}
-
-type RelatedEntity = {
-  id?: number
-  name?: string
-}
-
+/** Detail row as the dashboard aggregation needs to see it. */
 type AggregatableTransaction = {
   weight_kg?: number
   person?: RelatedEntity
@@ -54,97 +49,19 @@ type AggregatableTransaction = {
   payment?: RelatedEntity
 }
 
-type TransactionTypeFilter = 'purchases' | 'payments' | 'both'
-
-type EntityAggregate = {
-  id: number
-  name: string
-  purchaseWeight: number
-  paymentWeight: number
-  purchaseCount: number
-  paymentCount: number
-}
-
 type DetailRepoLike = {
   find(filter?: object): Promise<AggregatableTransaction[]>
 }
 
-export interface AnalyticsSummary {
-  totalSuppliers: number
-  totalProducts: number
-  totalWeight: number
-  /** Number of detail lines (each product line within a document). */
-  totalTransactions: number
-  /** Number of purchase documents ("Compra") in the range. */
-  purchaseCount: number
-  /** Number of payment documents ("Pago") in the range. */
-  paymentCount: number
-  /** Total weight ordered (purchases / "Compra") in the range. */
-  totalPurchaseWeight: number
-  /** Total weight paid/delivered (payments / "Pago") in the range. */
-  totalPaymentWeight: number
-  /** Outstanding weight: purchases minus payments. */
-  pendingWeight: number
-}
+/** Default ceiling for "low balance" when the caller does not set one. */
+const DEFAULT_LOW_BALANCE_THRESHOLD = 10
 
-export interface DashboardSummaryResponse {
-  summary: AnalyticsSummary
-  topSuppliersByWeight: SupplierAnalytics[]
-  bottomSuppliersByWeight: SupplierAnalytics[]
-  topProductsByWeight: ProductAnalytics[]
-  bottomProductsByWeight: ProductAnalytics[]
-  mostActiveSuppliers: SupplierAnalytics[]
-  mostTransactedProducts: ProductAnalytics[]
-}
-
-export interface LowBalanceProduct {
-  productId: number
-  productName: string
-  balance: number
-}
-
-export interface InventorySummaryResponse {
-  /** Sum of current balance (kg) across all products. */
-  totalBalance: number
-  productCount: number
-  inBalanceCount: number
-  outOfBalanceCount: number
-  /** Products with 0 < balance <= lowBalanceThreshold. */
-  lowBalanceCount: number
-  lowBalanceThreshold: number
-  lowBalanceProducts: LowBalanceProduct[]
-}
-
-export type PendingTrendInterval = 'day' | 'week' | 'month'
-
-/** One point of the pending-balance-over-time series (absolute pending). */
-export interface PendingTrendPoint {
-  /** Bucket start (ISO date). */
-  period: string
-  purchased: number
-  paid: number
-  /** Absolute outstanding pending at the end of this bucket (compras − pagos acumulado). */
-  pending: number
-}
-
-/** Outstanding (bought − paid) per supplier, in kg. Only suppliers with pending > 0. */
-export interface PendingBySupplier {
-  personId: number
-  personName: string
-  purchased: number
-  paid: number
-  pending: number
-}
-
-/** Current pending per product + since when it has been outstanding (aging). */
-export interface PendingByProduct {
-  productId: number
-  productName: string
-  balance: number
-  /** ISO date the product's balance last returned to 0 (or its first movement); null if unknown. */
-  pendingSince: string | null
-}
-
+/**
+ * The analytics reports. This service owns the READS and the orchestration; the
+ * arithmetic lives in `analytics.utils` (pure, unit-tested) and the aggregate
+ * SQL in `PendingAnalyticsRepository` — so no single file mixes "which rows do
+ * we load" with "how do we add them up" with "what does the SQL look like".
+ */
 @injectable({ scope: BindingScope.TRANSIENT })
 export class AnalyticsService {
   constructor(
@@ -160,12 +77,13 @@ export class AnalyticsService {
     protected personRepository: PersonRepository,
     @repository(ProductRepository)
     protected productRepository: ProductRepository,
+    @repository(PendingAnalyticsRepository)
+    protected pendingAnalyticsRepository: PendingAnalyticsRepository,
   ) {}
 
   async getDashboardSummary(
     startDate: string,
     endDate: string,
-
     type: TransactionTypeFilter = 'both',
     limit: number = 10,
   ): Promise<DashboardSummaryResponse> {
@@ -181,34 +99,32 @@ export class AnalyticsService {
         productAnalytics,
         weightTotals,
       ),
-      topSuppliersByWeight: this.getTopResults(
+      topSuppliersByWeight: topByWeight(
         supplierAnalytics,
         'max',
         normalizedLimit,
       ),
-      bottomSuppliersByWeight: this.getTopResults(
+      bottomSuppliersByWeight: topByWeight(
         supplierAnalytics,
         'min',
         normalizedLimit,
       ),
-      topProductsByWeight: this.getTopResults(
+      topProductsByWeight: topByWeight(
         productAnalytics,
         'max',
         normalizedLimit,
       ),
-      bottomProductsByWeight: this.getTopResults(
+      bottomProductsByWeight: topByWeight(
         productAnalytics,
         'min',
         normalizedLimit,
       ),
-      mostActiveSuppliers: this.getTopByTransactions(
+      mostActiveSuppliers: topByTransactionCount(
         supplierAnalytics,
-        'max',
         normalizedLimit,
       ),
-      mostTransactedProducts: this.getTopByTransactions(
+      mostTransactedProducts: topByTransactionCount(
         productAnalytics,
-        'max',
         normalizedLimit,
       ),
     }
@@ -220,7 +136,7 @@ export class AnalyticsService {
    * point-in-time value and intentionally NOT scoped by a date range.
    */
   async getInventorySummary(
-    lowBalanceThreshold: number = 10,
+    lowBalanceThreshold: number = DEFAULT_LOW_BALANCE_THRESHOLD,
   ): Promise<InventorySummaryResponse> {
     const threshold =
       Number.isFinite(lowBalanceThreshold) && lowBalanceThreshold > 0
@@ -266,176 +182,32 @@ export class AnalyticsService {
     }
   }
 
-  // --- Pendiente: insights de flujo (tendencia, por proveedor, por producto) ---
+  // --- Pendiente: insights de flujo. La validación de entrada vive aquí; el
+  // SQL agregado, en PendingAnalyticsRepository.
 
-  /** Lecturas analíticas vía SQL crudo sobre el datasource de los repositorios. */
-  private async query<T = Record<string, unknown>>(
-    sql: string,
-    params: unknown[] = [],
-  ): Promise<T[]> {
-    const ds = this.productRepository.dataSource as unknown as {
-      execute: (sql: string, params?: unknown[]) => Promise<unknown>
-    }
-    const result = await ds.execute(sql, params)
-    if (Array.isArray(result)) return result as T[]
-    const rows = (result as { rows?: unknown }).rows
-    return (Array.isArray(rows) ? rows : []) as T[]
-  }
-
-  private num(value: unknown): number {
-    const n = typeof value === 'number' ? value : Number(value)
-    return Number.isFinite(n) ? n : 0
-  }
-
-  private round3(n: number): number {
-    return Math.round(n * 1000) / 1000
-  }
-
-  private isoOrNull(value: unknown): string | null {
-    if (value == null) return null
-    if (value instanceof Date) return value.toISOString().slice(0, 10)
-    return String(value).slice(0, 10)
-  }
-
-  /**
-   * Pending (compras − pagos) en el tiempo como saldo ABSOLUTO: arranca del
-   * pendiente acumulado ANTES de startDate, así la línea refleja el pendiente
-   * real (no solo la variación del período). Agrupa por día/semana/mes.
-   */
   async getPendingTrend(
     startDate: string,
     endDate: string,
     interval: PendingTrendInterval = 'day',
   ): Promise<PendingTrendPoint[]> {
     validateDateRange(startDate, endDate)
-    // `bucket` solo puede ser day/week/month (validado) → interpolación segura.
-    const bucket: PendingTrendInterval = (
-      ['day', 'week', 'month'] as const
-    ).includes(interval)
-      ? interval
-      : 'day'
-
-    const [baselineRow] = await this.query<{ baseline: string | number }>(
-      `SELECT
-         COALESCE((SELECT SUM(pd.weight_kg) FROM purchasedetails pd
-                   JOIN purchase p ON pd.purchaseid = p.id
-                   WHERE p.date::date < $1::date), 0)
-       - COALESCE((SELECT SUM(qd.weight_kg) FROM paymentdetails qd
-                   JOIN payment q ON qd.paymentid = q.id
-                   WHERE q.date::date < $1::date), 0) AS baseline`,
-      [startDate],
+    return this.pendingAnalyticsRepository.findPendingTrend(
+      startDate,
+      endDate,
+      interval,
     )
-    let running = this.num(baselineRow?.baseline)
-
-    const [purchases, payments] = await Promise.all([
-      this.query<{ bucket: unknown; w: string | number }>(
-        `SELECT date_trunc('${bucket}', p.date)::date AS bucket, SUM(pd.weight_kg) AS w
-           FROM purchasedetails pd JOIN purchase p ON pd.purchaseid = p.id
-          WHERE p.date::date BETWEEN $1::date AND $2::date
-          GROUP BY 1`,
-        [startDate, endDate],
-      ),
-      this.query<{ bucket: unknown; w: string | number }>(
-        `SELECT date_trunc('${bucket}', q.date)::date AS bucket, SUM(qd.weight_kg) AS w
-           FROM paymentdetails qd JOIN payment q ON qd.paymentid = q.id
-          WHERE q.date::date BETWEEN $1::date AND $2::date
-          GROUP BY 1`,
-        [startDate, endDate],
-      ),
-    ])
-
-    const purchasedByBucket = new Map<string, number>()
-    const paidByBucket = new Map<string, number>()
-    for (const r of purchases) {
-      const key = this.isoOrNull(r.bucket)
-      if (key) purchasedByBucket.set(key, this.num(r.w))
-    }
-    for (const r of payments) {
-      const key = this.isoOrNull(r.bucket)
-      if (key) paidByBucket.set(key, this.num(r.w))
-    }
-
-    const periods = Array.from(
-      new Set([...purchasedByBucket.keys(), ...paidByBucket.keys()]),
-    ).sort()
-
-    return periods.map(period => {
-      const purchased = this.round3(purchasedByBucket.get(period) ?? 0)
-      const paid = this.round3(paidByBucket.get(period) ?? 0)
-      running += purchased - paid
-      return { period, purchased, paid, pending: this.round3(running) }
-    })
   }
 
-  /** Pendiente (comprado − pagado) por proveedor, histórico, solo los que se deben (> 0). */
   async getPendingBySupplier(limit: number = 10): Promise<PendingBySupplier[]> {
-    const rows = await this.query<{
-      personId: number
-      personName: string
-      purchased: string | number
-      paid: string | number
-      pending: string | number
-    }>(
-      `SELECT person.id AS "personId", person.name AS "personName",
-              COALESCE(pur.w, 0) AS purchased,
-              COALESCE(pay.w, 0) AS paid,
-              COALESCE(pur.w, 0) - COALESCE(pay.w, 0) AS pending
-         FROM person
-         LEFT JOIN (SELECT personid, SUM(weight_kg) w FROM purchasedetails GROUP BY personid) pur
-                ON pur.personid = person.id
-         LEFT JOIN (SELECT personid, SUM(weight_kg) w FROM paymentdetails GROUP BY personid) pay
-                ON pay.personid = person.id
-        WHERE COALESCE(pur.w, 0) - COALESCE(pay.w, 0) > 0
-        ORDER BY pending DESC
-        LIMIT $1`,
-      [normalizeLimit(limit)],
+    return this.pendingAnalyticsRepository.findPendingBySupplier(
+      normalizeLimit(limit),
     )
-    return rows.map(r => ({
-      personId: Number(r.personId),
-      personName: r.personName,
-      purchased: this.round3(this.num(r.purchased)),
-      paid: this.round3(this.num(r.paid)),
-      pending: this.round3(this.num(r.pending)),
-    }))
   }
 
-  /** Productos con pendiente (balance > 0) + desde cuándo lo arrastran (antigüedad). */
   async getPendingByProduct(limit: number = 10): Promise<PendingByProduct[]> {
-    const rows = await this.query<{
-      productId: number
-      productName: string
-      balance: string | number
-      pendingSince: string | Date | null
-    }>(
-      // pendingSince = inicio del streak ACTUAL de pendiente: el primer
-      // movimiento posterior a la última vez que el balance quedó <= 0 (settled).
-      // `<= 0` tolera residuos de redondeo; convertido a fecha calendario Bogotá
-      // para que la antigüedad (días) no se desfase contra el "hoy" del frontend.
-      // Fallback: primer movimiento del producto si nunca volvió a 0.
-      `SELECT pr.id AS "productId", pr.name AS "productName", pr.balance AS balance,
-              COALESCE(
-                (SELECT MIN((k.date AT TIME ZONE 'America/Bogota')::date)
-                   FROM kardex k
-                  WHERE k.productid = pr.id
-                    AND k.date > COALESCE(
-                          (SELECT MAX(k2.date) FROM kardex k2
-                            WHERE k2.productid = pr.id AND k2.balance <= 0),
-                          '-infinity'::timestamptz)),
-                (SELECT MIN((k.date AT TIME ZONE 'America/Bogota')::date)
-                   FROM kardex k WHERE k.productid = pr.id)
-              ) AS "pendingSince"
-         FROM product pr
-        WHERE pr.balance > 0
-        ORDER BY pr.balance DESC
-        LIMIT $1`,
-      [normalizeLimit(limit)],
+    return this.pendingAnalyticsRepository.findPendingByProduct(
+      normalizeLimit(limit),
     )
-    return rows.map(r => ({
-      productId: Number(r.productId),
-      productName: r.productName,
-      balance: this.round3(this.num(r.balance)),
-      pendingSince: this.isoOrNull(r.pendingSince),
-    }))
   }
 
   private kindsFor(type: TransactionTypeFilter): TransactionKind[] {
@@ -527,16 +299,11 @@ export class AnalyticsService {
   ): Promise<{
     supplierAnalytics: SupplierAnalytics[]
     productAnalytics: ProductAnalytics[]
-    weightTotals: {
-      purchaseWeight: number
-      paymentWeight: number
-      purchaseCount: number
-      paymentCount: number
-    }
+    weightTotals: WeightTotals
   }> {
     const supplierAgg = new Map<number, EntityAggregate>()
     const productAgg = new Map<number, EntityAggregate>()
-    const weightTotals = {
+    const weightTotals: WeightTotals = {
       purchaseWeight: 0,
       paymentWeight: 0,
       purchaseCount: 0,
@@ -553,11 +320,12 @@ export class AnalyticsService {
 
       let weightSum = 0
       for (const transaction of details) {
-        // weight_kg llega como STRING (columnas numeric de Postgres), así que
-        // hay que coaccionar a número: con strings, `weightSum += weight`
-        // CONCATENA en vez de sumar (1 línea parsea de vuelta por casualidad,
-        // 2+ líneas producen un string no-numérico → NaN → 0 en el dashboard).
-        const weight = this.num(transaction.weight_kg)
+        // Guard, not the primary mechanism: the datasource registers a
+        // NUMERIC → parseFloat parser, so weight_kg normally arrives as a
+        // number. Coercing anyway keeps one unparsed row from poisoning the
+        // sum — `weightSum += '1.5'` CONCATENATES instead of adding, and the
+        // resulting NaN blanks the whole dashboard rather than one line.
+        const weight = toFiniteNumber(transaction.weight_kg)
         if (!weight || weight <= 0) continue
 
         weightSum += weight
@@ -565,14 +333,14 @@ export class AnalyticsService {
         // Supplier/product grouping also requires the parent document to have
         // resolved (matches the previous aggregateDetailsBy contract).
         if (!transaction.purchase && !transaction.payment) continue
-        this.accumulate(
+        accumulateEntity(
           supplierAgg,
           transaction.person,
           weight,
           kind,
           'Proveedor',
         )
-        this.accumulate(
+        accumulateEntity(
           productAgg,
           transaction.product,
           weight,
@@ -611,53 +379,10 @@ export class AnalyticsService {
     }
   }
 
-  /**
-   * Folds one detail line into the running aggregate for its related entity,
-   * keeping purchase (entrada) and payment (salida) weight/count SEPARATE so the
-   * dashboard never shows a single mixed in+out number in "both" mode.
-   */
-  private accumulate(
-    aggregates: Map<number, EntityAggregate>,
-    related: RelatedEntity | undefined,
-    weight: number,
-    kind: TransactionKind,
-    fallbackLabel: string,
-  ): void {
-    if (!related) return
-    const id = related.id
-    if (id == null) return
-
-    const isPurchase = kind === TransactionKind.PURCHASE
-    const existing = aggregates.get(id)
-    if (existing) {
-      if (isPurchase) {
-        existing.purchaseWeight += weight
-        existing.purchaseCount += 1
-      } else {
-        existing.paymentWeight += weight
-        existing.paymentCount += 1
-      }
-    } else {
-      aggregates.set(id, {
-        id,
-        name: related.name ?? `${fallbackLabel} ${id}`,
-        purchaseWeight: isPurchase ? weight : 0,
-        paymentWeight: isPurchase ? 0 : weight,
-        purchaseCount: isPurchase ? 1 : 0,
-        paymentCount: isPurchase ? 0 : 1,
-      })
-    }
-  }
-
   private calculateSummary(
     supplierAnalytics: SupplierAnalytics[],
     productAnalytics: ProductAnalytics[],
-    weightTotals: {
-      purchaseWeight: number
-      paymentWeight: number
-      purchaseCount: number
-      paymentCount: number
-    },
+    weightTotals: WeightTotals,
   ): AnalyticsSummary {
     // Only reduce on ONE of the analytics arrays (e.g., products) to avoid double-counting
     // the same transaction's weight and count since both arrays are derived
@@ -676,42 +401,5 @@ export class AnalyticsService {
       totalPaymentWeight: weightTotals.paymentWeight,
       pendingWeight: weightTotals.purchaseWeight - weightTotals.paymentWeight,
     }
-  }
-
-  private getTopResults<T extends { totalWeight: number }>(
-    data: T[],
-    mode: 'max' | 'min',
-    limit: number,
-  ): T[] {
-    if (data.length === 0) return []
-
-    // Creamos una copia del arreglo para no mutar el original en memoria con el `sort`
-    const sortedData = [...data].sort((a, b) =>
-      mode === 'max'
-        ? b.totalWeight - a.totalWeight
-        : a.totalWeight - b.totalWeight,
-    )
-
-    return sortedData.slice(0, limit)
-  }
-
-  private getTopByTransactions<T extends { transactionCount: number }>(
-    data: T[],
-    mode: 'max' | 'min',
-    limit: number,
-  ): T[] {
-    if (data.length === 0) return []
-
-    // Filtramos aquellos con al menos 1 transacción
-    const filteredData = data.filter(item => item.transactionCount > 0)
-
-    // Lo copiamos y ordenamos
-    const sortedData = [...filteredData].sort((a, b) =>
-      mode === 'max'
-        ? b.transactionCount - a.transactionCount
-        : a.transactionCount - b.transactionCount,
-    )
-
-    return sortedData.slice(0, limit)
   }
 }

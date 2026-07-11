@@ -40,6 +40,7 @@ import {
   withDetailsCreateSchema,
   withDetailsUpdateSchema,
 } from '../detail-schemas'
+import { paginatedSchema } from '../pagination-schema'
 
 // Compras: lectura y mutaciones para Oficina y Admin.
 @requireRoles(Roles.OFFICE, Roles.ADMIN)
@@ -91,25 +92,7 @@ export class PurchaseController {
   @response(200, {
     description: 'Paginated list of Purchase model instances',
     content: {
-      'application/json': {
-        schema: {
-          type: 'object',
-          properties: {
-            count: { type: 'number' },
-            data: {
-              type: 'array',
-              items: getModelSchemaRef(PurchaseWithTotal, {
-                includeRelations: true,
-              }),
-            },
-            page: { type: 'number' },
-            limit: { type: 'number' },
-            totalPages: { type: 'number' },
-            hasNext: { type: 'boolean' },
-            hasPrevious: { type: 'boolean' },
-          },
-        },
-      },
+      'application/json': { schema: paginatedSchema(PurchaseWithTotal) },
     },
   })
   async find(
@@ -319,22 +302,7 @@ export class PurchaseController {
   @response(200, {
     description: 'Array of filtered Purchase model instances with pagination',
     content: {
-      'application/json': {
-        schema: {
-          type: 'object',
-          properties: {
-            count: { type: 'number' },
-            data: {
-              type: 'array',
-              items: getModelSchemaRef(PurchaseWithTotal, {
-                includeRelations: true,
-              }),
-            },
-            page: { type: 'number' },
-            limit: { type: 'number' },
-          },
-        },
-      },
+      'application/json': { schema: paginatedSchema(PurchaseWithTotal) },
     },
   })
   async getFilteredPurchases(

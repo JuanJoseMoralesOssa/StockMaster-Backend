@@ -1,4 +1,4 @@
-import { BindingScope, injectable, service } from '@loopback/core'
+﻿import { BindingScope, injectable, service } from '@loopback/core'
 import { USER_MESSAGES, ValidationError } from '../../errors'
 import {
   DataSourceWithTransactions,
@@ -15,7 +15,7 @@ import { BalanceReconciliationService } from './balance-reconciliation.service'
 import { TransactionDetailsSqlHelper } from './transaction-details-sql.helper'
 import { TransactionKind } from './transaction-kind.enum'
 import { TRANSACTION_CONFIG } from './transaction-type.const'
-import { roundWeightKg } from './weight.utils'
+import { roundWeight } from '../../domain/weight'
 
 @injectable({ scope: BindingScope.TRANSIENT })
 export class DetailMutationService {
@@ -74,7 +74,7 @@ export class DetailMutationService {
       if (updatedDetail.weight_kg <= 0) {
         throw new ValidationError(USER_MESSAGES.WEIGHT_POSITIVE)
       }
-      updatedDetail.weight_kg = roundWeightKg(updatedDetail.weight_kg)
+      updatedDetail.weight_kg = roundWeight(updatedDetail.weight_kg)
     }
 
     return runInTransaction(detailsRepository.dataSource, async options => {

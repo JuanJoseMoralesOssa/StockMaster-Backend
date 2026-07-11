@@ -1,4 +1,4 @@
-import { Entity, hasMany, model, property } from '@loopback/repository'
+﻿import { Entity, hasMany, model, property } from '@loopback/repository'
 import { PaymentDetails } from './payment-details.model'
 import { Payment } from './payment.model'
 import { Kardex } from './kardex.model'
@@ -23,7 +23,7 @@ export class Product extends Entity {
 
   @property({
     type: 'number',
-    // Balance accumulates fractional kg (see roundWeightKg). MUST stay numeric:
+    // Balance accumulates fractional kg (see roundWeight). MUST stay numeric:
     // an integer column rejects decimal balances with PG error 22P02.
     postgresql: {
       dataType: 'numeric',

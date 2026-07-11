@@ -36,15 +36,21 @@ export class FormExtractionService {
     return this.provider.name
   }
 
+  /**
+   * @param clientSignal aborts the vision call when the HTTP client hangs up, so
+   * an abandoned scan stops burning model calls instead of running the fallback
+   * chain to completion for an answer nobody will read (audit Finding H5).
+   */
   async extractForm(
     imageBuffer: Buffer,
     mimeType: string,
     people: Array<{ id: number; name: string }>,
     products: Array<{ id: number; name: string }>,
+    clientSignal?: AbortSignal,
   ): Promise<ExtractionResult> {
     let raw
     try {
-      raw = await this.provider.readForm(imageBuffer, mimeType)
+      raw = await this.provider.readForm(imageBuffer, mimeType, clientSignal)
     } catch (error) {
       throw this.toDomainError(error)
     }
@@ -61,6 +67,19 @@ export class FormExtractionService {
    */
   private toDomainError(error: unknown): DomainError {
     const message = error instanceof Error ? error.message : String(error)
+
+    // An abandoned scan is expected traffic, not a failure: log it as such so it
+    // does not pollute the error signal we use to judge the feature's health.
+    if (
+      error instanceof VisionProviderError &&
+      error.kind === 'client_aborted'
+    ) {
+      console.info('[purchase-extract] extraction cancelled by the client', {
+        message,
+      })
+      return new UnprocessableError(error.message)
+    }
+
     console.error('[purchase-extract] vision provider failed', { message })
 
     if (error instanceof VisionProviderError) {
@@ -70,6 +89,7 @@ export class FormExtractionService {
         case 'rate_limited':
           return new RateLimitedError(error.message)
         case 'unprocessable':
+        case 'client_aborted':
           return new UnprocessableError(error.message)
       }
     }

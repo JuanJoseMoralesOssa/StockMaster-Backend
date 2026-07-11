@@ -1,4 +1,4 @@
-import { belongsTo, Entity, model, property } from '@loopback/repository'
+﻿import { belongsTo, Entity, model, property } from '@loopback/repository'
 import { Payment } from './payment.model'
 import { Person } from './person.model'
 import { Product } from './product.model'
@@ -32,7 +32,7 @@ export class PaymentDetails extends Entity {
     jsonSchema: {
       exclusiveMinimum: 0,
     },
-    // Fractional kg with gram precision (see roundWeightKg). MUST stay numeric:
+    // Fractional kg with gram precision (see roundWeight). MUST stay numeric:
     // an integer column rejects decimal weights with PG error 22P02.
     postgresql: {
       dataType: 'numeric',

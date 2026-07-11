@@ -5,6 +5,7 @@
 // key. Ollama Cloud uses OLLAMA_HOST=https://ollama.com plus OLLAMA_API_KEY.
 
 import { RawExtractionFields } from '../form-extraction.normalizer'
+import { PRODUCT_FIELD_LABELS, PRODUCT_FIELDS } from '../form-spec'
 import {
   EMPTY_TEXT_EXTRACTION_MESSAGE,
   parseExtractionText,
@@ -34,6 +35,15 @@ const OLLAMA_PARSE_MESSAGE =
 const OLLAMA_GENERIC_MESSAGE =
   'No se pudo leer el formulario con el servicio de visión. Intenta de nuevo.'
 
+// The key-value lines Ollama must emit are derived from the shared spec, so a
+// product added to form-spec.ts is asked for here too — the prompt cannot drift
+// from what the text parser knows how to read (audit Finding H3). The printed
+// form labels above stay hand-written: they mirror the physical form's layout,
+// which is not derivable from the field list.
+const PRODUCT_OUTPUT_LINES = PRODUCT_FIELDS.map(
+  field => `${PRODUCT_FIELD_LABELS[field]}: number|null`,
+).join('\n')
+
 const OLLAMA_SYSTEM_PROMPT = `You are a data extraction assistant for a livestock/hide trading business (J.A.A.G).
 You receive photos of handwritten receipt forms with these printed Spanish labels:
 - "Fecha:" -> date
@@ -52,9 +62,7 @@ Rules:
 Return ONLY these plain key-value lines, no JSON, no markdown, no extra text:
 Fecha: value|null
 LibrasTotal: number|null
-Pieles: number|null
-Sebo: number|null
-Hueso: number|null
+${PRODUCT_OUTPUT_LINES}
 RecibiDelSr: value|null`
 
 const OLLAMA_USER_INSTRUCTION =

@@ -11,7 +11,6 @@ import {
   del,
   get,
   getModelSchemaRef,
-  HttpErrors,
   param,
   patch,
   post,
@@ -26,16 +25,18 @@ import {
 } from '../../../config/pagination'
 import { Pagination, User } from '../../../models'
 import { UserRepository } from '../../../repositories'
-import { SecurityService } from '../../../services'
+import { PUBLIC_USER_FIELDS, UserService } from '../../../services'
 
 // Usuarios: lectura Oficina+Admin; escrituras (crear/editar/borrar) solo Admin.
 @requireRoles(Roles.OFFICE, Roles.ADMIN)
 export class UserController {
   constructor(
+    // Read-only surface: every WRITE goes through UserService, which is the one
+    // place that validates the role, rejects a blank password and hashes it.
     @repository(UserRepository)
     public userRepository: UserRepository,
-    @service(SecurityService)
-    public securityService: SecurityService,
+    @service(UserService)
+    public userService: UserService,
   ) {}
 
   @requireRoles(Roles.ADMIN)
@@ -57,20 +58,7 @@ export class UserController {
     })
     user: Omit<User, 'id'>,
   ): Promise<User> {
-    if (user.password) {
-      // Hash the password before saving the user
-      user.password = await this.securityService.hashPassword(user.password)
-    } else if (
-      !user.password ||
-      user.password.trim() === '' ||
-      user.password.length === 0
-    ) {
-      throw new HttpErrors.BadRequest('Password is required')
-    }
-    const createdUser = await this.userRepository.create(user)
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password: _password, ...userWithoutPassword } = createdUser
-    return userWithoutPassword as User
+    return this.userService.create(user)
   }
 
   @get('/users/count')
@@ -102,13 +90,7 @@ export class UserController {
     const pagination = normalizePagination(page, limit)
     const users = await this.userRepository.find({
       ...filter,
-      fields: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        password: false,
-      },
+      fields: { ...PUBLIC_USER_FIELDS },
       skip: pagination.skip,
       limit: pagination.limit,
     })
@@ -161,13 +143,7 @@ export class UserController {
     const [users, count] = await Promise.all([
       this.userRepository.find({
         where,
-        fields: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          password: false,
-        },
+        fields: { ...PUBLIC_USER_FIELDS },
         skip: pagination.skip,
         limit: pagination.limit,
       }),
@@ -199,7 +175,7 @@ export class UserController {
     user: User,
     @param.where(User) where?: Where<User>,
   ): Promise<Count> {
-    return this.userRepository.updateAll(user, where)
+    return this.userService.updateAll(user, where)
   }
 
   @get('/users/{id}')
@@ -243,17 +219,7 @@ export class UserController {
     })
     user: Partial<User>,
   ): Promise<User> {
-    if (user.password) {
-      // Hash the password before updating the user
-      user.password = await this.securityService.hashPassword(user.password)
-    }
-    await this.userRepository.updateById(id, user)
-    return this.userRepository.findById(id, {
-      include: [],
-      fields: {
-        password: false,
-      },
-    })
+    return this.userService.updateById(id, user)
   }
 
   @requireRoles(Roles.ADMIN)
@@ -280,17 +246,7 @@ export class UserController {
     })
     user: Omit<User, 'id'>,
   ): Promise<User> {
-    if (user.password) {
-      // Hash the password before saving the user
-      user.password = await this.securityService.hashPassword(user.password)
-    }
-    await this.userRepository.replaceById(id, user)
-    return this.userRepository.findById(id, {
-      include: [],
-      fields: {
-        password: false,
-      },
-    })
+    return this.userService.replaceById(id, user)
   }
 
   @requireRoles(Roles.ADMIN)

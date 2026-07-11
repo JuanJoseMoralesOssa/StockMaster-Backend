@@ -1,4 +1,4 @@
-import { Entity, model, property, belongsTo } from '@loopback/repository'
+﻿import { Entity, model, property, belongsTo } from '@loopback/repository'
 import { Product } from './product.model'
 
 export enum KardexOperation {
@@ -36,7 +36,7 @@ export class Kardex extends Entity {
   })
   date: string
 
-  // input/output/balance track fractional kg movements (see roundWeightKg).
+  // input/output/balance track fractional kg movements (see roundWeight).
   // MUST stay numeric: an integer column rejects decimal weights with PG 22P02.
   @property({
     type: 'number',

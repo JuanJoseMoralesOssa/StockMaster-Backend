@@ -28,18 +28,34 @@ const ROLE_RANK: Record<Role, number> = {
   [Roles.OPERATOR]: 1,
 }
 
+const ROLE_VALUES: readonly string[] = Object.values(Roles)
+
+/**
+ * Narrows an arbitrary string (a JWT claim, a request body field) to a canonical
+ * role. This is the boundary where a role stops being a bare `string` and starts
+ * being a domain value: everything downstream — the interceptor's rank check,
+ * the user write path — goes through it, so an unknown or misspelled role is
+ * rejected AT THE EDGE instead of being stored and silently satisfying nothing.
+ *
+ * Membership is tested against the role VALUES, not `in ROLE_RANK`: an `in`
+ * check also walks the prototype chain, so `'constructor'` and `'toString'`
+ * would report as known roles.
+ */
+export function isRole(value: unknown): value is Role {
+  return typeof value === 'string' && ROLE_VALUES.includes(value)
+}
+
 /**
  * True when `userRole` meets at least one of `requiredRoles` directly or by
- * outranking it. An unknown user role never satisfies anything.
+ * outranking it. An unknown role — on either side — never satisfies anything.
  */
 export function roleSatisfies(
   userRole: string,
   requiredRoles: string[],
 ): boolean {
-  const userRank = ROLE_RANK[userRole as Role]
-  if (userRank == null) return false
-  return requiredRoles.some(required => {
-    const requiredRank = ROLE_RANK[required as Role]
-    return requiredRank != null && userRank >= requiredRank
-  })
+  if (!isRole(userRole)) return false
+  const userRank = ROLE_RANK[userRole]
+  return requiredRoles.some(
+    required => isRole(required) && userRank >= ROLE_RANK[required],
+  )
 }

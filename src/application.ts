@@ -30,7 +30,6 @@ import {
   TransactionQueryService,
   TransactionWithDetailsService,
 } from './modules/transactions'
-import { TransactionDetailsSqlHelper } from './modules/transactions/transaction-details-sql.helper'
 
 export { ApplicationConfig }
 
@@ -147,7 +146,6 @@ export class App extends BootMixin(
     this.service(DetailReconciliationService)
     this.service(PaymentTransactionService)
     this.service(PurchaseTransactionService)
-    this.service(TransactionDetailsSqlHelper)
     this.service(TransactionQueryService)
     this.service(TransactionWithDetailsService)
 

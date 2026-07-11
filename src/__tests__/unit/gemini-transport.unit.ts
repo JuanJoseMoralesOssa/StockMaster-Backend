@@ -1,5 +1,12 @@
 import { expect } from '@loopback/testlab'
-import { sanitizeRawExtraction } from '../../modules/form-extraction/gemini/gemini-transport'
+import {
+  ClientAbortedError,
+  consumedRemoteQuota,
+  GeminiCallError,
+  readGeminiUsage,
+  RetryableGeminiError,
+  sanitizeRawExtraction,
+} from '../../modules/form-extraction/gemini/gemini-transport'
 
 // Post-parse hardening (plan de validación §9, casos B14/B17): a degraded
 // model can slip mistyped values past the responseSchema; the sanitizer must
@@ -117,5 +124,77 @@ describe('sanitizeRawExtraction', () => {
     expect(() => sanitizeRawExtraction('texto')).to.throw(
       /invalid extraction JSON/,
     )
+  })
+})
+
+// The provider's official token accounting (audit Finding H3). Every other
+// token number in this codebase is a local estimate; only this one is billable
+// truth, so it must survive the parse — and must not invent a zero when absent.
+describe('readGeminiUsage', () => {
+  it("reads the provider's official token counts", () => {
+    const usage = readGeminiUsage({
+      usageMetadata: {
+        promptTokenCount: 1284,
+        candidatesTokenCount: 96,
+        thoughtsTokenCount: 320,
+        totalTokenCount: 1700,
+      },
+    })
+
+    expect(usage).to.deepEqual({
+      promptTokens: 1284,
+      outputTokens: 96,
+      thoughtsTokens: 320,
+      totalTokens: 1700,
+    })
+  })
+
+  it('reports null (not zero) when a model omits or garbles the usage block', () => {
+    expect(readGeminiUsage({})).to.deepEqual({
+      promptTokens: null,
+      outputTokens: null,
+      thoughtsTokens: null,
+      totalTokens: null,
+    })
+
+    const garbled = readGeminiUsage({
+      usageMetadata: {
+        promptTokenCount: -1,
+        candidatesTokenCount: undefined,
+        totalTokenCount: Number.NaN,
+      },
+    })
+    expect(garbled.promptTokens).to.be.null()
+    expect(garbled.outputTokens).to.be.null()
+    expect(garbled.totalTokens).to.be.null()
+  })
+})
+
+// Refunding local quota for a call Gemini already counted makes the guard
+// over-permit and pushes the 429s onto the remote API (audit Finding H6).
+describe('consumedRemoteQuota', () => {
+  it('is true for failures whose request reached Gemini', () => {
+    expect(
+      consumedRemoteQuota(
+        new RetryableGeminiError('timed out', 'timeout', true),
+      ),
+    ).to.be.true()
+    expect(
+      consumedRemoteQuota(new GeminiCallError('bad answer', true)),
+    ).to.be.true()
+    expect(
+      consumedRemoteQuota(new ClientAbortedError('gemini-3.5-flash')),
+    ).to.be.true()
+  })
+
+  it('is false for failures that never left the process', () => {
+    // Local quota guard / total-deadline rejections: nothing was sent.
+    expect(
+      consumedRemoteQuota(new RetryableGeminiError('local RPM')),
+    ).to.be.false()
+    expect(
+      consumedRemoteQuota(new GeminiCallError('GEMINI_API_KEY missing', false)),
+    ).to.be.false()
+    expect(consumedRemoteQuota(new Error('something else'))).to.be.false()
   })
 })

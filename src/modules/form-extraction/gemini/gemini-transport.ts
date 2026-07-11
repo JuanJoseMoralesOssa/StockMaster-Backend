@@ -117,26 +117,122 @@ interface GeminiGenerateContentResponse {
       }>
     }
   }>
+  usageMetadata?: {
+    promptTokenCount?: number
+    candidatesTokenCount?: number
+    thoughtsTokenCount?: number
+    totalTokenCount?: number
+  }
   error?: {
     message?: string
+  }
+}
+
+/**
+ * Gemini's OFFICIAL token accounting for one call, as reported in
+ * `usageMetadata`. This is the only trustworthy cost figure: everything else in
+ * this module (see {@link estimateGeminiRequestTokens}) is a local estimate used
+ * to pre-screen quota, and the two are NOT interchangeable. Fields are nullable
+ * because a degraded/older model may omit the block entirely.
+ */
+export interface GeminiUsage {
+  promptTokens: number | null
+  /** Billed output tokens (the JSON answer). */
+  outputTokens: number | null
+  /** Thinking tokens — billed as output, and invisible in the answer itself. */
+  thoughtsTokens: number | null
+  totalTokens: number | null
+}
+
+/** One successful model call: the extracted fields plus what it actually cost. */
+export interface GeminiModelResult {
+  fields: RawExtractionFields
+  usage: GeminiUsage
+}
+
+function tokenCount(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? value
+    : null
+}
+
+/** Reads the provider's official usage block; absent/garbled counts stay null. */
+export function readGeminiUsage(
+  response: GeminiGenerateContentResponse,
+): GeminiUsage {
+  const usage = response.usageMetadata
+  return {
+    promptTokens: tokenCount(usage?.promptTokenCount),
+    outputTokens: tokenCount(usage?.candidatesTokenCount),
+    thoughtsTokens: tokenCount(usage?.thoughtsTokenCount),
+    totalTokens: tokenCount(usage?.totalTokenCount),
   }
 }
 
 export type GeminiRetryKind = 'timeout' | 'rate_limited'
 
 /**
+ * Whether a failed attempt actually reached Gemini — i.e. whether it burned
+ * REMOTE quota. A request that died before dispatch (missing API key, local
+ * quota guard) costs nothing and may be refunded to the local counters; one that
+ * was dispatched costs a request against Gemini's RPM/RPD even if we aborted
+ * before reading the answer, so refunding it would make the local guard
+ * over-permit and invite 429s (audit Finding H6).
+ */
+export function consumedRemoteQuota(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error as Partial<{ dispatched: boolean }>).dispatched === true
+  )
+}
+
+/**
  * Thrown when a model call fails in a way the fallback chain should retry.
  * `retryKind` preserves WHY it is retryable (a deadline vs. an upstream
  * rate-limit) as a TYPE, so the provider can map it to the right domain error
- * without re-parsing the human-readable message.
+ * without re-parsing the human-readable message. `dispatched` says whether the
+ * request reached Gemini; it defaults to false because the provider raises this
+ * error for purely local rejections (quota guard, deadline) that never leave the
+ * process — the transport sets it explicitly when a real request was sent.
  */
 export class RetryableGeminiError extends Error {
   constructor(
     message: string,
     readonly retryKind: GeminiRetryKind = 'rate_limited',
+    readonly dispatched: boolean = false,
   ) {
     super(message)
     this.name = 'RetryableGeminiError'
+  }
+}
+
+/**
+ * A non-retryable failure of one model call (bad request, unparseable answer,
+ * missing API key). Carries `dispatched` for the same quota-accounting reason as
+ * {@link RetryableGeminiError}; the message is preserved verbatim so the
+ * provider's classification keeps working.
+ */
+export class GeminiCallError extends Error {
+  constructor(
+    message: string,
+    readonly dispatched: boolean,
+  ) {
+    super(message)
+    this.name = 'GeminiCallError'
+  }
+}
+
+/**
+ * The HTTP client hung up (the user left the scan screen, or its own deadline
+ * fired) while a model call was in flight. The chain must stop immediately:
+ * every further model would be billed for an answer nobody will read.
+ */
+export class ClientAbortedError extends Error {
+  readonly dispatched = true
+
+  constructor(model: string) {
+    super(`El cliente canceló la extracción durante la llamada a ${model}`)
+    this.name = 'ClientAbortedError'
   }
 }
 
@@ -183,7 +279,12 @@ function buildGenerationConfig(
   return config
 }
 
-/** Rough request-token estimate for the local quota guard. */
+/**
+ * PRE-FLIGHT estimate, used only to decide whether a call is worth attempting
+ * against the local TPM guard. It is NOT a cost figure: once the call returns,
+ * `usageMetadata` carries the provider's official count and the quota tracker
+ * trues the reservation up (see GeminiQuotaTracker.settle).
+ */
 export function estimateGeminiRequestTokens(mediaResolution: string): number {
   const visualTokens =
     {
@@ -308,22 +409,38 @@ function parseGeminiResponse(
 
 /** Performs one generateContent call against a single Gemini model. */
 export class GeminiTransport {
+  /**
+   * @param clientSignal aborts the call when the HTTP client that asked for the
+   * extraction hangs up. Distinguishing it from our own `timeoutMs` deadline
+   * matters: a deadline means "try the next model", a client hang-up means
+   * "stop — nobody is waiting for the answer".
+   */
   async requestModel(
     model: string,
     imageBuffer: Buffer,
     mimeType: string,
     mediaResolution: string,
     timeoutMs: number,
-  ): Promise<RawExtractionFields> {
+    clientSignal?: AbortSignal,
+  ): Promise<GeminiModelResult> {
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey)
-      throw new Error('GEMINI_API_KEY environment variable is not set')
+      throw new GeminiCallError(
+        'GEMINI_API_KEY environment variable is not set',
+        false,
+      )
+
+    if (clientSignal?.aborted) throw new ClientAbortedError(model)
 
     const url = new URL(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     )
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
+    // Forwarding beats AbortSignal.any() here: it keeps the two abort causes
+    // distinguishable (the flag below) and works on every supported Node.
+    const forwardClientAbort = () => controller.abort()
+    clientSignal?.addEventListener('abort', forwardClientAbort, { once: true })
 
     let response: Response
     try {
@@ -359,14 +476,25 @@ export class GeminiTransport {
       })
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
+        // The request DID leave the process, so Gemini has already counted it
+        // against the remote quota — both errors below are `dispatched`.
+        if (clientSignal?.aborted) throw new ClientAbortedError(model)
         throw new RetryableGeminiError(
           `Gemini extraction timed out with ${model} after ${timeoutMs}ms`,
           'timeout',
+          true,
         )
       }
-      throw error
+      // A connection-level failure (DNS, TLS, socket): the call never landed.
+      throw new GeminiCallError(
+        `Gemini extraction failed with ${model}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        false,
+      )
     } finally {
       clearTimeout(timeout)
+      clientSignal?.removeEventListener('abort', forwardClientAbort)
     }
 
     const responseText = await response.text()
@@ -378,11 +506,24 @@ export class GeminiTransport {
         throw new RetryableGeminiError(
           formattedMessage,
           geminiRetryKind(response.status, message),
+          true,
         )
       }
-      throw new Error(formattedMessage)
+      throw new GeminiCallError(formattedMessage, true)
     }
 
-    return parseExtractionJson(extractJsonText(payload))
+    // A malformed answer still consumed the call: keep `dispatched` true so the
+    // local quota guard does not hand the budget back.
+    try {
+      return {
+        fields: parseExtractionJson(extractJsonText(payload)),
+        usage: readGeminiUsage(payload),
+      }
+    } catch (error) {
+      throw new GeminiCallError(
+        error instanceof Error ? error.message : String(error),
+        true,
+      )
+    }
   }
 }

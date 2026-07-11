@@ -48,11 +48,6 @@ describe('SecurityService (unit)', () => {
       expect(payload.role).to.equal('admin')
     })
 
-    it('expone el rol vía getRoleFromToken', () => {
-      const token = service.generateToken(sampleUser)
-      expect(service.getRoleFromToken(token)).to.equal('admin')
-    })
-
     it('lanza Unauthorized con un token inválido', () => {
       expect(() => service.verifyToken('no-es-un-jwt')).to.throw(
         HttpErrors.Unauthorized,

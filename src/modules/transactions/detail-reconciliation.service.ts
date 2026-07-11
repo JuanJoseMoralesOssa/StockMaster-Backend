@@ -1,9 +1,9 @@
-import { BindingScope, injectable, service } from '@loopback/core'
+﻿import { BindingScope, injectable, service } from '@loopback/core'
 import { computeDetailsDiff, DetailDiff } from './transaction-diff.utils'
 import { DetailBase, TransactionOptions, TxScope } from './transaction.types'
 import { BalanceReconciliationService } from './balance-reconciliation.service'
 import { TransactionDetailsSqlHelper } from './transaction-details-sql.helper'
-import { roundWeightKg } from './weight.utils'
+import { roundWeight } from '../../domain/weight'
 
 type RelationsAccessor<D extends DetailBase> = {
   create(data: Partial<D>, options?: TransactionOptions): Promise<D>
@@ -81,7 +81,7 @@ export class DetailReconciliationService {
       scope.transactionKind,
     )
     for (const { old, new: det } of toUpdate) {
-      const newWeight = roundWeightKg(det.weight_kg)
+      const newWeight = roundWeight(det.weight_kg)
 
       await this.balanceReconciliationService.applyDetailBalanceDelta(
         scope,
@@ -127,7 +127,7 @@ export class DetailReconciliationService {
     parentId: number,
     relationsAccessor: RelationsAccessor<D>,
   ): Promise<D> {
-    const weightKg = roundWeightKg(detail.weight_kg!)
+    const weightKg = roundWeight(detail.weight_kg!)
     const kardexId = await this.balanceReconciliationService.adjustBalance(
       scope,
       detail.productId!,

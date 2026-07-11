@@ -2,26 +2,46 @@ import {
   normalizeForMatch,
   RawExtractionFields,
 } from './form-extraction.normalizer'
+import { PRODUCT_FIELDS, ProductField } from './form-spec'
 
 export const EMPTY_TEXT_EXTRACTION_MESSAGE =
   'No recognized extraction fields in OCR text'
 
+// The product lines come from the shared spec, and the two maps below are keyed
+// by ProductField, so adding a product to form-spec.ts fails to COMPILE until
+// this parser can recognise its key. Before, the parser held a private copy of
+// the list: a new product type-checked fine and left every text-based provider
+// (Ollama, OCR Space) silently blind to that line (audit Finding H3).
 const KEY_VALUE_FIELDS = [
   'fecha',
   'librasTotal',
-  'pieles',
-  'sebo',
-  'hueso',
   'recibiDelSr',
+  ...PRODUCT_FIELDS,
 ] as const
 type KeyValueField = (typeof KEY_VALUE_FIELDS)[number]
+
+/**
+ * How a product line can be KEYED in OCR text. Distinct from the spec's
+ * PRODUCT_ALIASES (which match a product against the DB catalogue): these are
+ * the labels a model or an OCR engine prints before the value, so they carry the
+ * form's own wording ("libra de sebo") rather than catalogue synonyms.
+ */
+const PRODUCT_KEY_ALIASES: Record<ProductField, string[]> = {
+  pieles: ['pieles', 'skins', 'hides'],
+  sebo: ['sebo', 'cebo', 'libra de sebo', 'libra de cebo', 'tallow'],
+  hueso: ['hueso', 'bone'],
+}
+
+/** Label patterns for the loose path, where OCR lost the ":" separators. */
+const PRODUCT_LOOSE_PATTERNS: Record<ProductField, RegExp> = {
+  pieles: /pieles/i,
+  sebo: /(?:libra\s+de\s+)?[sc]ebo/i,
+  hueso: /hueso/i,
+}
 
 const FIELD_KEY_ALIASES: Record<KeyValueField, string[]> = {
   fecha: ['fecha', 'date'],
   librasTotal: ['librastotal', 'libras', 'total libras', 'total pounds'],
-  pieles: ['pieles', 'skins', 'hides'],
-  sebo: ['sebo', 'cebo', 'libra de sebo', 'libra de cebo', 'tallow'],
-  hueso: ['hueso', 'bone'],
   recibiDelSr: [
     'recibidelsr',
     'recibidel sr',
@@ -32,15 +52,18 @@ const FIELD_KEY_ALIASES: Record<KeyValueField, string[]> = {
     'supplier',
     'nombre',
   ],
+  ...PRODUCT_KEY_ALIASES,
 }
 
+// Order is irrelevant here: labelHits() sorts by position in the text.
 const LOOSE_LABELS: Array<{ field: KeyValueField; pattern: RegExp }> = [
   { field: 'fecha', pattern: /fecha/i },
   { field: 'librasTotal', pattern: /libras(?:\s+total)?/i },
-  { field: 'pieles', pattern: /pieles/i },
   { field: 'recibiDelSr', pattern: /recib[ií]\s+del\s+sr\.?/i },
-  { field: 'sebo', pattern: /(?:libra\s+de\s+)?[sc]ebo/i },
-  { field: 'hueso', pattern: /hueso/i },
+  ...PRODUCT_FIELDS.map(field => ({
+    field,
+    pattern: PRODUCT_LOOSE_PATTERNS[field],
+  })),
 ]
 
 function isNullishText(value: string): boolean {
@@ -76,20 +99,23 @@ function fieldForKey(rawKey: string): KeyValueField | undefined {
 }
 
 function emptyExtraction(): RawExtractionFields {
+  const productValues = Object.fromEntries(
+    PRODUCT_FIELDS.map(field => [field, null]),
+  ) as Record<ProductField, number | null>
+  const productConfidences = Object.fromEntries(
+    PRODUCT_FIELDS.map(field => [field, 0]),
+  ) as Record<ProductField, number>
+
   return {
     fecha: null,
     librasTotal: null,
-    pieles: null,
-    sebo: null,
-    hueso: null,
     recibiDelSr: null,
+    ...productValues,
     fieldConfidences: {
       fecha: 0,
       librasTotal: 0,
-      pieles: 0,
-      sebo: 0,
-      hueso: 0,
       recibiDelSr: 0,
+      ...productConfidences,
     },
   }
 }

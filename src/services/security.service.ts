@@ -93,8 +93,4 @@ export class SecurityService {
       throw new HttpErrors.Unauthorized('Invalid token')
     }
   }
-
-  getRoleFromToken(token: string): string {
-    return this.verifyToken(token).role
-  }
 }

@@ -1,4 +1,4 @@
-require('dotenv').config()
+﻿require('dotenv').config()
 
 import { App } from './application'
 import { DB_CONSTRAINTS } from './errors'
@@ -130,7 +130,7 @@ END $$;
 /**
  * Widens the inventory quantity columns from the legacy `integer` type to
  * `numeric(14,3)` so fractional kilogram weights can be stored. The domain works
- * in kg with gram precision (see `roundWeightKg`), but the original stock/weight
+ * in kg with gram precision (see `roundWeight`), but the original stock/weight
  * schema typed these columns as integer. The rename (stock→balance) preserved
  * the integer type, so any real weighed value like 107.999 made PostgreSQL
  * reject the write with `invalid input syntax for type integer` (error 22P02)

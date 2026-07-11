@@ -85,11 +85,38 @@ export class GeminiQuotaTracker {
   }
 
   /**
-   * Refunds a reservation whose model call never actually consumed remote
-   * quota (a local timeout/abort or a transient 5xx before the request landed).
-   * Without this, a run of failing attempts permanently burns the durable daily
+   * Replaces a token RESERVATION with the provider's official `usageMetadata`
+   * count once the call returns. The reservation is a coarse guess (see
+   * estimateGeminiRequestTokens); leaving it in place would drift the local TPM
+   * window away from what Gemini actually billed, in either direction. Requests
+   * (RPM/RPD) are not touched — one call is one call, whatever it cost.
+   * A model that reports no usage keeps its estimate: a guess beats a zero.
+   */
+  settle(
+    model: string,
+    estimatedTokens: number,
+    actualTokens: number | null,
+    now: number = Date.now(),
+  ): void {
+    if (actualTokens === null) return
+    const window = this.windowFor(model, now)
+    window.minuteTokens = Math.max(
+      0,
+      window.minuteTokens - estimatedTokens + actualTokens,
+    )
+  }
+
+  /**
+   * Refunds a reservation whose model call never actually reached Gemini — a
+   * local quota rejection, a missing API key, a connection that never landed.
+   * Without this, a run of such failures permanently burns the durable daily
    * request counter (`rpd`, as low as 20) and the local guard locks the feature
    * out for the rest of the day while the real Gemini quota is untouched.
+   *
+   * The caller MUST NOT refund a dispatched attempt (see `consumedRemoteQuota`):
+   * a request that Gemini received counts against RPM/RPD even if we aborted
+   * before reading the answer, and refunding it would make this guard
+   * over-permit and push the real 429s onto the remote API (audit Finding H6).
    * Clamped at 0 so a double-release can never push a counter negative.
    */
   release(

@@ -7,6 +7,26 @@ import {
   VisionProviderError,
 } from '../../modules/form-extraction/form-extraction.provider'
 import { RawExtractionFields } from '../../modules/form-extraction/form-extraction.normalizer'
+import { GeminiQuotaTracker } from '../../modules/form-extraction/gemini/gemini-quota-tracker'
+import { GeminiTransport } from '../../modules/form-extraction/gemini/gemini-transport'
+
+/** A well-formed answer with every field blank — enough to satisfy the parser. */
+const EMPTY_FIELDS = {
+  fecha: null,
+  librasTotal: null,
+  pieles: null,
+  sebo: null,
+  hueso: null,
+  recibiDelSr: null,
+  fieldConfidences: {
+    fecha: 0,
+    librasTotal: 0,
+    pieles: 0,
+    sebo: 0,
+    hueso: 0,
+    recibiDelSr: 0,
+  },
+}
 
 describe('GeminiFormVisionProvider', () => {
   const originalFetch = globalThis.fetch
@@ -427,5 +447,188 @@ describe('FallbackFormVisionProvider', () => {
     if (originalChain === undefined)
       delete process.env.FORM_VISION_PROVIDER_CHAIN
     else process.env.FORM_VISION_PROVIDER_CHAIN = originalChain
+  })
+})
+
+// Cost accounting of the fallback chain (audit Findings H3/H5/H6). These assert
+// the chain's OBSERVABLE spending: how much local quota is left afterwards, and
+// how many model calls were actually billed — not which methods were called.
+describe('GeminiFormVisionProvider quota accounting', () => {
+  const MODEL = 'gemini-3.5-flash' // rpm 5
+  const HIGH_RES_ESTIMATE = 2620 // 1120 visual + 1500 reserve, at MEDIA_RESOLUTION_HIGH
+
+  const originalFetch = globalThis.fetch
+  const originalApiKey = process.env.GEMINI_API_KEY
+  const originalModel = process.env.GEMINI_VISION_MODEL
+  const originalFallbackModels = process.env.GEMINI_VISION_FALLBACK_MODELS
+
+  /**
+   * How many requests the model has left this minute. Spends them to find out,
+   * so call it once per test, at the end.
+   */
+  function remainingRequests(
+    tracker: GeminiQuotaTracker,
+    model: string,
+  ): number {
+    let free = 0
+    while (free < 10 && tracker.reserve(model, 1).ok) free += 1
+    return free
+  }
+
+  beforeEach(() => {
+    process.env.GEMINI_API_KEY = 'test-key'
+    process.env.GEMINI_VISION_MODEL = MODEL
+    process.env.GEMINI_VISION_FALLBACK_MODELS = ''
+  })
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+    process.env.GEMINI_API_KEY = originalApiKey
+    if (originalModel === undefined) delete process.env.GEMINI_VISION_MODEL
+    else process.env.GEMINI_VISION_MODEL = originalModel
+    if (originalFallbackModels === undefined)
+      delete process.env.GEMINI_VISION_FALLBACK_MODELS
+    else process.env.GEMINI_VISION_FALLBACK_MODELS = originalFallbackModels
+  })
+
+  it('keeps a timed-out attempt on the books: Gemini already counted it', async () => {
+    globalThis.fetch = (async () => {
+      const abort = new Error('The operation was aborted')
+      abort.name = 'AbortError'
+      throw abort
+    }) as typeof fetch
+
+    const quota = new GeminiQuotaTracker()
+    await expect(
+      new GeminiFormVisionProvider(new GeminiTransport(), quota).readForm(
+        Buffer.from('image'),
+        'image/jpeg',
+      ),
+    ).to.be.rejectedWith(VisionProviderError)
+
+    // 5 RPM minus the one request that DID reach Gemini before we hung up.
+    // Refunding it here is what used to make the guard over-permit and push the
+    // real 429s onto the remote API.
+    expect(remainingRequests(quota, MODEL)).to.equal(4)
+  })
+
+  it('refunds an attempt that never left the process', async () => {
+    delete process.env.GEMINI_API_KEY
+    let fetchCalls = 0
+    globalThis.fetch = (async () => {
+      fetchCalls += 1
+      return new Response('{}', { status: 200 })
+    }) as typeof fetch
+
+    const quota = new GeminiQuotaTracker()
+    await expect(
+      new GeminiFormVisionProvider(new GeminiTransport(), quota).readForm(
+        Buffer.from('image'),
+        'image/jpeg',
+      ),
+    ).to.be.rejectedWith(VisionProviderError)
+
+    expect(fetchCalls).to.equal(0)
+    // Nothing was sent, so nothing was spent: the whole minute is still there.
+    expect(remainingRequests(quota, MODEL)).to.equal(5)
+  })
+
+  it('charges the token window what Gemini billed, not what we guessed', async () => {
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          candidates: [
+            { content: { parts: [{ text: JSON.stringify(EMPTY_FIELDS) }] } },
+          ],
+          // Far above the pre-flight estimate: a thinking-heavy call.
+          usageMetadata: { promptTokenCount: 1200, totalTokenCount: 249_000 },
+        }),
+        { status: 200 },
+      )) as typeof fetch
+
+    const quota = new GeminiQuotaTracker()
+    await new GeminiFormVisionProvider(new GeminiTransport(), quota).readForm(
+      Buffer.from('image'),
+      'image/jpeg',
+    )
+
+    // The 250K TPM budget is now genuinely spent. Had the estimate stayed on the
+    // books, the guard would happily wave through another call.
+    const next = quota.reserve(MODEL, HIGH_RES_ESTIMATE)
+    expect(next.ok).to.be.false()
+    if (!next.ok) expect(next.reason).to.match(/TPM/)
+  })
+})
+
+describe('GeminiFormVisionProvider client cancellation', () => {
+  const originalFetch = globalThis.fetch
+  const originalApiKey = process.env.GEMINI_API_KEY
+  const originalModel = process.env.GEMINI_VISION_MODEL
+  const originalFallbackModels = process.env.GEMINI_VISION_FALLBACK_MODELS
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+    process.env.GEMINI_API_KEY = originalApiKey
+    if (originalModel === undefined) delete process.env.GEMINI_VISION_MODEL
+    else process.env.GEMINI_VISION_MODEL = originalModel
+    if (originalFallbackModels === undefined)
+      delete process.env.GEMINI_VISION_FALLBACK_MODELS
+    else process.env.GEMINI_VISION_FALLBACK_MODELS = originalFallbackModels
+  })
+
+  it('stops the chain when the client hangs up mid-call', async () => {
+    process.env.GEMINI_API_KEY = 'test-key'
+    process.env.GEMINI_VISION_MODEL = 'gemini-3.5-flash'
+    process.env.GEMINI_VISION_FALLBACK_MODELS =
+      'gemini-3.1-flash-lite,gemini-2.5-flash'
+
+    const clientGone = new AbortController()
+    let fetchCalls = 0
+    globalThis.fetch = (async () => {
+      fetchCalls += 1
+      // The browser gave up while this call was in flight.
+      clientGone.abort()
+      const abort = new Error('The operation was aborted')
+      abort.name = 'AbortError'
+      throw abort
+    }) as typeof fetch
+
+    const error = await new GeminiFormVisionProvider()
+      .readForm(Buffer.from('image'), 'image/jpeg', clientGone.signal)
+      .then(
+        () => undefined,
+        (thrown: unknown) => thrown,
+      )
+
+    // Two more models were configured. Trying them would bill Gemini for an
+    // answer nobody is left to read.
+    expect(fetchCalls).to.equal(1)
+    expect(error).to.be.instanceOf(VisionProviderError)
+    expect((error as VisionProviderError).kind).to.equal('client_aborted')
+  })
+
+  it('does not call the model at all when the client is already gone', async () => {
+    process.env.GEMINI_API_KEY = 'test-key'
+    process.env.GEMINI_VISION_MODEL = 'gemini-3.5-flash'
+    process.env.GEMINI_VISION_FALLBACK_MODELS = ''
+
+    let fetchCalls = 0
+    globalThis.fetch = (async () => {
+      fetchCalls += 1
+      return new Response('{}', { status: 200 })
+    }) as typeof fetch
+
+    const clientGone = new AbortController()
+    clientGone.abort()
+
+    await expect(
+      new GeminiFormVisionProvider().readForm(
+        Buffer.from('image'),
+        'image/jpeg',
+        clientGone.signal,
+      ),
+    ).to.be.rejectedWith(VisionProviderError)
+
+    expect(fetchCalls).to.equal(0)
   })
 })

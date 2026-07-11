@@ -159,6 +159,15 @@ export class PurchaseExtractController {
       },
     })
 
+    // The vision chain can bill several model calls per scan. If the client goes
+    // away mid-scan (its own timeout fired, the user left the screen), every
+    // further call is paid for an answer that will never be read — so hang the
+    // whole chain off the connection's lifetime (audit Finding H5).
+    const clientGone = new AbortController()
+    res.on('close', () => {
+      if (!res.writableEnded) clientGone.abort()
+    })
+
     const [people, products] = await Promise.all([
       this.personRepository.find({ fields: { id: true, name: true } }),
       this.productRepository.find({ fields: { id: true, name: true } }),
@@ -169,6 +178,7 @@ export class PurchaseExtractController {
       file.mimetype,
       people.map(p => ({ id: p.id!, name: p.name })),
       products.map(p => ({ id: p.id!, name: p.name })),
+      clientGone.signal,
     )
 
     console.info('[purchase-extract] extraction result', {

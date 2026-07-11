@@ -9,5 +9,7 @@ export * from '../modules/transactions'
 export * from './security.service'
 export * from './analytics.service'
 export * from './product.service'
+export * from './user.service'
+export * from './kardex-query.service'
 // Pure utils that controllers consume directly (date filters).
 export * from './date-validation.utils'
