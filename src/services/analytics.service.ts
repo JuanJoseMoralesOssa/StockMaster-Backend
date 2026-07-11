@@ -6,7 +6,6 @@ import {
   AnalyticsSummary,
   DashboardSummaryResponse,
   InventorySummaryResponse,
-  LowBalanceProduct,
   PendingByProduct,
   PendingBySupplier,
   PendingTrendInterval,
@@ -36,6 +35,7 @@ import {
   accumulateEntity,
   EntityAggregate,
   RelatedEntity,
+  summarizeInventory,
   topByTransactionCount,
   topByWeight,
 } from './analytics.utils'
@@ -85,7 +85,7 @@ export class AnalyticsService {
     startDate: string,
     endDate: string,
     type: TransactionTypeFilter = 'both',
-    limit: number = 10,
+    limit?: number,
   ): Promise<DashboardSummaryResponse> {
     validateDateRange(startDate, endDate)
     const normalizedLimit = normalizeLimit(limit)
@@ -138,48 +138,11 @@ export class AnalyticsService {
   async getInventorySummary(
     lowBalanceThreshold: number = DEFAULT_LOW_BALANCE_THRESHOLD,
   ): Promise<InventorySummaryResponse> {
-    const threshold =
-      Number.isFinite(lowBalanceThreshold) && lowBalanceThreshold > 0
-        ? lowBalanceThreshold
-        : 0
-
     const products = await this.productRepository.find({
       fields: ['id', 'name', 'balance'],
     })
 
-    let totalBalance = 0
-    let inBalanceCount = 0
-    let outOfBalanceCount = 0
-    const lowBalanceProducts: LowBalanceProduct[] = []
-
-    for (const product of products) {
-      const balance = product.balance ?? 0
-      totalBalance += balance
-      if (balance > 0) {
-        inBalanceCount += 1
-        if (threshold > 0 && balance <= threshold) {
-          lowBalanceProducts.push({
-            productId: product.id ?? 0,
-            productName: product.name,
-            balance,
-          })
-        }
-      } else {
-        outOfBalanceCount += 1
-      }
-    }
-
-    lowBalanceProducts.sort((a, b) => a.balance - b.balance)
-
-    return {
-      totalBalance,
-      productCount: products.length,
-      inBalanceCount,
-      outOfBalanceCount,
-      lowBalanceCount: lowBalanceProducts.length,
-      lowBalanceThreshold: threshold,
-      lowBalanceProducts,
-    }
+    return summarizeInventory(products, lowBalanceThreshold)
   }
 
   // --- Pendiente: insights de flujo. La validación de entrada vive aquí; el
@@ -198,13 +161,13 @@ export class AnalyticsService {
     )
   }
 
-  async getPendingBySupplier(limit: number = 10): Promise<PendingBySupplier[]> {
+  async getPendingBySupplier(limit?: number): Promise<PendingBySupplier[]> {
     return this.pendingAnalyticsRepository.findPendingBySupplier(
       normalizeLimit(limit),
     )
   }
 
-  async getPendingByProduct(limit: number = 10): Promise<PendingByProduct[]> {
+  async getPendingByProduct(limit?: number): Promise<PendingByProduct[]> {
     return this.pendingAnalyticsRepository.findPendingByProduct(
       normalizeLimit(limit),
     )

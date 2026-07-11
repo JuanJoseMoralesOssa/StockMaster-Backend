@@ -1,7 +1,6 @@
 import { service } from '@loopback/core'
 import { get, param, response } from '@loopback/rest'
 import { Roles, requireRoles } from '../../../auth'
-import { normalizeLimit, paginationConfig } from '../../../config/pagination'
 import {
   DashboardSummaryResponse,
   InventorySummaryResponse,
@@ -134,13 +133,16 @@ export class GeneralReportsController {
     @param.query.string('endDate') endDate: string,
     @param.query.string('type')
     type: TransactionTypeFilter = 'both',
-    @param.query.number('limit') limit: number = paginationConfig.DEFAULT_LIMIT,
+    @param.query.number('limit') limit?: number,
   ): Promise<DashboardSummaryResponse> {
+    // Limit normalization (defaulting + clamping to MAX_LIMIT) is the
+    // service's job — see AnalyticsService.getDashboardSummary — so the raw
+    // query value is passed through unmodified.
     return this.analyticsService.getDashboardSummary(
       startDate,
       endDate,
       type,
-      normalizeLimit(limit),
+      limit,
     )
   }
 
@@ -150,8 +152,9 @@ export class GeneralReportsController {
     content: { 'application/json': { schema: INVENTORY_SUMMARY_SCHEMA } },
   })
   async getInventorySummary(
-    @param.query.number('lowBalanceThreshold') lowBalanceThreshold: number = 10,
+    @param.query.number('lowBalanceThreshold') lowBalanceThreshold?: number,
   ): Promise<InventorySummaryResponse> {
+    // Default lives solely in AnalyticsService.DEFAULT_LOW_BALANCE_THRESHOLD.
     return this.analyticsService.getInventorySummary(lowBalanceThreshold)
   }
 
@@ -175,9 +178,9 @@ export class GeneralReportsController {
     content: { 'application/json': { schema: PENDING_BY_SUPPLIER_SCHEMA } },
   })
   async getPendingBySupplier(
-    @param.query.number('limit') limit: number = paginationConfig.DEFAULT_LIMIT,
+    @param.query.number('limit') limit?: number,
   ): Promise<PendingBySupplier[]> {
-    return this.analyticsService.getPendingBySupplier(normalizeLimit(limit))
+    return this.analyticsService.getPendingBySupplier(limit)
   }
 
   @get('/analytics/pending-by-product')
@@ -186,8 +189,8 @@ export class GeneralReportsController {
     content: { 'application/json': { schema: PENDING_BY_PRODUCT_SCHEMA } },
   })
   async getPendingByProduct(
-    @param.query.number('limit') limit: number = paginationConfig.DEFAULT_LIMIT,
+    @param.query.number('limit') limit?: number,
   ): Promise<PendingByProduct[]> {
-    return this.analyticsService.getPendingByProduct(normalizeLimit(limit))
+    return this.analyticsService.getPendingByProduct(limit)
   }
 }

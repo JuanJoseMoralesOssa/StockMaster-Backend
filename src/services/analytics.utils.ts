@@ -9,6 +9,7 @@
 // from a service.
 
 import { TransactionKind } from '../modules/transactions/transaction-kind.enum'
+import { InventorySummaryResponse, LowBalanceProduct } from '../models'
 
 export type RelatedEntity = {
   id?: number
@@ -97,4 +98,63 @@ export function topByTransactionCount<T extends { transactionCount: number }>(
     .filter(item => item.transactionCount > 0)
     .sort((a, b) => b.transactionCount - a.transactionCount)
     .slice(0, limit)
+}
+
+/** Product row as the inventory summary aggregation needs to see it. */
+export type InventoryProduct = {
+  id?: number
+  name: string
+  balance?: number
+}
+
+/**
+ * Folds the current product snapshot into the inventory dashboard shape:
+ * total/in/out-of-balance counts plus the ascending low-balance list.
+ *
+ * A non-finite or non-positive threshold means "feature off" — the effective
+ * threshold collapses to 0 and no product can ever qualify as low-balance
+ * (the loop below only adds to the list when `threshold > 0`).
+ */
+export function summarizeInventory(
+  products: InventoryProduct[],
+  lowBalanceThreshold: number,
+): InventorySummaryResponse {
+  const threshold =
+    Number.isFinite(lowBalanceThreshold) && lowBalanceThreshold > 0
+      ? lowBalanceThreshold
+      : 0
+
+  let totalBalance = 0
+  let inBalanceCount = 0
+  let outOfBalanceCount = 0
+  const lowBalanceProducts: LowBalanceProduct[] = []
+
+  for (const product of products) {
+    const balance = product.balance ?? 0
+    totalBalance += balance
+    if (balance > 0) {
+      inBalanceCount += 1
+      if (threshold > 0 && balance <= threshold) {
+        lowBalanceProducts.push({
+          productId: product.id ?? 0,
+          productName: product.name,
+          balance,
+        })
+      }
+    } else {
+      outOfBalanceCount += 1
+    }
+  }
+
+  lowBalanceProducts.sort((a, b) => a.balance - b.balance)
+
+  return {
+    totalBalance,
+    productCount: products.length,
+    inBalanceCount,
+    outOfBalanceCount,
+    lowBalanceCount: lowBalanceProducts.length,
+    lowBalanceThreshold: threshold,
+    lowBalanceProducts,
+  }
 }

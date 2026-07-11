@@ -4,6 +4,7 @@ import { TransactionKind } from '../../modules/transactions/transaction-kind.enu
 import {
   accumulateEntity,
   EntityAggregate,
+  summarizeInventory,
   topByTransactionCount,
   topByWeight,
 } from '../../services/analytics.utils'
@@ -205,5 +206,89 @@ describe('topByTransactionCount', () => {
 
   it('returns an empty list for no rows', () => {
     expect(topByTransactionCount([], 5)).to.eql([])
+  })
+})
+
+describe('summarizeInventory', () => {
+  it('disables the low-balance list when the threshold is non-finite', () => {
+    // Non-finite (NaN/Infinity) means "no threshold supplied" — the feature
+    // turns off rather than letting an unparseable value leak through.
+    const products = [{ id: 1, name: 'Sal', balance: 5 }]
+
+    const result = summarizeInventory(products, NaN)
+
+    expect(result.lowBalanceThreshold).to.equal(0)
+    expect(result.lowBalanceProducts).to.eql([])
+    expect(result.lowBalanceCount).to.equal(0)
+  })
+
+  it('disables the low-balance list when the threshold is zero or negative', () => {
+    const products = [{ id: 1, name: 'Sal', balance: 5 }]
+
+    expect(summarizeInventory(products, 0).lowBalanceProducts).to.eql([])
+    expect(summarizeInventory(products, -3).lowBalanceProducts).to.eql([])
+  })
+
+  it('counts a zero or negative balance as out-of-balance', () => {
+    const products = [
+      { id: 1, name: 'Cero', balance: 0 },
+      { id: 2, name: 'Negativo', balance: -2 },
+    ]
+
+    const result = summarizeInventory(products, 10)
+
+    expect(result.outOfBalanceCount).to.equal(2)
+    expect(result.inBalanceCount).to.equal(0)
+    expect(result.lowBalanceProducts).to.eql([])
+  })
+
+  it('lists a positive balance at or under the threshold, ascending', () => {
+    const products = [
+      { id: 1, name: 'Alto', balance: 9 },
+      { id: 2, name: 'Bajo', balance: 1 },
+      { id: 3, name: 'Medio', balance: 5 },
+      // Above the threshold: in balance, but not "low".
+      { id: 4, name: 'Fuera de rango', balance: 20 },
+    ]
+
+    const result = summarizeInventory(products, 10)
+
+    expect(result.lowBalanceProducts.map(p => p.productName)).to.eql([
+      'Bajo',
+      'Medio',
+      'Alto',
+    ])
+    expect(result.lowBalanceCount).to.equal(3)
+    expect(result.inBalanceCount).to.equal(4)
+  })
+
+  it('treats a missing or null balance as 0', () => {
+    const products = [
+      { id: 1, name: 'Sin balance' },
+      { id: 2, name: 'Balance null', balance: null as unknown as number },
+    ]
+
+    const result = summarizeInventory(products, 10)
+
+    expect(result.totalBalance).to.equal(0)
+    expect(result.outOfBalanceCount).to.equal(2)
+  })
+
+  it('sums every balance into totalBalance regardless of bucket', () => {
+    const products = [
+      { id: 1, name: 'A', balance: 3 },
+      { id: 2, name: 'B', balance: -1 },
+      { id: 3, name: 'C', balance: 50 },
+    ]
+
+    expect(summarizeInventory(products, 10).totalBalance).to.equal(52)
+  })
+
+  it('falls back a missing productId to 0, preserving current behavior', () => {
+    const products = [{ name: 'Sin id', balance: 4 }]
+
+    const result = summarizeInventory(products, 10)
+
+    expect(result.lowBalanceProducts[0].productId).to.equal(0)
   })
 })
