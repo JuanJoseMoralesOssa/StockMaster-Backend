@@ -20,18 +20,31 @@ import {
   PurchaseRepository,
 } from '../../repositories'
 import { validateDateRange } from '../../services/date-validation.utils'
+import {
+  mapPaymentDetailsToRows,
+  mapPurchaseDetailsToRows,
+  mergeTransactionRowsByDate,
+} from './transaction-detail-mapping.utils'
 import { TransactionKind } from './transaction-kind.enum'
 import { findParentIdsInRange } from './transaction-range.utils'
 import { TRANSACTION_TYPE_LABEL } from './transaction-type.const'
 
-type PurchaseDetailWithRelations = PurchaseDetails & {
+type PurchaseDetailWithPerson = PurchaseDetails & {
   purchase?: Pick<Purchase, 'date'>
   person?: Pick<Person, 'name'>
 }
 
-type PaymentDetailWithRelations = PaymentDetails & {
+type PaymentDetailWithPerson = PaymentDetails & {
   payment?: Pick<Payment, 'date'>
   person?: Pick<Person, 'name'>
+}
+
+type PurchaseDetailWithParent = PurchaseDetails & {
+  purchase?: Pick<Purchase, 'date'>
+}
+
+type PaymentDetailWithParent = PaymentDetails & {
+  payment?: Pick<Payment, 'date'>
 }
 
 @injectable({ scope: BindingScope.TRANSIENT })
@@ -59,12 +72,10 @@ export class TransactionQueryService {
   ): Promise<TransactionDetailPersonProduct[]> {
     validateDateRange(startDate, endDate)
 
-    // Construir filtro de fechas
     const dateFilter = {
       between: [startDate, endDate],
     }
 
-    // Buscar persona con sus compras y pagos
     const person = await this.personRepository.findOne({
       where: { id: personId },
       include: [
@@ -112,7 +123,6 @@ export class TransactionQueryService {
     person: Person,
     productId: number,
   ): TransactionDetailPersonProduct[] {
-    // Extraer detalles de compras
     const purchaseTransactions =
       person.purchases?.flatMap(
         (purchase: Purchase) =>
@@ -127,7 +137,6 @@ export class TransactionQueryService {
             })) ?? [],
       ) || []
 
-    // Extraer detalles de pagos
     const paymentTransactions =
       person.payments?.flatMap(
         (payment: Payment) =>
@@ -140,7 +149,6 @@ export class TransactionQueryService {
             })) || [],
       ) || []
 
-    // Combinar y ordenar por fecha
     return [...purchaseTransactions, ...paymentTransactions].sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
     )
@@ -175,39 +183,22 @@ export class TransactionQueryService {
         : Promise.resolve([]),
     ])
 
-    const transactions: TransactionDetailProduct[] = []
-    const purchaseDetailsWithRelations =
-      purchaseDetails as PurchaseDetailWithRelations[]
-    const paymentDetailsWithRelations =
-      paymentDetails as PaymentDetailWithRelations[]
-
-    for (const detail of purchaseDetailsWithRelations) {
-      if (detail.purchase && detail.weight_kg) {
-        transactions.push({
-          date: detail.purchase.date,
-          weight_kg: detail.weight_kg,
-          type: TRANSACTION_TYPE_LABEL[TransactionKind.PURCHASE],
-          personId: detail.personId,
-          personName: detail.person?.name,
-        })
-      }
-    }
-
-    for (const detail of paymentDetailsWithRelations) {
-      if (detail.payment && detail.weight_kg) {
-        transactions.push({
-          date: detail.payment.date,
-          weight_kg: detail.weight_kg,
-          type: TRANSACTION_TYPE_LABEL[TransactionKind.PAYMENT],
-          personId: detail.personId,
-          personName: detail.person?.name,
-        })
-      }
-    }
-
-    return transactions.sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    const purchaseRows = mapPurchaseDetailsToRows(
+      purchaseDetails as PurchaseDetailWithPerson[],
+      detail => ({
+        personId: detail.personId,
+        personName: detail.person?.name,
+      }),
     )
+    const paymentRows = mapPaymentDetailsToRows(
+      paymentDetails as PaymentDetailWithPerson[],
+      detail => ({
+        personId: detail.personId,
+        personName: detail.person?.name,
+      }),
+    )
+
+    return mergeTransactionRowsByDate(purchaseRows, paymentRows)
   }
 
   async getPersonTransactions(
@@ -239,42 +230,21 @@ export class TransactionQueryService {
         : Promise.resolve([]),
     ])
 
-    const transactions: TransactionDetailPerson[] = []
-    const purchaseDetailsWithRelations =
-      purchaseDetails as PurchaseDetailWithRelations[]
-    const paymentDetailsWithRelations =
-      paymentDetails as PaymentDetailWithRelations[]
-
-    for (const detail of purchaseDetailsWithRelations) {
-      if (detail.purchase && detail.weight_kg) {
-        transactions.push({
-          date: detail.purchase.date,
-          weight_kg: detail.weight_kg,
-          type: TRANSACTION_TYPE_LABEL[TransactionKind.PURCHASE],
-          productId: detail.productId,
-        })
-      }
-    }
-
-    for (const detail of paymentDetailsWithRelations) {
-      if (detail.payment && detail.weight_kg) {
-        transactions.push({
-          date: detail.payment.date,
-          weight_kg: detail.weight_kg,
-          type: TRANSACTION_TYPE_LABEL[TransactionKind.PAYMENT],
-          productId: detail.productId,
-        })
-      }
-    }
-
-    return transactions.sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    const purchaseRows = mapPurchaseDetailsToRows(
+      purchaseDetails as PurchaseDetailWithParent[],
+      detail => ({ productId: detail.productId }),
     )
+    const paymentRows = mapPaymentDetailsToRows(
+      paymentDetails as PaymentDetailWithParent[],
+      detail => ({ productId: detail.productId }),
+    )
+
+    return mergeTransactionRowsByDate(purchaseRows, paymentRows)
   }
 
   private async ensurePersonExists(personId: number): Promise<void> {
-    const person = await this.personRepository.findById(personId)
-    if (!person) {
+    const found = await this.personRepository.exists(personId)
+    if (!found) {
       throw new ResourceNotFoundError(
         `Persona con ID ${personId} no encontrada`,
       )
@@ -282,8 +252,8 @@ export class TransactionQueryService {
   }
 
   private async ensureProductExists(productId: number): Promise<void> {
-    const product = await this.productRepository.findById(productId)
-    if (!product) {
+    const found = await this.productRepository.exists(productId)
+    if (!found) {
       throw new ResourceNotFoundError(
         `Producto con ID ${productId} no encontrado`,
       )
