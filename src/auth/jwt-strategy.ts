@@ -13,6 +13,7 @@ import {
 } from '@loopback/rest'
 import { securityId, UserProfile } from '@loopback/security'
 import { SecurityService } from '../services/security.service'
+import { extractAuthTokenFromCookieHeader } from './auth-cookie'
 
 @injectable(asAuthStrategy, asSpecEnhancer)
 export class JWTAuthStrategy implements AuthenticationStrategy, OASEnhancer {
@@ -47,6 +48,13 @@ export class JWTAuthStrategy implements AuthenticationStrategy, OASEnhancer {
   }
 
   extractCredentials(request: Request): string {
+    // Cookie first (browser session flow), falling back to the Authorization
+    // header (API tools, acceptance tests) so both flows keep working.
+    const cookieToken = extractAuthTokenFromCookieHeader(request.headers.cookie)
+    if (cookieToken) {
+      return cookieToken
+    }
+
     if (!request.headers.authorization) {
       throw new HttpErrors.Unauthorized('Authorization header not found.')
     }

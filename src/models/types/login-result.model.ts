@@ -1,6 +1,8 @@
 import { Model, model, property } from '@loopback/repository'
 import { User } from '../entities/user.model'
 
+// El JWT ya no viaja en el body: /sign-in lo entrega vía cookie httpOnly
+// (ver src/auth/auth-cookie.ts). Este modelo solo describe el body público.
 @model()
 export class LoginResult extends Model {
   @property({
@@ -8,12 +10,6 @@ export class LoginResult extends Model {
     required: true,
   })
   user: User
-
-  @property({
-    type: 'string',
-    required: true,
-  })
-  token: string
 
   constructor(data?: Partial<LoginResult>) {
     super(data)

@@ -4,9 +4,19 @@ import { HttpErrors } from '@loopback/rest'
 import * as bcrypt from 'bcryptjs'
 import * as jwt from 'jsonwebtoken'
 import { securityConfig } from '../config/security'
-import { Credentials, LoginResult, User } from '../models'
+import { Credentials, User } from '../models'
 import { TokenPayload } from '../models/types/token-payload.type'
 import { UserRepository } from '../repositories'
+
+/**
+ * Result of a successful credential check: the sanitized user plus the JWT.
+ * Not an API response model — the controller decides how to deliver the
+ * token (as a cookie) and the user (in the response body).
+ */
+export interface AuthenticatedSession {
+  user: User
+  token: string
+}
 
 /**
  * NOTE ON ERROR TYPES: this service intentionally throws `HttpErrors.Unauthorized`
@@ -37,7 +47,7 @@ export class SecurityService {
     return bcrypt.compare(password, hashedPassword)
   }
 
-  async login(credentials: Credentials): Promise<LoginResult> {
+  async login(credentials: Credentials): Promise<AuthenticatedSession> {
     const foundUser = await this.userRepository.findOne({
       where: { email: credentials.email },
     })
@@ -60,10 +70,7 @@ export class SecurityService {
     // Evitar que el hash viaje al cliente
     foundUser.password = ''
 
-    return new LoginResult({
-      user: foundUser,
-      token,
-    })
+    return { user: foundUser, token }
   }
 
   generateToken(user: User): string {

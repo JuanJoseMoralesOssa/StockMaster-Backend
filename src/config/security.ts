@@ -18,9 +18,43 @@ if (!rawJwtSecret && NODE_ENV !== 'production' && NODE_ENV !== 'test') {
   )
 }
 
+/**
+ * Convierte un valor de expiración tipo jsonwebtoken ("1h", "7d", "30m", "45s",
+ * o segundos puros como "3600") a segundos, para usarlo como `Max-Age` de la
+ * cookie de sesión. Debe alinearse con lo que `jwt.sign({ expiresIn })` hace
+ * con el mismo string en `SecurityService.generateToken`; si cambia el formato
+ * soportado ahí, actualizar este parser también.
+ */
+export function parseExpirationToSeconds(expiration: string): number {
+  const match = /^(\d+(?:\.\d+)?)\s*(s|m|h|d|w)?$/i.exec(expiration.trim())
+
+  if (!match) {
+    throw new Error(
+      `JWT_EXPIRATION inválido: "${expiration}". Usa un número de segundos o un sufijo s/m/h/d/w (ej. "1d", "12h").`,
+    )
+  }
+
+  const value = Number(match[1])
+  const unit = (match[2] ?? 's').toLowerCase()
+
+  const unitToSeconds: Record<string, number> = {
+    s: 1,
+    m: 60,
+    h: 60 * 60,
+    d: 60 * 60 * 24,
+    w: 60 * 60 * 24 * 7,
+  }
+
+  return Math.round(value * unitToSeconds[unit])
+}
+
+const JWT_EXPIRATION = rawJwtExpiration ?? '1d'
+
 export const securityConfig = {
   // En desarrollo se permite un valor por defecto; en producción es obligatorio configurarlo
   JWT_SECRET: rawJwtSecret ?? 'default_secret',
   // Expiración por defecto: 1 día, a menos que se provea en el .env
-  JWT_EXPIRATION: rawJwtExpiration ?? '1d',
+  JWT_EXPIRATION,
+  // Misma expiración, en segundos, para usar como Max-Age de la cookie de sesión.
+  JWT_EXPIRATION_SECONDS: parseExpirationToSeconds(JWT_EXPIRATION),
 }

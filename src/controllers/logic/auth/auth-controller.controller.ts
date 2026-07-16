@@ -6,9 +6,16 @@ import {
   post,
   requestBody,
   response,
+  Response,
+  RestBindings,
 } from '@loopback/rest'
 import { SecurityBindings, UserProfile } from '@loopback/security'
-import { allowAuthenticated, requireAuth } from '../../../auth'
+import {
+  allowAuthenticated,
+  buildAuthCookie,
+  buildClearAuthCookie,
+  requireAuth,
+} from '../../../auth'
 import { Credentials, LoginResult, WhoAmIResponse } from '../../../models'
 import { SecurityService } from '../../../services'
 
@@ -21,9 +28,10 @@ export class AuthControllerController {
   /**
    * User sign-in with credentials (email and password)
    * @param credentials User credentials
-   * @returns Login result with user data and JWT token
+   * @returns Login result with user data; the JWT is delivered as an
+   * httpOnly cookie, never in the response body.
    * @description This method allows a user to sign in using their email and password.
-   * It returns the user data and token if the credentials are valid.
+   * On success it sets the `auth_token` session cookie and returns the user data.
    */
   @authenticate.skip()
   @post('/sign-in')
@@ -42,8 +50,29 @@ export class AuthControllerController {
       },
     })
     credentials: Credentials,
+    @inject(RestBindings.Http.RESPONSE)
+    httpResponse: Response,
   ): Promise<LoginResult> {
-    return this.securityService.login(credentials)
+    const { user, token } = await this.securityService.login(credentials)
+    httpResponse.setHeader('Set-Cookie', buildAuthCookie(token))
+    return new LoginResult({ user })
+  }
+
+  /**
+   * Sign out: clears the `auth_token` session cookie.
+   * @description Skips authentication (an expired/invalid token must still
+   * be able to sign out and clear its cookie).
+   */
+  @authenticate.skip()
+  @post('/sign-out')
+  @response(204, {
+    description: 'User sign-out: clears the session cookie',
+  })
+  async signOut(
+    @inject(RestBindings.Http.RESPONSE)
+    httpResponse: Response,
+  ): Promise<void> {
+    httpResponse.setHeader('Set-Cookie', buildClearAuthCookie())
   }
 
   /**
