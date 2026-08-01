@@ -85,7 +85,7 @@
     "@loopback/testlab": "^8.0.11",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^25.6.0",
+    "@types/node": "^26.1.2",
     "@types/pg": "^8.20.0",
     "eslint": "^8.57.1",
     "source-map-support": "^0.5.21",
